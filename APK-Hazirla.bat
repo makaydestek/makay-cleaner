@@ -6,7 +6,7 @@ REM ============================================================
 REM  MakayCleaner Release APK
 REM  Tek surum kaynagi: VERSION.txt
 REM  Tek teslimat klasoru: APK\
-REM  Cikti: APK\MakayCleaner_vX.Y.Z.apk + MakayCleaner-latest.apk
+REM  Cikti: yalnizca MakayCleaner_vX.Y.Z.apk + .apk.sha256
 REM ============================================================
 
 cd /d "%~dp0"
@@ -20,12 +20,9 @@ set "APK_DIR=%PROJECT_DIR%\APK"
 set "GRADLEW=%PROJECT_DIR%\gradlew.bat"
 set "BUMP_PS1=%PROJECT_DIR%\tools\bump-version.ps1"
 set "READ_PS1=%PROJECT_DIR%\tools\read-version.ps1"
-set "LOG=%APK_DIR%\APK-Hazirla-last.log"
 set "VERSION_FILE=%PROJECT_DIR%\VERSION.txt"
 
 if not exist "%APK_DIR%" mkdir "%APK_DIR%"
-> "%LOG%" echo APK-Hazirla basladi %DATE% %TIME%
->> "%LOG%" echo Proje: %PROJECT_DIR%
 
 echo.
 echo ================================================
@@ -34,7 +31,6 @@ echo ================================================
 echo  Proje   : %PROJECT_DIR%
 echo  Teslimat: %APK_DIR%
 echo  Surum   : %VERSION_FILE%
-echo  Log     : %LOG%
 echo.
 
 REM JDK 17 zorunlu
@@ -48,24 +44,20 @@ if exist "C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot\bin\java.exe" (
 
 if not defined JAVA_HOME (
     echo [HATA] JDK 17 bulunamadi.
-    >> "%LOG%" echo JAVA_HOME yok
     goto :END_FAIL
 )
 
 set "PATH=%JAVA_HOME%\bin;%PATH%"
->> "%LOG%" echo JAVA_HOME=%JAVA_HOME%
 echo  JAVA    : %JAVA_HOME%
 echo.
 
 if not exist "%GRADLEW%" (
     echo [HATA] gradlew.bat yok: %GRADLEW%
-    >> "%LOG%" echo gradlew yok
     goto :END_FAIL
 )
 
 if not exist "%BUMP_PS1%" (
     echo [HATA] bump-version.ps1 yok: %BUMP_PS1%
-    >> "%LOG%" echo bump yok
     goto :END_FAIL
 )
 
@@ -78,12 +70,10 @@ for /f "usebackq tokens=1,2 delims=|" %%A in (`powershell -NoProfile -ExecutionP
 )
 if not defined VERSION (
     echo [HATA] Surum artirilamadi.
-    >> "%LOG%" echo bump failed
     goto :END_FAIL
 )
 echo  Onceki : !OLD_VERSION!
 echo  Yeni   : !VERSION!
->> "%LOG%" echo version !OLD_VERSION! -^> !VERSION!
 echo.
 
 REM Surum dosyasini dogrula (tek kaynak)
@@ -94,7 +84,6 @@ for /f "usebackq tokens=1,2 delims=|" %%A in (`powershell -NoProfile -ExecutionP
 )
 if /I not "!CHECK_VER!"=="!VERSION!" (
     echo [HATA] VERSION.txt uyumsuz: dosya=!CHECK_VER! beklenen=!VERSION!
-    >> "%LOG%" echo version mismatch
     goto :END_FAIL
 )
 echo  Kod    : !CHECK_CODE!  (versionCode)
@@ -107,35 +96,29 @@ echo.
 echo [3/4] Release APK derleniyor + APK\ klasorune yayinlaniyor (v!VERSION!)...
 echo  Bu islem birka dakika surebilir.
 echo.
-REM assembleRelease bitince publishReleaseApk otomatik APK\ klasorune kopyalar
+REM assembleRelease bitince publishReleaseApk: eski dosyalari siler, yalnizca vX.Y.Z + sha256 yazar
 call "%GRADLEW%" assembleRelease --no-daemon
 set "ERR=!ERRORLEVEL!"
->> "%LOG%" echo assembleRelease exit !ERR!
 if not "!ERR!"=="0" (
     echo.
     echo [HATA] Derleme/yayin basarisiz. Kod: !ERR!
-    echo  Log: %LOG%
     goto :END_FAIL
 )
 echo.
 
 echo [4/4] Teslimat dogrulaniyor...
 set "APK_TARGET=%APK_DIR%\MakayCleaner_v!VERSION!.apk"
-set "APK_LATEST=%APK_DIR%\MakayCleaner-latest.apk"
+set "SHA_TARGET=%APK_DIR%\MakayCleaner_v!VERSION!.apk.sha256"
 if not exist "!APK_TARGET!" (
     echo [HATA] Beklenen APK yok:
     echo  !APK_TARGET!
-    >> "%LOG%" echo apk target missing
     goto :END_FAIL
 )
-if not exist "!APK_LATEST!" (
-    echo [HATA] MakayCleaner-latest.apk yok
-    >> "%LOG%" echo latest missing
+if not exist "!SHA_TARGET!" (
+    echo [HATA] SHA-256 yok:
+    echo  !SHA_TARGET!
     goto :END_FAIL
 )
-
-REM CURRENT.txt = VERSION.txt ile ayni olmali
-> "%APK_DIR%\CURRENT.txt" echo !VERSION!
 
 for %%A in ("!APK_TARGET!") do (
     set "SIZE_BYTES=%%~zA"
@@ -144,14 +127,13 @@ for %%A in ("!APK_TARGET!") do (
 set /a SIZE_MB=!SIZE_BYTES! / 1048576
 
 echo.
-echo [OK] APK hazir — tek teslimat klasoru: APK\
+echo [OK] APK hazir — klasorde yalnizca bu surum:
 echo  Dosya : !APK_TARGET!
-echo  Latest: !APK_LATEST!
+echo  SHA   : !SHA_TARGET!
 echo  Surum : !VERSION!  (versionCode !CHECK_CODE!)
 echo  Boyut : !SIZE_MB! MB
 echo  Tarih : !APK_DATE!
 echo.
->> "%LOG%" echo OK !APK_TARGET! v!VERSION! code=!CHECK_CODE!
 
 start "" explorer "%APK_DIR%"
 goto :END_OK

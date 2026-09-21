@@ -161,18 +161,19 @@ object JunkScanHelper {
     }
 
     /**
-     * Cihaz skoru (Xiaomi tarzı): junk, kullanılmayan uygulama ve depolama doluluğu düşürür.
-     * Junk temizlenince o ceza kalkar. Fotoğraf/video kütüphanesi junk sayılmaz.
-     * Kalan ceza (uygulama / dolu disk) kullanıcı aksiyonu olmadan 100 olmaz.
+     * Ana skor (Xiaomi Güvenlik tarzı): yalnızca tek dokunuşla temizlenebilen junk düşürür.
+     * Optimizasyon junk’ı temizleyince skor %100 olur.
+     * Kullanılmayan uygulama / dolu disk skor düşürmez — bunlar ana sayfada “öneri”dir.
+     * [storageUsagePercent] / [unusedApps] geriye uyumluluk için tutulur, skora etki etmez.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun optimizationScore(
         junkBytes: Long,
         storageUsagePercent: Float = 0f,
         unusedApps: Int = 0
     ): Int {
-        var score = 100
         val junkMb = junkBytes / (1024.0 * 1024.0)
-        score -= when {
+        val penalty = when {
             junkMb <= 0.0 -> 0
             junkMb < 5 -> 5
             junkMb < 20 -> 10
@@ -180,20 +181,7 @@ object JunkScanHelper {
             junkMb < 150 -> 25
             else -> 35
         }
-        score -= when {
-            unusedApps <= 0 -> 0
-            unusedApps < 8 -> 5
-            unusedApps < 20 -> 10
-            unusedApps < 35 -> 15
-            else -> 25
-        }
-        score -= when {
-            storageUsagePercent >= 92f -> 15
-            storageUsagePercent >= 85f -> 10
-            storageUsagePercent >= 75f -> 5
-            else -> 0
-        }
-        return score.coerceIn(40, 100)
+        return (100 - penalty).coerceIn(40, 100)
     }
 
     private fun isLikelyDeletable(file: File): Boolean {

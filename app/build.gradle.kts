@@ -24,6 +24,8 @@ android {
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
+        buildConfigField("String", "UPDATE_GITHUB_OWNER", "\"makaydestek\"")
+        buildConfigField("String", "UPDATE_GITHUB_REPO", "\"makay-cleaner\"")
     }
 
     buildTypes {
@@ -87,9 +89,10 @@ android {
 }
 
 // Teslimat yalnizca proje/APK — ara cikti app/build altinda kalir, kurulum dosyasi APK\
+// Klasorde yalnizca: MakayCleaner_vX.Y.Z.apk + ayni adli .sha256 (eski surumler silinir)
 tasks.register("publishReleaseApk") {
     group = "distribution"
-    description = "Release APK'yi yalnizca APK/ klasorune surum adıyla kopyalar"
+    description = "Release APK + SHA-256'yi APK/ klasorune yazar; eski dosyalari temizler"
     doLast {
         val src = layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
         check(src.exists()) { "APK bulunamadi: ${src.absolutePath}" }
@@ -97,13 +100,27 @@ tasks.register("publishReleaseApk") {
         apkDir.mkdirs()
         val ver = rootProject.file("VERSION.txt").readText().trim()
         val named = apkDir.resolve("MakayCleaner_v$ver.apk")
-        val latest = apkDir.resolve("MakayCleaner-latest.apk")
+        val shaFile = apkDir.resolve("MakayCleaner_v$ver.apk.sha256")
+
+        // Onceki surumler + latest / CURRENT / log — hepsi temizlenir
+        apkDir.listFiles()?.forEach { f ->
+            if (f.isFile) f.delete()
+        }
+
         src.copyTo(named, overwrite = true)
-        src.copyTo(latest, overwrite = true)
-        apkDir.resolve("CURRENT.txt").writeText("$ver\n")
+        val ps = listOf(
+            "powershell", "-NoProfile", "-Command",
+            "\$h=(Get-FileHash -Algorithm SHA256 -Path '${named.absolutePath.replace("'", "''")}').Hash.ToLower(); " +
+                "Set-Content -Path '${shaFile.absolutePath.replace("'", "''")}' -Value (\$h + '  MakayCleaner_v$ver.apk') -Encoding ascii; " +
+                "Write-Output \$h"
+        )
+        val proc = ProcessBuilder(ps).redirectErrorStream(true).start()
+        val hex = proc.inputStream.bufferedReader().readText().trim()
+        check(proc.waitFor() == 0 && hex.length == 64) { "SHA-256 olusturulamadi: $hex" }
         println("Published: ${named.absolutePath}")
-        println("Latest   : ${latest.absolutePath}")
+        println("SHA-256  : ${shaFile.absolutePath}")
         println("Version  : $ver (versionCode=$appVersionCode)")
+        println("Fingerprint: $hex")
     }
 }
 

@@ -1,59 +1,128 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 title Makay Cleaner - GitHub Release
-
-REM ============================================================
-REM  VERSION.txt surumunu okur, APK varsa GitHub Release olusturur
-REM  Gereksinim: git + gh (GitHub CLI) oturum acik
-REM  Repo: https://github.com/makaydestek/makay-cleaner
-REM ============================================================
-
 cd /d "%~dp0"
+
+REM PATH'e gh ekle (yeni kurulumlar icin)
+set "PATH=%ProgramFiles%\GitHub CLI;%LocalAppData%\Programs\GitHub CLI;%PATH%"
+
+echo.
+echo ================================================
+echo  Makay Cleaner - GitHub Release
+echo  Repo: https://github.com/makaydestek/makay-cleaner
+echo ================================================
+echo.
+
 set "VERSION_FILE=%CD%\VERSION.txt"
 set "APK_DIR=%CD%\APK"
 
 if not exist "%VERSION_FILE%" (
   echo [HATA] VERSION.txt yok
-  exit /b 1
+  goto :FAIL
 )
 
 for /f "usebackq delims=" %%V in ("%VERSION_FILE%") do set "VERSION=%%V"
-set "TAG=v!VERSION!"
+if not defined VERSION (
+  echo [HATA] VERSION.txt bos
+  goto :FAIL
+)
+
+set "TAG=!VERSION!"
 set "APK=%APK_DIR%\MakayCleaner_v!VERSION!.apk"
+set "SHA=%APK_DIR%\MakayCleaner_v!VERSION!.apk.sha256"
 
 if not exist "%APK%" (
   echo [HATA] APK yok: %APK%
-  echo Once APK-Hazirla.bat veya gradlew assembleRelease calistirin.
-  exit /b 1
+  echo Once APK-Hazirla.bat veya: gradlew assembleRelease
+  goto :FAIL
+)
+
+if not exist "%SHA%" (
+  echo [UYARI] SHA dosyasi yok, olusturuluyor...
+  powershell -NoProfile -Command ^
+    "$h=(Get-FileHash -Algorithm SHA256 '%APK%').Hash.ToLower(); Set-Content -Path '%SHA%' -Value ($h + '  MakayCleaner_v!VERSION!.apk') -Encoding ASCII"
+  if not exist "%SHA%" (
+    echo [HATA] SHA olusturulamadi
+    goto :FAIL
+  )
 )
 
 where gh >nul 2>&1
 if errorlevel 1 (
-  echo [HATA] GitHub CLI ^(gh^) yuklu degil.
-  echo https://cli.github.com/ adresinden kurun, sonra: gh auth login
-  exit /b 1
+  echo [HATA] GitHub CLI ^(gh^) bulunamadi.
+  echo 1^) winget install --id GitHub.cli
+  echo 2^) gh auth login
+  goto :FAIL
+)
+
+gh auth status >nul 2>&1
+if errorlevel 1 (
+  echo [UYARI] GitHub oturumu yok.
+  echo.
+  echo  ----------------------------------------
+  echo   KOD BU SIYAH PENCEREDE gorunecek.
+  echo   Ayrica panoya ^(Ctrl+V^) kopyalanir.
+  echo.
+  echo   1^) Bu penceredeki XXXX-XXXX kodunu okuyun
+  echo   2^) Tarayici acilinca kutuya yapistirin
+  echo   3^) Authorize / Confirm
+  echo  ----------------------------------------
+  echo.
+  echo  Enter'a basin — giris baslar...
+  pause >nul
+  echo.
+  REM -w tarayici, -c kodu panoya kopyalar
+  gh auth login -h github.com -p https -w -c -s "repo,read:org,gist,workflow"
+  if errorlevel 1 (
+    echo.
+    echo [HATA] gh auth login basarisiz.
+    echo Alternatif: Gh-Giris.bat dosyasini calistirin.
+    goto :FAIL
+  )
+  gh auth status >nul 2>&1
+  if errorlevel 1 (
+    echo [HATA] Hala oturum yok. Gh-Giris.bat ile tekrar deneyin.
+    goto :FAIL
+  )
+  echo.
+  echo [OK] GitHub oturumu acildi.
+  echo.
 )
 
 echo Surum : !VERSION!
 echo Tag   : !TAG!
 echo APK   : %APK%
+echo SHA   : %SHA%
 echo.
 
 gh release view "!TAG!" --repo makaydestek/makay-cleaner >nul 2>&1
 if not errorlevel 1 (
-  echo Release !TAG! zaten var. Asset guncelleniyor...
-  gh release upload "!TAG!" "%APK%" --repo makaydestek/makay-cleaner --clobber
+  echo Release !TAG! mevcut — assetler guncelleniyor...
+  gh release upload "!TAG!" "%APK%" "%SHA%" --repo makaydestek/makay-cleaner --clobber
 ) else (
   echo Yeni release olusturuluyor...
-  gh release create "!TAG!" "%APK%" --repo makaydestek/makay-cleaner --title "Makay Cleaner !VERSION!" --notes "Makay Cleaner !VERSION! sideload surumu. Ayarlar ^> Guncelleme kontrol et ile indirilebilir."
+  REM Video Player ile ayni: baslik = surum, not = Initial commit
+  gh release create "!TAG!" "%APK%" "%SHA%" --repo makaydestek/makay-cleaner --title "!VERSION!" --notes "Initial commit"
 )
 
 if errorlevel 1 (
-  echo [HATA] Release basarisiz. gh auth login ile oturum acin.
-  exit /b 1
+  echo [HATA] Release basarisiz.
+  goto :FAIL
 )
 
 echo.
 echo [OK] https://github.com/makaydestek/makay-cleaner/releases/tag/!TAG!
+echo Kullanicilar uygulamayi acinca bildirim + diyalog gorur.
+echo.
+pause
 endlocal
 exit /b 0
+
+:FAIL
+echo.
+echo ================================================
+echo  Basarisiz - pencereyi kapatmak icin bir tus
+echo ================================================
+pause
+endlocal
+exit /b 1

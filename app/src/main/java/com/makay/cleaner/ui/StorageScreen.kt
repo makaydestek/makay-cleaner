@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -42,7 +41,6 @@ import kotlin.math.roundToInt
 // Accent renkleri (tema ile uyumlu vurgu)
 private val HomeOrange = Color(0xFFFF9F0A)
 private val HomeGreen = Color(0xFF30D158)
-private val HomePurple = Color(0xFFBF5AF2)
 private val HomeCyan = Color(0xFF64D2FF)
 private val HomeRed = Color(0xFFFF453A)
 private val HomeWhatsApp = Color(0xFF25D366)
@@ -97,8 +95,8 @@ fun StorageScreen(
     var scanned by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // Açılışta tarama: junk + kullanılmayan uygulama → skor 100'de kilitlenmez
-    LaunchedEffect(hasPermission, uiState.storageInfo?.usagePercent) {
+    // Açılışta junk + öneri listesi; skor yalnızca junk’a bağlı
+    LaunchedEffect(hasPermission) {
         val (junk, unused) = withContext(Dispatchers.IO) {
             val j = runCatching { JunkScanHelper.scan(context).totalBytes }.getOrDefault(0L)
             val u = runCatching { UnusedAppsHelper.getUnusedApps(context).size }.getOrDefault(0)
@@ -111,16 +109,14 @@ fun StorageScreen(
 
     val usagePercent = uiState.storageInfo?.usagePercent ?: 0f
     val healthScore = JunkScanHelper.optimizationScore(junkBytes, usagePercent, unusedApps)
+    val hasSuggestions = unusedApps > 0 || usagePercent >= 85f
     val statusSubtitle = when {
         optimizing -> "Taranıyor ve temizleniyor…"
         !scanned || uiState.isLoading -> "Cihaz kontrol ediliyor…"
         !hasPermission -> "Depolama izni gerekli"
         healthScore >= 100 -> "Cihazınız iyi durumda"
-        else -> {
-            val n = listOf(junkBytes > 0L, unusedApps > 0, usagePercent >= 75f).count { it }
-            if (n <= 0) "Birkaç öge optimize edilebilir"
-            else "$n öge optimize edilebilir"
-        }
+        junkBytes > 0L -> "Temizlenebilir önbellek bulundu"
+        else -> "Optimizasyon önerilir"
     }
 
     fun runOptimization() {
@@ -130,9 +126,9 @@ fun StorageScreen(
         }
         scope.launch {
             optimizing = true
+            cleanMessage = null
             val result = withContext(Dispatchers.IO) {
-                if (junkBytes > 0L) JunkScanHelper.cleanAll(context)
-                else JunkScanHelper.CleanResult(0, 0, 0)
+                JunkScanHelper.cleanAll(context)
             }
             val (junk, unused) = withContext(Dispatchers.IO) {
                 val j = JunkScanHelper.scan(context).totalBytes
@@ -144,15 +140,14 @@ fun StorageScreen(
             scanned = true
             viewModel.refresh()
             optimizing = false
-            val score = JunkScanHelper.optimizationScore(
-                junk, uiState.storageInfo?.usagePercent ?: usagePercent, unused
-            )
+            val score = JunkScanHelper.optimizationScore(junk, usagePercent, unused)
             cleanMessage = when {
-                score >= 100 -> "Optimizasyon tamam — önbellek cezası kalktı, skor %100"
-                junk == 0L ->
-                    "Önbellek cezası kalktı. Skor %$score — kalan: ${buildHealthHint(junk, unused, usagePercent)}"
+                score >= 100 && result.spaceSaved > 0L ->
+                    "Optimizasyon tamam — ${formatBytes(result.spaceSaved)} temizlendi, skor %100"
+                score >= 100 ->
+                    "Optimizasyon tamam — cihaz iyi durumda, skor %100"
                 else ->
-                    "Kısmen temizlendi (${formatBytes(result.spaceSaved)}). Skor %$score — ${buildHealthHint(junk, unused, usagePercent)}"
+                    "Kısmen temizlendi (${formatBytes(result.spaceSaved)}). Kalan önbellek: ${formatBytes(junk)}"
             }
         }
     }
@@ -181,8 +176,9 @@ fun StorageScreen(
                 Text(
                     text = "Makay Cleaner",
                     color = homeTextPrimary(),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp,
+                    letterSpacing = 0.2.sp
                 )
                 IconButton(onClick = onNavigateToSettings) {
                     Icon(
@@ -203,19 +199,19 @@ fun StorageScreen(
                     optimizing -> "Optimize ediliyor…"
                     !scanned -> "Kontrol ediliyor…"
                     healthScore >= 100 -> "Yeniden tara"
-                    junkBytes > 0 -> "Optimizasyon"
                     else -> "Optimizasyon"
                 },
                 onOptimizeClick = { runOptimization() }
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             OutlinedButton(
                 onClick = onNavigateToCleanerHub,
-                modifier = Modifier.fillMaxWidth().height(44.dp),
-                shape = RoundedCornerShape(50)
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = ButtonDefaults.outlinedButtonBorder(enabled = true)
             ) {
-                Text("Ayrıntılı temizleyici")
+                Text("Ayrıntılı temizleyici", fontWeight = FontWeight.Medium)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -224,7 +220,7 @@ fun StorageScreen(
             if (!hasPermission) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = homeCard()),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     CompactStatusRow(
@@ -234,42 +230,17 @@ fun StorageScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-            } else if (scanned && healthScore < 100) {
+            } else if (scanned && junkBytes > 0L) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = homeCard()),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(Modifier.padding(vertical = 4.dp)) {
-                        Text(
-                            "Optimize edilebilir",
-                            color = homeTextPrimary(),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                        if (junkBytes > 0L) {
-                            CompactStatusRow(
-                                title = "${formatBytes(junkBytes)} temizlenebilir önbellek",
-                                action = "Temizle",
-                                onClick = { runOptimization() }
-                            )
-                        }
-                        if (unusedApps > 0) {
-                            CompactStatusRow(
-                                title = "$unusedApps kullanılmayan uygulama",
-                                action = "Yönet",
-                                onClick = onNavigateToManageApps
-                            )
-                        }
-                        if (usagePercent >= 75f) {
-                            CompactStatusRow(
-                                title = "Depolama %${usagePercent.roundToInt()} dolu",
-                                action = "Ayrıntı",
-                                onClick = onNavigateToCleanerHub
-                            )
-                        }
-                    }
+                    CompactStatusRow(
+                        title = "${formatBytes(junkBytes)} temizlenebilir önbellek",
+                        action = "Temizle",
+                        onClick = { runOptimization() }
+                    )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
             }
@@ -279,8 +250,42 @@ fun StorageScreen(
                     text = it,
                     color = HomeGreen,
                     style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+            }
+
+            // Skoru düşürmeyen yumuşak öneriler (sürekli “sorun var” izlenimi vermez)
+            if (hasPermission && scanned && healthScore >= 100 && hasSuggestions) {
+                Text(
+                    text = "Alan kazanma önerileri",
+                    color = homeTextSecondary(),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = homeCard()),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(vertical = 2.dp)) {
+                        if (unusedApps > 0) {
+                            CompactStatusRow(
+                                title = "$unusedApps uzun süredir kullanılmayan uygulama",
+                                action = "İncele",
+                                onClick = onNavigateToManageApps
+                            )
+                        }
+                        if (usagePercent >= 85f) {
+                            CompactStatusRow(
+                                title = "Depolama %${usagePercent.roundToInt()} dolu",
+                                action = "Gözat",
+                                onClick = onNavigateToCleanerHub
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             // Depolama kırılımı + pasta
@@ -476,15 +481,6 @@ private fun CompactStatusRow(title: String, action: String, onClick: () -> Unit)
     }
 }
 
-private fun buildHealthHint(junkBytes: Long, unusedApps: Int, usagePercent: Float): String {
-    val parts = mutableListOf<String>()
-    if (junkBytes > 0L) parts += "${formatBytes(junkBytes)} önbellek"
-    if (unusedApps > 0) parts += "$unusedApps uygulama"
-    if (usagePercent >= 75f) parts += "depolama %${usagePercent.roundToInt()}"
-    return if (parts.isEmpty()) "Birkaç öge optimize edilebilir"
-    else parts.joinToString(" · ")
-}
-
 private data class HomeFeature(
     val title: String,
     val subtitle: String,
@@ -502,22 +498,29 @@ private fun HomeScoreHero(
     buttonLabel: String = "Optimizasyon",
     onOptimizeClick: () -> Unit
 ) {
-    val accent = homeAccent()
+    val accent = when {
+        score >= 100 -> HomeGreen
+        score >= 80 -> homeAccent()
+        else -> HomeOrange
+    }
     val textPrimary = homeTextPrimary()
     val textSecondary = homeTextSecondary()
+    val track = MaterialTheme.colorScheme.surfaceVariant
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
-            modifier = Modifier.size(200.dp),
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .size(188.dp),
             contentAlignment = Alignment.Center
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val stroke = 14.dp.toPx()
+                val stroke = 12.dp.toPx()
                 val pad = stroke / 2
                 drawArc(
-                    color = Color(0xFF2C2C2E),
+                    color = track,
                     startAngle = -90f,
                     sweepAngle = 360f,
                     useCenter = false,
@@ -526,11 +529,9 @@ private fun HomeScoreHero(
                     style = Stroke(width = stroke, cap = StrokeCap.Round)
                 )
                 drawArc(
-                    brush = Brush.sweepGradient(
-                        listOf(accent, Color(0xFF5AC8FA), accent)
-                    ),
+                    color = accent,
                     startAngle = -90f,
-                    sweepAngle = 360f * (score / 100f),
+                    sweepAngle = 360f * (score / 100f).coerceIn(0f, 1f),
                     useCenter = false,
                     topLeft = Offset(pad, pad),
                     size = Size(size.width - stroke, size.height - stroke),
@@ -542,46 +543,53 @@ private fun HomeScoreHero(
                 Text(
                     text = "$score",
                     color = textPrimary,
-                    fontSize = 56.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 52.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-1).sp
+                )
+                Text(
+                    text = if (score >= 100) "İyi durumda" else "Skor",
+                    color = textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
                 )
                 if (isLoading) {
                     LinearProgressIndicator(
-                        modifier = Modifier.width(72.dp).padding(top = 4.dp),
+                        modifier = Modifier.width(64.dp).padding(top = 8.dp),
                         color = accent,
-                        trackColor = Color(0xFF2C2C2E)
+                        trackColor = track
+                    )
+                } else {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = subtitle,
+                        color = textSecondary,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        maxLines = 2
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = subtitle,
-                    color = textSecondary,
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                    maxLines = 2
-                )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        // CTA halka dışında — kesilmez / tarama sırasında da tıklanabilir
+        Spacer(modifier = Modifier.height(18.dp))
         Button(
             onClick = onOptimizeClick,
             enabled = buttonEnabled,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(50),
+                .height(50.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = HomeOrange,
+                containerColor = if (score >= 100) homeAccent() else HomeOrange,
                 contentColor = Color.White,
-                disabledContainerColor = HomeOrange.copy(alpha = 0.5f)
+                disabledContainerColor = HomeOrange.copy(alpha = 0.45f)
             )
         ) {
             Text(
                 text = buttonLabel,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 fontSize = 16.sp
             )
         }

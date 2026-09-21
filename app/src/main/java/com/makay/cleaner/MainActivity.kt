@@ -6,16 +6,18 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
@@ -25,6 +27,8 @@ import com.makay.cleaner.data.ThemeRepository
 import com.makay.cleaner.ui.AppWithSplash
 import com.makay.cleaner.ui.formatBytes
 import com.makay.cleaner.ui.theme.MakayCleanerTheme
+import com.makay.cleaner.update.AppUpdateHost
+import com.makay.cleaner.update.AppUpdateRepository
 import com.makay.cleaner.util.QuickCleanHelper
 import java.lang.ref.WeakReference
 
@@ -39,6 +43,10 @@ class MainActivity : FragmentActivity() {
 
     private val _hasStoragePermission = mutableStateOf(false)
     val hasStoragePermission: State<Boolean> = _hasStoragePermission
+
+    private val _updatePromptToken = mutableLongStateOf(0L)
+    private val _updateFromNotification = mutableStateOf(false)
+    private val _updateAutoDownload = mutableStateOf(false)
 
     private val storagePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -61,6 +69,7 @@ class MainActivity : FragmentActivity() {
         themeRepository = ThemeRepository.getInstance(this)
         checkStoragePermission()
         requestRuntimePermissionsIfNeeded()
+        consumeUpdateIntent(intent)
 
         setContent {
             MakayCleanerTheme(themeRepository = themeRepository) {
@@ -68,13 +77,44 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppWithSplash()
+                    val promptToken by _updatePromptToken
+                    val fromNotif by _updateFromNotification
+                    val autoDl by _updateAutoDownload
+                    Box(Modifier.fillMaxSize()) {
+                        AppWithSplash()
+                        AppUpdateHost(
+                            openFromNotification = fromNotif,
+                            autoDownload = autoDl,
+                            promptToken = promptToken
+                        )
+                    }
                 }
             }
         }
 
         handleWidgetIntent(intent)
         handleDeepLink(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeUpdateIntent(intent)
+        handleWidgetIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun consumeUpdateIntent(intent: Intent?) {
+        if (intent == null) return
+        val show = intent.getBooleanExtra(AppUpdateRepository.EXTRA_SHOW_UPDATE, false)
+        if (!show) return
+        val auto = intent.getBooleanExtra(AppUpdateRepository.EXTRA_AUTO_DOWNLOAD, false)
+        intent.removeExtra(AppUpdateRepository.EXTRA_SHOW_UPDATE)
+        intent.removeExtra(AppUpdateRepository.EXTRA_AUTO_DOWNLOAD)
+        intent.removeExtra(AppUpdateRepository.EXTRA_UPDATE_TAG)
+        _updateFromNotification.value = true
+        _updateAutoDownload.value = auto
+        _updatePromptToken.longValue = System.currentTimeMillis()
     }
 
     private fun requestRuntimePermissionsIfNeeded() {
@@ -140,13 +180,6 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         checkStoragePermission()
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleWidgetIntent(intent)
-        handleDeepLink(intent)
     }
 
     private fun handleDeepLink(intent: Intent?) {

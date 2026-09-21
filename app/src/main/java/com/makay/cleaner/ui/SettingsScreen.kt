@@ -14,15 +14,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.makay.cleaner.BuildConfig
 import com.makay.cleaner.data.ThemeRepository
 import com.makay.cleaner.ui.theme.ThemeMode
-import com.makay.cleaner.update.GitHubUpdateChecker
+import com.makay.cleaner.update.AppUpdateViewModel
+import com.makay.cleaner.update.findActivity
 import com.makay.cleaner.util.ProManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import com.makay.cleaner.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,11 +39,12 @@ fun SettingsScreen(
     val currentTheme by themeRepository.themeMode.collectAsState()
     val currentDynamic by themeRepository.dynamicColor.collectAsState()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val activity = context.findActivity() as? FragmentActivity
+    val updateVm: AppUpdateViewModel? = if (activity != null) {
+        viewModel(viewModelStoreOwner = activity, factory = AppUpdateViewModel.Factory(application))
+    } else null
+    val updateState = updateVm?.state?.collectAsState()?.value
     val intervals = listOf(6L, 12L, 24L, 48L)
-    var updateBusy by remember { mutableStateOf(false) }
-    var updateDialog by remember { mutableStateOf<GitHubUpdateChecker.UpdateInfo?>(null) }
-    var updateStatus by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(uiState.lastManualCleanMessage) {
         uiState.lastManualCleanMessage?.let {
@@ -304,38 +304,8 @@ fun SettingsScreen(
             }
 
             Button(
-                onClick = {
-                    if (updateBusy) return@Button
-                    scope.launch {
-                        updateBusy = true
-                        updateStatus = "GitHub kontrol ediliyor…"
-                        val result = GitHubUpdateChecker.checkLatest()
-                        updateBusy = false
-                        result.fold(
-                            onSuccess = { info ->
-                                when {
-                                    info == null -> {
-                                        updateStatus = "Henüz yayın yok (GitHub Releases boş)."
-                                        Toast.makeText(context, updateStatus, Toast.LENGTH_LONG).show()
-                                    }
-                                    GitHubUpdateChecker.isNewer(info) -> {
-                                        updateStatus = "Yeni sürüm: ${info.versionName}"
-                                        updateDialog = info
-                                    }
-                                    else -> {
-                                        updateStatus = "Güncelsiniz (v${BuildConfig.VERSION_NAME})."
-                                        Toast.makeText(context, updateStatus, Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            },
-                            onFailure = {
-                                updateStatus = "Kontrol başarısız: ${it.message}"
-                                Toast.makeText(context, updateStatus, Toast.LENGTH_LONG).show()
-                            }
-                        )
-                    }
-                },
-                enabled = !updateBusy,
+                onClick = { updateVm?.checkManual() },
+                enabled = updateVm != null && updateState?.checking != true && updateState?.downloading != true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -343,13 +313,30 @@ fun SettingsScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
             ) {
                 Text(
-                    if (updateBusy) "Kontrol ediliyor…" else "🔄 Güncelleme kontrol et",
+                    when {
+                        updateState?.checking == true -> "Kontrol ediliyor…"
+                        updateState?.downloading == true -> "İndiriliyor…"
+                        else -> "🔄 Güncelleme kontrol et"
+                    },
                     style = MaterialTheme.typography.titleMedium
                 )
             }
-            updateStatus?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val msg = updateState?.statusMessage ?: updateState?.error
+            if (!msg.isNullOrBlank()) {
+                Text(
+                    msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (updateState?.error != null)
+                        MaterialTheme.colorScheme.error
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+            Text(
+                "Kaynak: github.com/makaydestek/makay-cleaner · v${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Button(
                 onClick = onNavigateToNotifications,
@@ -426,55 +413,5 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
-    }
-
-    updateDialog?.let { info ->
-        AlertDialog(
-            onDismissRequest = { updateDialog = null },
-            title = { Text("Yeni sürüm ${info.versionName}") },
-            text = {
-                Text(
-                    buildString {
-                        append("Mevcut: v${BuildConfig.VERSION_NAME}\n")
-                        append("Kaynak: github.com/makaydestek/makay-cleaner\n\n")
-                        if (info.releaseNotes.isNotBlank()) append(info.releaseNotes)
-                        else append("Sürüm notu yok.")
-                    }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val url = info.apkUrl
-                        if (url.isNullOrBlank()) {
-                            GitHubUpdateChecker.openReleasesPage(context, info.htmlUrl)
-                            updateDialog = null
-                            return@TextButton
-                        }
-                        scope.launch {
-                            updateBusy = true
-                            updateStatus = "APK indiriliyor…"
-                            try {
-                                val file = withContext(Dispatchers.IO) {
-                                    GitHubUpdateChecker.downloadApk(context, url)
-                                }
-                                GitHubUpdateChecker.installApk(context, file)
-                                updateStatus = "Kurulum ekranı açıldı."
-                            } catch (e: Exception) {
-                                updateStatus = "İndirme hatası: ${e.message}"
-                                Toast.makeText(context, updateStatus, Toast.LENGTH_LONG).show()
-                                GitHubUpdateChecker.openReleasesPage(context, info.htmlUrl)
-                            } finally {
-                                updateBusy = false
-                                updateDialog = null
-                            }
-                        }
-                    }
-                ) { Text(if (info.apkUrl != null) "İndir ve kur" else "GitHub’da aç") }
-            },
-            dismissButton = {
-                TextButton(onClick = { updateDialog = null }) { Text("Sonra") }
-            }
-        )
     }
 }
