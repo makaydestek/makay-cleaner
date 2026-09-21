@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_background">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Makay Cleaner"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="12dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Kullanılan: "
+            android:textSize="12sp"
+            android:textColor="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/tv_used_storage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 GB"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#FF6B6B" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=" / Boş: "
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:layout_marginStart="8dp" />
+
+        <TextView
+            android:id="@+id/tv_free_storage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 GB"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#4CAF50" />
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/progress_storage"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:layout_marginBottom="12dp"
+        android:max="100"
+        android:progress="0"
+        android:progressDrawable="@drawable/progress_bar_widget" />
+
+    <TextView
+        android:id="@+id/tv_usage_percent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="%0 Dolu"
+        android:textSize="11sp"
+        android:textColor="#FFFFFF"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="12dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btn_open_media"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Medya"
+            android:textSize="11sp"
+            android:textColor="#1E88E5"
+            android:background="@drawable/button_widget"
+            android:padding="6dp"
+            android:layout_marginEnd="4dp" />
+
+        <Button
+            android:id="@+id/btn_open_toolbox"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Araçlar"
+            android:textSize="11sp"
+            android:textColor="#1E88E5"
+            android:background="@drawable/button_widget"
+            android:padding="6dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp" />
+
+        <Button
+            android:id="@+id/btn_quick_clean"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Temizle"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#1E88E5"
+            android:background="@drawable/button_widget"
+            android:padding="6dp"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Makay Cleaner</string>
+    <string name="storage_analysis">Depolama Analizi</string>
+    <string name="settings">Ayarlar</string>
+    <string name="permission_required">Depolama İzni Gerekli</string>
+    <string name="permission_body">Makay Cleaner gereksiz dosyaları tarayıp temizlemek için depolama erişimine ihtiyaç duyar. Dosyalarınız cihazda kalır; sistem dosyaları silinmez.</string>
+    <string name="scan">Tara</string>
+    <string name="quick_clean">Hızlı Temizle</string>
+    <string name="confirm_delete">Dosyaları Sil</string>
+    <string name="cancel">İptal</string>
+    <string name="delete">Sil</string>
+    <string name="move_to_trash">Çöp kutusuna taşı</string>
+    <string name="recycle_bin">Çöp kutusu</string>
+    <string name="toolbox">Araç kutusu</string>
+    <string name="media_clean">Medya temizliği</string>
+    <string name="pro_title">Makay Pro</string>
+    <string name="pro_active">Pro sürüm açık</string>
+    <string name="pro_free">Ücretsiz sürüm</string>
+    <string name="pro_features_desc">Kod, aşağıdaki Pro özelliklerini açar. Tarama ve normal temizlik ücretsizdir.</string>
+    <string name="pro_sideload_note">Kod uygulama içinde üretilmez. Bu kurulumun kodu geliştiriciye aittir: MAKAY-PRO. Play Billing yok.</string>
+    <string name="pro_free_list">Skor, optimizasyon, önbellek, depolama, sağlık özeti, pil/veri özeti, uygulama kilidi.</string>
+    <string name="pro_unlock_label">Pro açılış kodu</string>
+    <string name="pro_apply">Kodu uygula</string>
+    <string name="pro_unlocked">Pro açıldı</string>
+    <string name="pro_invalid">Kod geçersiz. Geliştiricinin verdiği kodu kontrol edin.</string>
+    <string name="pro_code_hint">Bu kurulumun açılış kodu: MAKAY-PRO</string>
+    <string name="pro_disable_test">Pro’yu kapat</string>
+    <string name="pro_free_keeps">Ücretsizde kalanlar</string>
+    <string name="pro_gain_title">Kod ile açılanlar</string>
+    <string name="privacy_note">Gizlilik: reklam yok, veriler cihazınızda kalır.</string>
+    <string name="clean_summary_title">Temizlik tamamlandı</string>
+    <string name="protected_skipped">korunan sistem dosyası atlandı</string>
+    <string name="duplicates">Yinelenen dosyalar</string>
+    <string name="system_cleaner">Sistem temizleyici</string>
+    <string name="corpse_finder">Kalıntı bulucu</string>
+    <string name="media_hub">Medya merkezi</string>
+    <string name="similar_photos">Benzer fotoğraflar</string>
+    <string name="media_compress">Medya sıkıştırma</string>
+    <string name="app_control">Uygulama kontrolü</string>
+    <string name="usage_access_needed">Kullanım erişimi kapalı — kullanılmayan uygulamalar kurulum tarihine göre tahmin edilir.</string>
+    <string name="usage_access_open">Kullanım iznini aç</string>
+    <string name="storage_breakdown">Depolama kırılımı</string>
+</resources>

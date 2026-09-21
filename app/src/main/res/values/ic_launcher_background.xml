@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ikon teal tonu - beyaz plaka yerine -->
+    <color name="ic_launcher_background">#00897B</color>
+</resources>
