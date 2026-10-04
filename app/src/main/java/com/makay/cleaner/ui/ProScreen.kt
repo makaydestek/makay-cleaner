@@ -137,13 +137,15 @@ fun ProScreen(
                     "Pro özellikleri açık: zamanlama, otomatik junk, benzer fotoğraf, sıkıştırma ve yinelenen dosyalar.",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                OutlinedButton(
-                    onClick = {
-                        ProManager.setPro(application, false)
-                        isPro = false
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(stringResource(R.string.pro_disable_test)) }
+                if (ProManager.PRO_GATING_ENABLED) {
+                    OutlinedButton(
+                        onClick = {
+                            ProManager.setPro(application, false)
+                            isPro = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.pro_disable_test)) }
+                }
             }
         }
     }

@@ -34,7 +34,10 @@ fun SocialMediaScreen(
             TopAppBar(
                 title = { Text("💬 Sosyal Medya Temizliği", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 }

@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.makay.cleaner.MainActivity
 import com.makay.cleaner.R
+import com.makay.cleaner.util.PlatformManager
 
 class NotificationManager(private val context: Context) {
 
@@ -48,7 +49,11 @@ class NotificationManager(private val context: Context) {
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Düzenli temizlik hatırlatmaları"
-                enableVibration(true)
+                enableVibration(!PlatformManager.isTvMode(context))
+                if (PlatformManager.isTvMode(context)) {
+                    setSound(null, null)
+                    importance = NotificationManager.IMPORTANCE_MIN
+                }
             }
             val completeChannel = NotificationChannel(
                 CHANNEL_CLEANING_COMPLETE,
@@ -56,7 +61,11 @@ class NotificationManager(private val context: Context) {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Temizlik işlemi tamamlandığında bildirim"
-                enableVibration(true)
+                enableVibration(!PlatformManager.isTvMode(context))
+                if (PlatformManager.isTvMode(context)) {
+                    setSound(null, null)
+                    importance = NotificationManager.IMPORTANCE_MIN
+                }
             }
             val warningChannel = NotificationChannel(
                 CHANNEL_STORAGE_WARNING,
@@ -64,7 +73,11 @@ class NotificationManager(private val context: Context) {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Depolama alanı azaldığında uyarı"
-                enableVibration(true)
+                enableVibration(!PlatformManager.isTvMode(context))
+                if (PlatformManager.isTvMode(context)) {
+                    setSound(null, null)
+                    importance = NotificationManager.IMPORTANCE_LOW
+                }
             }
             notificationManager.createNotificationChannel(reminderChannel)
             notificationManager.createNotificationChannel(completeChannel)
@@ -87,6 +100,7 @@ class NotificationManager(private val context: Context) {
     }
 
     fun sendCleaningReminder() {
+        if (PlatformManager.isTvMode(context)) return
         val pendingIntent = createPendingIntent(DEEP_SUGGESTIONS, NOTIFICATION_ID_REMINDER)
         val notification = NotificationCompat.Builder(context, CHANNEL_CLEANING_REMINDER)
             .setSmallIcon(R.drawable.ic_launcher)
@@ -100,6 +114,7 @@ class NotificationManager(private val context: Context) {
     }
 
     fun sendCleaningComplete(spaceSaved: Long, deepLink: String = DEEP_STATS) {
+        if (PlatformManager.isTvMode(context)) return
         val pendingIntent = createPendingIntent(deepLink, NOTIFICATION_ID_COMPLETE)
         val savedText = when {
             spaceSaved < 1024 * 1024 -> "${spaceSaved / 1024} KB"
@@ -118,6 +133,7 @@ class NotificationManager(private val context: Context) {
     }
 
     fun sendStorageWarning(usagePercent: Int = 90, deepLink: String = DEEP_CACHE) {
+        if (PlatformManager.isTvMode(context)) return
         val pendingIntent = createPendingIntent(deepLink, NOTIFICATION_ID_WARNING)
         val notification = NotificationCompat.Builder(context, CHANNEL_STORAGE_WARNING)
             .setSmallIcon(R.drawable.ic_launcher)

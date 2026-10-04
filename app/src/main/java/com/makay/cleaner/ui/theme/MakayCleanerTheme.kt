@@ -1,6 +1,7 @@
 package com.makay.cleaner.ui.theme
 
 import android.os.Build
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -8,10 +9,16 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.makay.cleaner.data.ThemeRepository
+import com.makay.cleaner.ui.LocalTvFocusPalette
+import com.makay.cleaner.ui.TvFocusIndication
+import com.makay.cleaner.ui.rememberTvFocusPalette
+import com.makay.cleaner.ui.tvFocusPaletteNow
+import com.makay.cleaner.util.PlatformManager
 
 /** Xiaomi Security tarzı AMOLED + neon vurgu */
 val MakayPrimary = Color(0xFF3F8CFF)
@@ -38,11 +45,11 @@ private val LightColorScheme = lightColorScheme(
     tertiaryContainer = Color(0xFFFFE4C2),
     onTertiaryContainer = Color(0xFF5C3500),
     background = MakayBackground,
-    onBackground = Color(0xFF1C1C1E),
+    onBackground = Color(0xFF111111),
     surface = MakaySurface,
-    onSurface = Color(0xFF1C1C1E),
-    surfaceVariant = Color(0xFFEEEEF0),
-    onSurfaceVariant = Color(0xFF636366),
+    onSurface = Color(0xFF111111),
+    surfaceVariant = Color(0xFFE8E8ED),
+    onSurfaceVariant = Color(0xFF3A3A3C),
     error = MakayError,
     onError = Color.White
 )
@@ -95,8 +102,21 @@ fun MakayCleanerTheme(
         else -> LightColorScheme
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        content = content
-    )
+    val isTv = PlatformManager.rememberIsTvMode()
+    MaterialTheme(colorScheme = colorScheme) {
+        val focusPalette = rememberTvFocusPalette()
+        tvFocusPaletteNow = focusPalette
+        if (isTv) {
+            CompositionLocalProvider(
+                LocalIndication provides TvFocusIndication,
+                LocalTvFocusPalette provides focusPalette
+            ) {
+                content()
+            }
+        } else {
+            CompositionLocalProvider(LocalTvFocusPalette provides focusPalette) {
+                content()
+            }
+        }
+    }
 }

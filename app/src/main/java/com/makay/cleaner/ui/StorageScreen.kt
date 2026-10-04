@@ -1,5 +1,6 @@
 package com.makay.cleaner.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -29,11 +31,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.makay.cleaner.R
+import com.makay.cleaner.data.AnalyticsRepository
 import com.makay.cleaner.util.JunkScanHelper
 import com.makay.cleaner.util.PermissionHelper
+import com.makay.cleaner.util.PlatformManager
 import com.makay.cleaner.util.UnusedAppsHelper
 import com.makay.cleaner.util.rememberStoragePermissionState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -46,19 +51,25 @@ private val HomeRed = Color(0xFFFF453A)
 private val HomeWhatsApp = Color(0xFF25D366)
 
 @Composable
-private fun homeBg() = MaterialTheme.colorScheme.background
+private fun homeIsLight() = MaterialTheme.colorScheme.background.luminance() > 0.45f
 
 @Composable
-private fun homeCard() = MaterialTheme.colorScheme.surfaceVariant
+private fun homeBg() = if (homeIsLight()) Color(0xFFF4F4F6) else Color(0xFF000000)
 
 @Composable
-private fun homeTextPrimary() = MaterialTheme.colorScheme.onBackground
+private fun homeCard() = if (homeIsLight()) Color(0xFFFFFFFF) else Color(0xFF2C2C2E)
 
 @Composable
-private fun homeTextSecondary() = MaterialTheme.colorScheme.onSurfaceVariant
+private fun homeTextPrimary() = if (homeIsLight()) Color(0xFF111111) else Color(0xFFF2F2F7)
+
+@Composable
+private fun homeTextSecondary() = if (homeIsLight()) Color(0xFF3A3A3C) else Color(0xFFD1D1D6)
 
 @Composable
 private fun homeAccent() = MaterialTheme.colorScheme.primary
+
+@Composable
+private fun homeOutline() = if (homeIsLight()) Color(0xFF1C1C1E) else Color(0xFFAEAEB2)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,33 +101,50 @@ fun StorageScreen(
     val hasPermission = rememberStoragePermissionState()
     var cleanMessage by remember { mutableStateOf<String?>(null) }
     var junkBytes by remember { mutableLongStateOf(0L) }
+    var lockedBytes by remember { mutableLongStateOf(0L) }
     var unusedApps by remember { mutableIntStateOf(0) }
     var optimizing by remember { mutableStateOf(false) }
     var scanned by remember { mutableStateOf(false) }
+    var expandedCategory by remember { mutableStateOf<String?>(null) }
+    var showWhy by remember { mutableStateOf(false) }
+    var whyDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(cleanMessage) {
+        if (cleanMessage == null) return@LaunchedEffect
+        delay(5_000)
+        cleanMessage = null
+    }
 
     // Açılışta junk + öneri listesi; skor yalnızca junk’a bağlı
     LaunchedEffect(hasPermission) {
-        val (junk, unused) = withContext(Dispatchers.IO) {
-            val j = runCatching { JunkScanHelper.scan(context).totalBytes }.getOrDefault(0L)
+        if (!hasPermission) {
+            junkBytes = 0L
+            lockedBytes = 0L
+            unusedApps = 0
+            scanned = true
+            return@LaunchedEffect
+        }
+        val (junk, locked, unused) = withContext(Dispatchers.IO) {
+            val report = runCatching { JunkScanHelper.scan(context) }.getOrNull()
             val u = runCatching { UnusedAppsHelper.getUnusedApps(context).size }.getOrDefault(0)
-            j to u
+            Triple(report?.cleanableBytes ?: 0L, report?.lockedBytes ?: 0L, u)
         }
         junkBytes = junk
+        lockedBytes = locked
         unusedApps = unused
         scanned = true
     }
 
     val usagePercent = uiState.storageInfo?.usagePercent ?: 0f
     val healthScore = JunkScanHelper.optimizationScore(junkBytes, usagePercent, unusedApps)
-    val hasSuggestions = unusedApps > 0 || usagePercent >= 85f
     val statusSubtitle = when {
-        optimizing -> "Taranıyor ve temizleniyor…"
-        !scanned || uiState.isLoading -> "Cihaz kontrol ediliyor…"
-        !hasPermission -> "Depolama izni gerekli"
-        healthScore >= 100 -> "Cihazınız iyi durumda"
-        junkBytes > 0L -> "Temizlenebilir önbellek bulundu"
-        else -> "Optimizasyon önerilir"
+        optimizing -> "Optimizasyon çalışıyor"
+        !scanned || uiState.isLoading -> "Cihaz durumu kontrol ediliyor"
+        !hasPermission -> "Devam etmek için depolama izni gerekli"
+        healthScore >= 100 && junkBytes <= 0L -> "Cihaz temiz görünüyor"
+        junkBytes > 0L -> "${formatBytes(junkBytes)} silinebilir alan"
+        else -> "Hızlı optimizasyon önerilir"
     }
 
     fun runOptimization() {
@@ -130,65 +158,78 @@ fun StorageScreen(
             val result = withContext(Dispatchers.IO) {
                 JunkScanHelper.cleanAll(context)
             }
-            val (junk, unused) = withContext(Dispatchers.IO) {
-                val j = JunkScanHelper.scan(context).totalBytes
+            val (junk, locked, unused) = withContext(Dispatchers.IO) {
+                val report = JunkScanHelper.scan(context)
                 val u = UnusedAppsHelper.getUnusedApps(context).size
-                j to u
+                if (PlatformManager.isTvMode(context)) {
+                    val score = JunkScanHelper.optimizationScore(report.cleanableBytes)
+                    com.makay.cleaner.util.TvRecommendationManager.publishRecommendation(
+                        context,
+                        report.cleanableBytes,
+                        score
+                    )
+                }
+                Triple(report.cleanableBytes, report.lockedBytes, u)
             }
             junkBytes = junk
+            lockedBytes = locked
             unusedApps = unused
             scanned = true
             viewModel.refresh()
             optimizing = false
-            val score = JunkScanHelper.optimizationScore(junk, usagePercent, unused)
-            cleanMessage = when {
-                score >= 100 && result.spaceSaved > 0L ->
-                    "Optimizasyon tamam — ${formatBytes(result.spaceSaved)} temizlendi, skor %100"
-                score >= 100 ->
-                    "Optimizasyon tamam — cihaz iyi durumda, skor %100"
-                else ->
-                    "Kısmen temizlendi (${formatBytes(result.spaceSaved)}). Kalan önbellek: ${formatBytes(junk)}"
-            }
+            showWhy = junk > 0L
+            val removed = result.spaceSaved
+            cleanMessage = if (removed > 0L) "${formatBytes(removed)} silindi" else null
         }
     }
 
-    Box(
+    val isTv = PlatformManager.rememberIsTvMode()
+    val homeScroll = rememberScrollState()
+    LaunchedEffect(isTv) {
+        if (isTv) homeScroll.scrollTo(0)
+    }
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(homeBg())
+            .then(
+                if (isTv) Modifier.padding(horizontal = 48.dp, vertical = 28.dp)
+                else Modifier.statusBarsPadding().padding(horizontal = 16.dp)
+            )
     ) {
+        // Başlık + ayarlar kaydırılmaz — TV açılışında her zaman görünür
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = if (isTv) 0.dp else 4.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Makay Cleaner",
+                color = homeTextPrimary(),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = if (isTv) 20.sp else 18.sp,
+                letterSpacing = 0.2.sp
+            )
+            TvIconButton(
+                onClick = onNavigateToSettings,
+                idleContent = homeTextPrimary(),
+                modifier = if (isTv) Modifier.tvRequestInitialFocus() else Modifier
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Ayarlar"
+                )
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 28.dp)
+                .verticalScroll(homeScroll)
+                .padding(bottom = if (isTv) 20.dp else 28.dp)
         ) {
-            // Üst bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Makay Cleaner",
-                    color = homeTextPrimary(),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 18.sp,
-                    letterSpacing = 0.2.sp
-                )
-                IconButton(onClick = onNavigateToSettings) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Ayarlar",
-                        tint = homeTextPrimary()
-                    )
-                }
-            }
-
             // Skor halkası + büyük Optimizasyon / Temizle CTA (halka dışında — kesilmez)
             HomeScoreHero(
                 score = healthScore,
@@ -204,23 +245,13 @@ fun StorageScreen(
                 onOptimizeClick = { runOptimization() }
             )
 
-            Spacer(Modifier.height(10.dp))
-            OutlinedButton(
-                onClick = onNavigateToCleanerHub,
-                modifier = Modifier.fillMaxWidth().height(46.dp),
-                shape = RoundedCornerShape(14.dp),
-                border = ButtonDefaults.outlinedButtonBorder(enabled = true)
-            ) {
-                Text("Ayrıntılı temizleyici", fontWeight = FontWeight.Medium)
-            }
+            Spacer(Modifier.height(14.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Yalnızca depolama izni (kullanım erişimi istenmez — sideload uyarılarına yol açmaz)
             if (!hasPermission) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = homeCard()),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, homeOutline().copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     CompactStatusRow(
@@ -229,265 +260,455 @@ fun StorageScreen(
                         onClick = onNavigateToPermissions
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-            } else if (scanned && junkBytes > 0L) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = homeCard()),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    CompactStatusRow(
-                        title = "${formatBytes(junkBytes)} temizlenebilir önbellek",
-                        action = "Temizle",
-                        onClick = { runOptimization() }
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(Modifier.height(12.dp))
             }
 
-            cleanMessage?.let {
+            cleanMessage?.let { msg ->
                 Text(
-                    text = it,
-                    color = HomeGreen,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(bottom = 10.dp)
-                )
-            }
-
-            // Skoru düşürmeyen yumuşak öneriler (sürekli “sorun var” izlenimi vermez)
-            if (hasPermission && scanned && healthScore >= 100 && hasSuggestions) {
-                Text(
-                    text = "Alan kazanma önerileri",
-                    color = homeTextSecondary(),
-                    fontWeight = FontWeight.SemiBold,
+                    text = msg,
+                    color = if (homeIsLight()) Color(0xFF1B7A35) else HomeGreen,
                     fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = homeCard()),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(Modifier.padding(vertical = 2.dp)) {
-                        if (unusedApps > 0) {
-                            CompactStatusRow(
-                                title = "$unusedApps uzun süredir kullanılmayan uygulama",
-                                action = "İncele",
-                                onClick = onNavigateToManageApps
-                            )
+            }
+            if (showWhy && (junkBytes > 0L || lockedBytes > 0L)) {
+                HomeWhyRow(
+                    label = if (junkBytes > 0L) "Kalan ${formatBytes(junkBytes)}" else "Silinemeyen önbellek",
+                    onWhy = { whyDialog = true }
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+            if (whyDialog) {
+                AlertDialog(
+                    onDismissRequest = { whyDialog = false },
+                    title = { Text("Neden silinmedi?") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            if (junkBytes > 0L) {
+                                Text(
+                                    "Kalan ${formatBytes(junkBytes)} diskte duruyor. Silme denendi, Android dosyayı yerinde bıraktı.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    "Bunlar sistem klasörü (/system, /vendor) değil. Başka uygulamanın özel alanı veya yazmaya kapalı önbellek.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    "Silmek için: Ayarlar → Uygulamalar → ilgili uygulama → Depolama → Önbelleği temizle. Makay bu klasöre giremez.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            if (lockedBytes > 0L) {
+                                Text(
+                                    "Sistem sayacı yaklaşık ${formatBytes(lockedBytes)} ek önbellek gösterir. Bu bir dosya listesi değil. Xiaomi ve Samsung bunu sistem uygulaması oldukları için silebilir; sideload uygulama silemez. Skor bu alanı saymaz.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
-                        if (usagePercent >= 85f) {
-                            CompactStatusRow(
-                                title = "Depolama %${usagePercent.roundToInt()} dolu",
-                                action = "Gözat",
-                                onClick = onNavigateToCleanerHub
-                            )
-                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { whyDialog = false }) { Text("Tamam") }
                     }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
+                )
             }
 
-            // Depolama kırılımı + pasta
-            Spacer(modifier = Modifier.height(8.dp))
+            val cats = uiState.categories.take(5)
+            val catTotal = cats.sumOf { it.sizeBytes }
+            val weekUsage = remember {
+                AnalyticsRepository(context.applicationContext).getLast7DaysUsage()
+            }
+            val weekSaved = weekUsage.sumOf { it.spaceSaved }
+
+            HomeInsightStrip(
+                storagePercent = usagePercent,
+                junkBytes = junkBytes,
+                unusedApps = unusedApps,
+                weekSaved = weekSaved,
+                topCategory = cats.firstOrNull { it.sizeBytes > 0 }?.let { "${it.name} ${it.sizeFormatted}" },
+                hasPermission = hasPermission,
+                onStorage = {
+                    expandedCategory = if (expandedCategory == "storage") null else "storage"
+                },
+                onUnused = onNavigateToAppControl,
+                onWeek = onNavigateToAnalytics
+            )
+
+            if (expandedCategory == "storage") {
+                Spacer(Modifier.height(8.dp))
+                HomeStorageCompact(
+                    categories = cats,
+                    catTotal = catTotal,
+                    isLoading = uiState.isLoading,
+                    hasPermission = hasPermission,
+                    onCategoryClick = { id ->
+                        when (id) {
+                            "cache" -> onNavigateToCache()
+                            "large" -> onNavigateToLargeFiles()
+                            "media" -> onNavigateToMediaClean()
+                            "docs" -> onNavigateToLargeFiles()
+                            else -> onNavigateToCleanerHub()
+                        }
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(18.dp))
             Text(
-                text = "Depolama kırılımı",
+                text = "Kategoriler",
                 color = homeTextPrimary(),
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
                 modifier = Modifier.padding(bottom = 10.dp)
             )
-            val cats = uiState.categories.take(5)
-            val catTotal = cats.sumOf { it.sizeBytes }
-            when {
-                uiState.isLoading && cats.isEmpty() -> {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                        color = homeAccent()
-                    )
-                }
-                catTotal <= 0L -> {
-                    Text(
-                        if (!hasPermission)
-                            "Medya ve junk boyutları için depolama izni verin."
-                        else
-                            "Henüz anlamlı kırılım yok — Optimizasyon ile junk taraması yapın.",
-                        color = homeTextSecondary(),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-                }
-                else -> {
-                    StorageBreakdownPie(
-                        categories = cats.filter { it.sizeBytes > 0 }.ifEmpty { cats },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(140.dp)
-                            .padding(bottom = 10.dp)
-                    )
-                    cats.forEach { cat ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    when {
-                                        cat.name.contains("Önbellek", ignoreCase = true) ->
-                                            onNavigateToCache()
-                                        cat.name.contains("Büyük", ignoreCase = true) ->
-                                            onNavigateToLargeFiles()
-                                        cat.name.contains("Medya", ignoreCase = true) ->
-                                            onNavigateToMediaClean()
-                                        cat.name.contains("Belge", ignoreCase = true) ->
-                                            onNavigateToLargeFiles()
-                                        else -> onNavigateToToolbox()
-                                    }
-                                }
-                                .padding(vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(cat.color.toLong() and 0xFFFFFFFFL))
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(cat.name, color = homeTextSecondary(), fontSize = 13.sp)
-                            }
-                            Text(cat.sizeFormatted, color = homeTextPrimary(), fontSize = 13.sp)
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 2x3 özellik kartları — referans Security ana sayfa
-            val storageLabel = uiState.storageInfo?.let {
-                "%${it.usagePercent.roundToInt()} depolama alanı"
-            } ?: "Depolama analizi"
 
             val batterySub = remember(context) {
                 try {
                     val bm = context.getSystemService(android.content.Context.BATTERY_SERVICE)
                         as android.os.BatteryManager
                     val lvl = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
-                    "%$lvl şarj · sistemde yönet"
+                    "%$lvl şarj"
                 } catch (_: Exception) {
-                    "Sistem pil ayarları"
+                    "Pil özeti"
                 }
             }
-            val dataSub = remember(context) {
-                val mobile = android.net.TrafficStats.getMobileRxBytes() +
-                    android.net.TrafficStats.getMobileTxBytes()
-                if (mobile > 0) "${formatBytes(mobile)} mobil · sistemde yönet"
-                else "Sayaç özeti · sistemde yönet"
-            }
 
-            HomeFeatureGrid(
-                items = listOf(
-                    HomeFeature(
-                        title = "Temizleyici",
-                        subtitle = storageLabel,
-                        iconRes = R.drawable.ic_hub_cleaner,
-                        accent = HomeOrange,
-                        onClick = onNavigateToCleanerHub
-                    ),
-                    HomeFeature(
-                        title = "Güvenlik taraması",
-                        subtitle = "Virüs motoru yok · sağlık özeti",
-                        iconRes = R.drawable.ic_hub_security,
-                        accent = HomeGreen,
-                        onClick = onNavigateToSecurityScan
-                    ),
-                    HomeFeature(
-                        title = "Pil",
-                        subtitle = batterySub,
-                        iconRes = R.drawable.ic_hub_battery,
-                        accent = HomeGreen,
-                        onClick = onNavigateToBattery
-                    ),
-                    HomeFeature(
-                        title = "Veri kullanımı",
-                        subtitle = dataSub,
-                        iconRes = R.drawable.ic_hub_data,
-                        accent = HomeCyan,
-                        onClick = onNavigateToDataUsage
-                    ),
-                    HomeFeature(
-                        title = "Gizlilik koruması",
-                        subtitle = "Kilitle ve izinleri yönet",
-                        iconRes = R.drawable.ic_hub_privacy,
-                        accent = HomeCyan,
-                        onClick = onNavigateToPrivacy
-                    ),
-                    HomeFeature(
-                        title = "Uygulamaları yönet",
-                        subtitle = "Ara, kilitle, kaldır",
-                        iconRes = R.drawable.ic_hub_apps,
-                        accent = Color(0xFF8E8E93),
-                        onClick = onNavigateToManageApps
-                    )
+            HomeCategoryCard(
+                title = "Temizlik",
+                subtitle = if (junkBytes > 0L) "${formatBytes(junkBytes)} silinebilir" else "Önbellek, junk, çöp kutusu",
+                accent = HomeOrange,
+                iconRes = R.drawable.ic_hub_cleaner,
+                expanded = expandedCategory == "clean",
+                onToggle = { expandedCategory = if (expandedCategory == "clean") null else "clean" },
+                actions = listOf(
+                    "Ayrıntılı temizleyici" to onNavigateToCleanerHub,
+                    "Önbellek" to onNavigateToCache,
+                    "Büyük dosya" to onNavigateToLargeFiles,
+                    "Çöp kutusu" to onNavigateToRecycleBin
                 )
             )
-
-            Spacer(Modifier.height(24.dp))
-
-            Text(
-                text = "Ortak özellikler",
-                color = homeTextPrimary(),
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                modifier = Modifier.padding(bottom = 14.dp)
+            Spacer(Modifier.height(10.dp))
+            HomeCategoryCard(
+                title = "Medya",
+                subtitle = "Fotoğraf, sosyal, yinelenenler",
+                accent = HomeCyan,
+                iconRes = R.drawable.ic_hub_data,
+                expanded = expandedCategory == "media",
+                onToggle = { expandedCategory = if (expandedCategory == "media") null else "media" },
+                actions = listOf(
+                    "Medya temizliği" to onNavigateToMediaClean,
+                    "Sosyal medya" to onNavigateToSocialMedia,
+                    "Yinelenen foto" to onNavigateToDuplicatePhotos,
+                    "Araç kutusu" to onNavigateToToolbox
+                )
             )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                HomeQuickAction(iconRes = R.drawable.ic_hub_privacy, label = "Gizlilik", onClick = onNavigateToPrivacy)
-                HomeQuickAction(iconRes = R.drawable.ic_hub_apps, label = "Araçlar", onClick = onNavigateToToolbox)
-                HomeQuickAction(iconRes = R.drawable.ic_hub_cleaner, label = "Çöp kutusu", onClick = onNavigateToRecycleBin)
-                HomeQuickAction(iconRes = R.drawable.ic_hub_data, label = "Medya", onClick = onNavigateToMediaClean)
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            HomeToolboxCard(
-                onCache = onNavigateToCleanerHub,
-                onSocial = onNavigateToSocialMedia,
-                onLarge = onNavigateToLargeFiles,
-                onUninstall = onNavigateToUninstall,
-                onStats = onNavigateToAnalytics,
-                onSuggestions = onNavigateToToolbox
+            Spacer(Modifier.height(10.dp))
+            HomeCategoryCard(
+                title = "Uygulamalar",
+                subtitle = if (unusedApps > 0) "$unusedApps kullanılmayan · yönet" else "Yönet, kaldır, kilitle",
+                accent = Color(0xFF8E8E93),
+                iconRes = R.drawable.ic_hub_apps,
+                expanded = expandedCategory == "apps",
+                onToggle = { expandedCategory = if (expandedCategory == "apps") null else "apps" },
+                actions = listOf(
+                    "Kullanılmayan" to onNavigateToAppControl,
+                    "Uygulamaları yönet" to onNavigateToManageApps,
+                    "Uygulama kaldır" to onNavigateToUninstall,
+                    "Gizlilik" to onNavigateToPrivacy
+                )
+            )
+            Spacer(Modifier.height(10.dp))
+            HomeCategoryCard(
+                title = "Cihaz",
+                subtitle = "$batterySub · güvenlik ve istatistik",
+                accent = HomeGreen,
+                iconRes = R.drawable.ic_hub_security,
+                expanded = expandedCategory == "device",
+                onToggle = { expandedCategory = if (expandedCategory == "device") null else "device" },
+                actions = listOf(
+                    "Güvenlik özeti" to onNavigateToSecurityScan,
+                    "Pil" to onNavigateToBattery,
+                    "Veri kullanımı" to onNavigateToDataUsage,
+                    "İstatistik" to onNavigateToAnalytics
+                )
             )
         }
     }
 }
 
 @Composable
-private fun CompactStatusRow(title: String, action: String, onClick: () -> Unit) {
+private fun HomeWhyRow(label: String, onWhy: () -> Unit) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(title, color = homeTextPrimary(), fontSize = 13.sp, modifier = Modifier.weight(1f))
-        Text(action, color = homeAccent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = label,
+            color = homeTextSecondary(),
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f)
+        )
+        TvIconButton(onClick = onWhy, idleContent = homeTextPrimary()) {
+            Text("?", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        }
     }
 }
 
-private data class HomeFeature(
-    val title: String,
-    val subtitle: String,
-    val iconRes: Int,
-    val accent: Color,
-    val onClick: () -> Unit
-)
+@Composable
+private fun CompactStatusRow(title: String, action: String, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .tvClickable(corner = 12.dp, onFocused = { focused = it }, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            title,
+            color = homeTextPrimary(),
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            action,
+            color = homeAccent(),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun HomeInsightStrip(
+    storagePercent: Float,
+    junkBytes: Long,
+    unusedApps: Int,
+    weekSaved: Long,
+    topCategory: String?,
+    hasPermission: Boolean,
+    onStorage: () -> Unit,
+    onUnused: () -> Unit,
+    onWeek: () -> Unit
+) {
+    val chips = buildList {
+        if (hasPermission) {
+            add(
+                Triple(
+                    if (storagePercent > 0f) "%${storagePercent.roundToInt()} dolu" else "Depolama",
+                    topCategory ?: "Kırılım",
+                    onStorage
+                )
+            )
+        }
+        if (junkBytes > 0L) {
+            add(Triple(formatBytes(junkBytes), "Silinebilir", onStorage))
+        }
+        if (unusedApps > 0) {
+            add(Triple("$unusedApps uygulama", "Kullanılmayan", onUnused))
+        }
+        if (weekSaved > 0L) {
+            add(Triple(formatBytes(weekSaved), "Son 7 gün", onWeek))
+        }
+    }
+    if (chips.isEmpty()) return
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        chips.take(4).forEach { (value, label, click) ->
+            val (src, focused) = rememberTvInteraction()
+            Card(
+                onClick = click,
+                interactionSource = src,
+                modifier = Modifier
+                    .weight(1f)
+                    .makayFocus(corner = 12.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = tvCardColors(focused, homeCard())
+            ) {
+                Column(
+                    Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        value,
+                        color = homeTextPrimary(),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        label,
+                        color = homeTextSecondary(),
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeStorageCompact(
+    categories: List<com.makay.cleaner.domain.model.StorageCategory>,
+    catTotal: Long,
+    isLoading: Boolean,
+    hasPermission: Boolean,
+    onCategoryClick: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = homeCard())
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            when {
+                isLoading && categories.isEmpty() -> {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = homeAccent()
+                    )
+                }
+                catTotal <= 0L -> {
+                    Text(
+                        if (!hasPermission) "Depolama izni sonrası kırılım görünür."
+                        else "Henüz anlamlı kırılım yok.",
+                        color = homeTextSecondary(),
+                        fontSize = 12.sp
+                    )
+                }
+                else -> {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StorageBreakdownPie(
+                            categories = categories.filter { it.sizeBytes > 0 }.ifEmpty { categories },
+                            modifier = Modifier.size(72.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            categories.filter { it.sizeBytes > 0 }.take(4).forEach { cat ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onCategoryClick(cat.id.ifBlank { cat.name }) }
+                                        .padding(vertical = 3.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(cat.name, color = homeTextSecondary(), fontSize = 12.sp, maxLines = 1)
+                                    Text(cat.sizeFormatted, color = homeTextPrimary(), fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeCategoryCard(
+    title: String,
+    subtitle: String,
+    accent: Color,
+    iconRes: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    actions: List<Pair<String, () -> Unit>>
+) {
+    val (interaction, focused) = rememberTvInteraction()
+    Card(
+        onClick = onToggle,
+        interactionSource = interaction,
+        modifier = Modifier
+            .fillMaxWidth()
+            .makayFocus(corner = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = tvCardColors(focused, homeCard())
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accent.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(iconRes),
+                        contentDescription = title,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        color = homeTextPrimary(),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        subtitle,
+                        color = homeTextSecondary(),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    if (expanded) "▲" else "▼",
+                    color = homeTextSecondary(),
+                    fontSize = 12.sp
+                )
+            }
+            if (expanded) {
+                Spacer(Modifier.height(12.dp))
+                actions.chunked(2).forEach { row ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        row.forEach { (label, click) ->
+                            val (chipSrc, _) = rememberTvInteraction()
+                            OutlinedButton(
+                                onClick = click,
+                                interactionSource = chipSrc,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .makayFocus(corner = 12.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, homeOutline().copy(alpha = 0.35f)),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color.Transparent,
+                                    contentColor = homeTextPrimary()
+                                ),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Text(label, fontSize = 12.sp, maxLines = 1)
+                            }
+                        }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun HomeScoreHero(
@@ -505,7 +726,9 @@ private fun HomeScoreHero(
     }
     val textPrimary = homeTextPrimary()
     val textSecondary = homeTextSecondary()
-    val track = MaterialTheme.colorScheme.surfaceVariant
+    val track = if (homeIsLight()) Color(0xFFD8D8DC) else Color(0xFF3A3A3C)
+    val isTv = PlatformManager.rememberIsTvMode()
+    val ring = if (isTv) 156.dp else 188.dp
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -513,7 +736,7 @@ private fun HomeScoreHero(
         Box(
             modifier = Modifier
                 .padding(top = 4.dp)
-                .size(188.dp),
+                .size(ring),
             contentAlignment = Alignment.Center
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
@@ -543,7 +766,7 @@ private fun HomeScoreHero(
                 Text(
                     text = "$score",
                     color = textPrimary,
-                    fontSize = 52.sp,
+                    fontSize = if (isTv) 42.sp else 52.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-1).sp
                 )
@@ -574,17 +797,19 @@ private fun HomeScoreHero(
         }
 
         Spacer(modifier = Modifier.height(18.dp))
+        val (optInteraction, optFocused) = rememberTvInteraction()
         Button(
             onClick = onOptimizeClick,
             enabled = buttonEnabled,
+            interactionSource = optInteraction,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .height(50.dp)
+                .makayFocus(),
             shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (score >= 100) homeAccent() else HomeOrange,
-                contentColor = Color.White,
-                disabledContainerColor = HomeOrange.copy(alpha = 0.45f)
+            colors = tvButtonColors(
+                focused = optFocused,
+                idle = if (score >= 100) homeAccent() else HomeOrange
             )
         ) {
             Text(
@@ -592,181 +817,6 @@ private fun HomeScoreHero(
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 16.sp
             )
-        }
-    }
-}
-
-@Composable
-private fun HomeFeatureGrid(items: List<HomeFeature>) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items.chunked(2).forEach { rowItems ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                rowItems.forEach { feature ->
-                    HomeFeatureCard(
-                        feature = feature,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                if (rowItems.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeFeatureCard(
-    feature: HomeFeature,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = feature.onClick,
-        modifier = modifier.height(112.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = homeCard())
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(feature.accent.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(feature.iconRes),
-                    contentDescription = feature.title,
-                    tint = Color.Unspecified,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = feature.title,
-                    color = homeTextPrimary(),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = feature.subtitle,
-                    color = homeTextSecondary(),
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeQuickAction(
-    iconRes: Int,
-    label: String,
-    onClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(96.dp)
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(homeCard()),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = label,
-                tint = Color.Unspecified,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = label,
-            color = homeTextSecondary(),
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            maxLines = 2
-        )
-    }
-}
-
-@Composable
-private fun HomeToolboxCard(
-    onCache: () -> Unit,
-    onSocial: () -> Unit,
-    onLarge: () -> Unit,
-    onUninstall: () -> Unit,
-    onStats: () -> Unit,
-    onSuggestions: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = homeCard())
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Temizleyici araçları",
-                color = homeTextPrimary(),
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            val tools = listOf(
-                Triple("🗑️", "Derin temizlik", onCache),
-                Triple("💬", "WhatsApp", onSocial),
-                Triple("📁", "Büyük dosya", onLarge),
-                Triple("📱", "Uygulama kaldır", onUninstall),
-                Triple("📈", "Analitik", onStats),
-                Triple("🧰", "Tüm araçlar", onSuggestions)
-            )
-            tools.chunked(3).forEach { row ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    row.forEach { (emoji, label, click) ->
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable(onClick = click)
-                                .padding(4.dp)
-                        ) {
-                            Text(text = emoji, fontSize = 28.sp)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = label,
-                                color = homeTextSecondary(),
-                                fontSize = 11.sp,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }

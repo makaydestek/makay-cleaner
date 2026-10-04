@@ -41,7 +41,10 @@ fun RecycleBinScreen(
             TopAppBar(
                 title = { Text("Çöp kutusu", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 },
@@ -91,7 +94,7 @@ fun RecycleBinScreen(
                                 style = MaterialTheme.typography.bodySmall
                             )
                             Text(
-                                dateFmt.format(Date(item.deletedAt)),
+                                "${dateFmt.format(Date(item.deletedAt))} · kalan ${repo.hoursRemaining(item)} saat",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

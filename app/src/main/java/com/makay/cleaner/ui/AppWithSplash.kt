@@ -58,9 +58,25 @@ sealed class AppScreen {
 @Composable
 fun AppWithSplash() {
     var showSplash by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    com.makay.cleaner.util.LanguageManager.init(context)
+    com.makay.cleaner.util.PlatformManager.init(context)
+    val prefs = remember { context.getSharedPreferences("platform_prefs", android.content.Context.MODE_PRIVATE) }
+    var showPlatformSelect by remember { mutableStateOf(prefs.getString("platform_mode", null) == null) }
+    var showGuide by remember { mutableStateOf(!isFirstLaunchDone(context)) }
 
     if (showSplash) {
         SplashScreen(onSplashFinished = { showSplash = false })
+    } else if (showPlatformSelect) {
+        PlatformSelectScreen(context = context, onSelected = { showPlatformSelect = false })
+    } else if (showGuide) {
+        FirstLaunchGuideScreen(
+            context = context,
+            onDone = {
+                markFirstLaunchDone(context)
+                showGuide = false
+            }
+        )
     } else {
         MainAppContent()
     }
@@ -86,6 +102,7 @@ fun MainAppContent() {
         val link = com.makay.cleaner.util.DeepLinkBus.consume() ?: return@LaunchedEffect
         if (isLocked) return@LaunchedEffect
         currentScreen = when (link) {
+            com.makay.cleaner.notification.NotificationManager.DEEP_HOME -> AppScreen.Storage
             com.makay.cleaner.notification.NotificationManager.DEEP_CACHE -> AppScreen.Cache
             com.makay.cleaner.notification.NotificationManager.DEEP_STATS -> AppScreen.Stats
             com.makay.cleaner.notification.NotificationManager.DEEP_SUGGESTIONS -> AppScreen.Suggestions
@@ -429,7 +446,7 @@ fun MainAppContent() {
                 onOpenPermissions = { currentScreen = AppScreen.Permissions },
                 onOpenManageApps = {
                     hubReturn = AppScreen.SecurityScan
-                    currentScreen = AppScreen.ManageApps
+                    currentScreen = AppScreen.AppControl
                 }
             )
         }

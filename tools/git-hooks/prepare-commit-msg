@@ -1,0 +1,18 @@
+#!/bin/sh
+# Cursor / Git Bash prepare-commit-msg — Co-authored-by: Cursor kaldirir
+# Kurulum: tools\install-git-hooks.bat
+MSG_FILE="$1"
+[ -f "$MSG_FILE" ] || exit 0
+tmp="${MSG_FILE}.tmp.$$"
+grep -vi 'cursoragent@cursor.com' "$MSG_FILE" | grep -vi 'Co-authored-by: Cursor' | grep -vi 'Made with Cursor' > "$tmp"
+# Sondaki fazla bos satirlari kirp
+awk '
+  { lines[NR]=$0 }
+  END {
+    end=NR
+    while (end>0 && lines[end]=="") end--
+    for (i=1;i<=end;i++) print lines[i]
+  }
+' "$tmp" > "$MSG_FILE"
+rm -f "$tmp"
+exit 0

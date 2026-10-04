@@ -26,3 +26,7 @@ jobs:
           ./gradlew :app:compileReleaseKotlin --no-daemon --stacktrace
       - name: Compile debug Kotlin
         run: ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
+      - name: Run unit tests
+        run: ./gradlew test --no-daemon --stacktrace
+      - name: Android lint (debug)
+        run: ./gradlew :app:lintDebug --no-daemon --stacktrace

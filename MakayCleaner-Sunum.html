@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Makay Cleaner — Kullanıcı Sunumu</title>
+  <style>
+    :root {
+      --bg: #0b0b0c;
+      --surface: #161618;
+      --line: #2c2c2e;
+      --text: #f2f2f7;
+      --muted: #8e8e93;
+      --accent: #3f8cff;
+      --ok: #2eb050;
+      --warn: #ff9f0a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    h2 { font-size: 22px; margin: 0 0 12px; }
+    h3 { font-size: 16px; margin: 20px 0 8px; }
+    p { margin: 0 0 12px; color: var(--text); }
+    .muted { color: var(--muted); }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 18px; }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 24px; }
+    nav button {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    nav button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    section { display: none; }
+    section.on { display: block; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+    .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    .stat b { display: block; font-size: 18px; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .card h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    .note {
+      border-left: 3px solid var(--accent);
+      background: var(--surface);
+      padding: 12px 14px;
+      border-radius: 0 10px 10px 0;
+      margin: 16px 0;
+    }
+    .note.warn { border-left-color: var(--warn); }
+    .note.ok { border-left-color: var(--ok); }
+    .note strong { display: block; margin-bottom: 4px; }
+    ol { padding-left: 20px; }
+    li { margin: 6px 0; }
+    footer { margin-top: 36px; color: var(--muted); font-size: 12px; }
+    @media (max-width: 700px) {
+      .stats, .cards { grid-template-columns: 1fr; }
+    }
+    @media print {
+      body { background: #fff; color: #111; }
+      .wrap { max-width: none; padding: 0; }
+      nav, .pills { display: none !important; }
+      p, h1, h2, h3, td, th, li { color: #111; }
+      .muted, th, .stat span, .card h4, footer { color: #444; }
+      .stat, .card, .note { background: #fff; border-color: #ccc; }
+      section {
+        display: block !important;
+        break-inside: avoid;
+        page-break-before: always;
+        margin: 0;
+      }
+      section:first-of-type { page-break-before: auto; }
+      table, .note, .card { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Makay Cleaner</h1>
+    <div class="pills">
+      <span class="pill active">v1.0.72</span>
+      <span class="pill">Sideload</span>
+      <span class="pill">Mobil + TV</span>
+    </div>
+    <p class="muted">
+      Cihazı yavaşlatan önbellek, geçici dosya ve kalıntıları tarayıp temizleyen yerel
+      bir depolama asistanı. Reklam yok; tarama ve silme cihaz üzerinde kalır.
+      Play Store zorunlu değildir.
+    </p>
+
+    <nav>
+      <button class="on" data-id="amac">Amaç</button>
+      <button data-id="baslangic">İlk kullanım</button>
+      <button data-id="ana">Ana ekran</button>
+      <button data-id="temizlik">Temizlik</button>
+      <button data-id="araclar">Araçlar</button>
+      <button data-id="tv">Android TV</button>
+      <button data-id="gizlilik">Gizlilik</button>
+      <button data-id="paylasim">Paylaşım</button>
+    </nav>
+
+    <section id="amac" class="on">
+      <h2>Ne işe yarar?</h2>
+      <p>
+        Makay Cleaner, Xiaomi Güvenlik tarzı tek dokunuşlu optimizasyon ile ayrıntılı
+        temizliği bir araya getirir. Amaç: dolu depolamayı görünür kılmak, silinebilir
+        junk’ı seçmek ve sistem dosyalarına dokunmadan yer açmak.
+      </p>
+      <div class="stats">
+        <div class="stat"><b>Tek dokunuş</b><span>Optimizasyon</span></div>
+        <div class="stat"><b>Kategori</b><span>Ayrıntılı temizleyici</span></div>
+        <div class="stat"><b>48 saat</b><span>Çöp kutusu geri alma</span></div>
+      </div>
+      <h3>Kimler için</h3>
+      <table>
+        <tr><th>Kullanıcı</th><th>Neden uygun</th></tr>
+        <tr><td>Telefon / tablet</td><td>Önbellek, büyük dosya, kullanılmayan uygulama ve medya kalıntısı</td></tr>
+        <tr><td>Android TV</td><td>Kumanda ile gezinme, TV önbellek yolları, Leanback başlatıcı</td></tr>
+        <tr><td>Sideload dağıtım</td><td>Play hesabı olmadan APK + SHA-256; uygulama içi GitHub güncellemesi</td></tr>
+        <tr><td>Gizlilik odaklı</td><td>Reklam ve uzak analitik yok; tarama sonucu cihazda kalır</td></tr>
+      </table>
+      <div class="note">
+        <strong>Ücretsiz çekirdek</strong>
+        Skor, optimizasyon, önbellek, depolama kırılımı, sağlık özeti, pil/veri özeti
+        ve uygulama kilidi temel kurulumda açıktır. Tarama için internet gerekmez;
+        güncelleme kontrolü isteğe bağlıdır.
+      </div>
+    </section>
+
+    <section id="baslangic">
+      <h2>İlk kullanım</h2>
+      <p class="muted">Kurulumdan sonra dört adım yeter. İzin verilmeden junk boyutları 0 görünebilir.</p>
+      <table>
+        <tr><th>Adım</th><th>Ne yapılır</th><th>Neden</th></tr>
+        <tr><td>1. APK kur</td><td>Geliştiricinin verdiği APK’yı yükle; varsa .sha256 ile bütünlüğü doğrula</td><td>Paketin değişmediğinden emin olmak</td></tr>
+        <tr><td>2. Platform seç</td><td>Mobil / tablet veya Android TV</td><td>TV’de odak halkası ve kumanda düzeni açılır</td></tr>
+        <tr><td>2b. Hızlı rehber</td><td>İzin, optimizasyon, çöp kutusu, Xiaomi farkı — atlanabilir</td><td>İlk açılışta bir kez gösterilir</td></tr>
+        <tr><td>3. Depolama izni</td><td>Android 11+ Tüm dosyalara erişim; eski sürümde depolama izni</td><td>Önbellek ve genel depolamayı taramak</td></tr>
+        <tr><td>4. Optimizasyon</td><td>Ana ekranda Optimizasyon veya Ayrıntılı temizleyici</td><td>Skoru yükseltmek ve seçili junk’ı silmek</td></tr>
+      </table>
+      <h3>İzinler ve güvenlik sınırı</h3>
+      <p>
+        Uygulama depolama, medya okuma, bildirim, arka plan süreçlerini durdurma ve
+        (TV’de) Leanback başlatıcı kullanır. Sistem klasörleri (/system, /vendor,
+        üretici paketleri) koruma listesindedir; silinmez.
+      </p>
+      <div class="note warn">
+        <strong>Kurulum kaynağı</strong>
+        Android, sideload için “bilinmeyen kaynaklar” iznini isteyebilir.
+        Yalnızca güvendiğiniz kişiden gelen APK’yı kurun.
+      </div>
+    </section>
+
+    <section id="ana">
+      <h2>Ana ekran ve skor</h2>
+      <p>
+        Üstte cihaz skoru (40–100) durur. Skor yalnızca tek dokunuşla temizlenebilen
+        junk’a göre düşer. Kullanılmayan uygulama veya dolu disk skor kırmaz; bunlar
+        öneri satırı olarak görünür.
+      </p>
+      <div class="cards">
+        <div class="card">
+          <h4>Optimizasyon</h4>
+          <p>Hızlı tarama + temizlik. Önbellek, geçici dosya, APK kalıntısı, artık klasör, bellek tahmini ve sistemin boşaltabileceği uygulama önbelleği bu adımda işlenir. Skor 100 ise düğme “Yeniden tara” olur.</p>
+        </div>
+        <div class="card">
+          <h4>Ayrıntılı temizleyici</h4>
+          <p>Kategori listesi: önbellek, kullanılmayan dosyalar, paketler, artıklar, geçici dosyalar, bellek. İstenmeyen satır işaretten çıkarılır; altta seçili boyut kadar Temizle çalışır.</p>
+        </div>
+      </div>
+      <h3>Ana ekrandaki diğer yüzeyler</h3>
+      <table>
+        <tr><th>Öğe</th><th>İşlev</th></tr>
+        <tr><td>Depolama kırılımı</td><td>Uygulama, büyük dosya, medya, belge pasta grafiği</td></tr>
+        <tr><td>Temizleyici</td><td>Ayrıntılı junk taramasına gider</td></tr>
+        <tr><td>Güvenlik taraması</td><td>Virüs motoru yok; izin, junk ve uygulama sağlığı özeti</td></tr>
+        <tr><td>Pil / veri</td><td>Sistem pil ve trafik özeti; ayrıntı sistem ayarına açılır</td></tr>
+        <tr><td>Gizlilik</td><td>Kilit ve izin yönetimi</td></tr>
+        <tr><td>Uygulamaları yönet</td><td>Ara, sistem ayarına git, kaldır</td></tr>
+        <tr><td>Kullanılmayan uygulamalar</td><td>Skoru düşürmez; alan kazancı önerisi</td></tr>
+      </table>
+      <div class="note">
+        <strong>Skor nasıl okunur</strong>
+        Skor yalnızca silinebilir junk’a bakar. 1 MB altı = 100. Xiaomi’nin ekstra
+        saydığı sistem önbelleği kilitli satırda ayrı durur; sideload ile silinemez.
+      </div>
+    </section>
+
+    <section id="temizlik">
+      <h2>Temizlik nasıl çalışır</h2>
+      <p>
+        İki katman vardır. Birincisi dosya silme: yazılabilen önbellek, küçük resim,
+        eski indirme, APK, boş/kalıntı klasör. İkincisi sistem önbellek boşaltması:
+        Android’in diğer uygulamaların iç önbelleğini düşürmesini isteme (Xiaomi
+        Güvenlik’in saydığı cacheBytes ile aynı kaynak).
+      </p>
+      <table>
+        <tr><th>Kategori</th><th>Ne tarar</th><th>Ne silinir</th></tr>
+        <tr><td>Önbellek dosyaları</td><td>Silinebilir cache (kilitli OEM ayrı)</td><td>Kendi cache, thumbnail, listelenebilir dış cache; sistem boşaltması</td></tr>
+        <tr><td>Kullanılmayan dosyalar</td><td>İndirilenler içinde eski veya junk uzantılı dosya</td><td>Seçilen dosyalar (doğrulandıktan sonra)</td></tr>
+        <tr><td>Paketler</td><td>Eski / artık APK</td><td>APK dosyası</td></tr>
+        <tr><td>Artık dosyalar</td><td>Kaldırılmış uygulamanın bıraktığı klasör</td><td>Kalıntı yolu</td></tr>
+        <tr><td>Geçici dosyalar</td><td>tmp, log, thumbnail, boş klasör</td><td>Sınıflanan junk</td></tr>
+        <tr><td>Bellek</td><td>Kullanılan RAM’in geri alınabilir kısmı</td><td>Arka plan süreçlerini durdurma (dosya değil)</td></tr>
+      </table>
+      <h3>Çöp kutusu</h3>
+      <p>
+        Silinen uygun dosyalar 48 saat uygulama çöp kutusunda tutulur. Süre dolunca
+        kalıcı silinir. Sistemin boşalttığı iç önbellek çöp kutusuna taşınmaz;
+        işletim sistemi yönetir.
+      </p>
+      <div class="note warn">
+        <strong>Xiaomi ile fark</strong>
+        Xiaomi Güvenlik sistem uygulamasıdır; her paketin iç cache klasörünü doğrudan
+        silebilir. Makay sideload olduğu için aynı klasöre dosya dosya giremez.
+        Temizlik, resmi sistem boşaltması + silinebilir dosyalardır. Xiaomi taramasında
+        bir miktar korumalı önbellek kalabilir; bu Android kısıtıdır.
+      </div>
+    </section>
+
+    <section id="araclar">
+      <h2>Araç kutusu ve ek özellikler</h2>
+      <p class="muted">Ana skor tek dokunuştur. Derin işler araç kutusundan veya hub kartlarından açılır.</p>
+      <div class="cards">
+        <div class="card">
+          <h4>Derin araçlar</h4>
+          <p>Derin temizlik, sosyal / medya, APK sil, artık dosya, yinelenen / benzer fotoğraf, sistem junk.</p>
+        </div>
+        <div class="card">
+          <h4>Cihaz araçları</h4>
+          <p>Büyük dosya tarayıcı, uygulama kaldır + kalıntı, kullanılmayan uygulamalar, pil ve mobil veri özeti, temizlik istatistikleri.</p>
+        </div>
+      </div>
+      <h3>Ayarlar</h3>
+      <table>
+        <tr><th>Ayar</th><th>Açıklama</th></tr>
+        <tr><td>Tema / dil / platform</td><td>Açık-koyu-sistem, TR/EN, Mobil veya Android TV</td></tr>
+        <tr><td>Otomatik temizlik</td><td>Saat aralığı, yalnızca Wi‑Fi / şarj, kategori anahtarları</td></tr>
+        <tr><td>Şimdi temizle</td><td>Ayarlardan manuel junk geçişi</td></tr>
+        <tr><td>Güncelleme</td><td>GitHub Releases: denetle, indir, SHA-256 + imza doğrula</td></tr>
+        <tr><td>Bildirimler</td><td>Temizlik hatırlatması aralığı</td></tr>
+        <tr><td>Güvenlik</td><td>PIN ve biyometrik uygulama kilidi</td></tr>
+      </table>
+      <div class="card">
+        <h4>Medya ve yinelenenler</h4>
+        <p>Medya merkezi, benzer fotoğraf, yinelenen dosya ve video araçları büyük galerilerde yer açmak içindir. Seçim sizde kalır; toplu silme öncesi onay istenir.</p>
+      </div>
+    </section>
+
+    <section id="tv">
+      <h2>Android TV sürümü</h2>
+      <p>
+        İlk açılışta “Android TV Sürümü” seçilirse arayüz kumanda (D-pad) için
+        ayarlanır. Leanback başlatıcı ve 320×180 TV banner ile televizyon
+        uygulama rafında görünür.
+      </p>
+      <table>
+        <tr><th>Davranış</th><th>Detay</th></tr>
+        <tr><td>Odak rengi</td><td>Seçili düğme/satır amber dolgu + siyah-beyaz çerçeve; tema değişince kaybolmaz</td></tr>
+        <tr><td>Gezinme</td><td>Tema satırları, anahtarlar ve araç ızgarası tüm satır olarak odaklanır</td></tr>
+        <tr><td>TV önbelleği</td><td>YouTube TV, Netflix, VLC ve benzeri yayın uygulamalarının cache yolları taranır</td></tr>
+        <tr><td>Öneri satırı</td><td>TV ana ekranına temizlik önerisi yayınlanabilir</td></tr>
+      </table>
+      <div class="note">
+        <strong>Mobil ile aynı motor</strong>
+        TV ayrı bir APK değildir. Aynı paket, platform tercihine göre odak ve bazı
+        yolları değiştirir. Skor ve temizleyici mantığı ortaktır.
+      </div>
+    </section>
+
+    <section id="gizlilik">
+      <h2>Gizlilik ve güvenlik</h2>
+      <div class="stats">
+        <div class="stat"><b>Yok</b><span>Reklam ağı</span></div>
+        <div class="stat"><b>Cihazda</b><span>Tarama verisi</span></div>
+        <div class="stat"><b>İsteğe bağlı</b><span>GitHub güncelleme</span></div>
+      </div>
+      <p>
+        Temizlik kayıtları ve çöp kutusu dizini uygulama özel alanında tutulur.
+        Kullanım erişimi istenmez; kullanılmayan uygulamalar kurulum yaşına göre
+        tahmin edilir.
+      </p>
+      <h3>Uygulama kilidi</h3>
+      <p>
+        Ayarlar → Güvenlik: PIN ve (cihaz destekliyorsa) biyometrik. Kilit açıksa
+        uygulama öne gelince kilit ekranı çıkar. PIN cihazda saklanır.
+      </p>
+      <div class="note">
+        <strong>Virüs motoru yok</strong>
+        “Güvenlik taraması” izin, junk ve kullanılmayan uygulama özetidir.
+        Antivirüs imzası veya bulut tarama yoktur.
+      </div>
+    </section>
+
+    <section id="paylasim">
+      <h2>Başkalarıyla paylaşma</h2>
+      <p>
+        Dağıtım sideload içindir. Alıcıya APK ve mümkünse SHA-256 özeti verin.
+        Uygulama içinden “Güncelleme kontrol et” GitHub Releases’teki son paketi
+        indirir ve bütünlüğü doğrular.
+      </p>
+      <table>
+        <tr><th>Verilecek şey</th><th>Nasıl kullanılır</th></tr>
+        <tr><td>MakayCleaner_vX.Y.Z.apk</td><td>Bilinmeyen kaynaklardan kurulum</td></tr>
+        <tr><td>Aynı ada .sha256</td><td>İndirilen dosyanın hash kontrolü</td></tr>
+        <tr><td>Bu sunum (HTML)</td><td>Amaç, izinler, TV ve Xiaomi farkı için brifing</td></tr>
+        <tr><td>Kısa sözlü uyarı</td><td>Sistem uygulaması kadar derin iç cache silinemez</td></tr>
+      </table>
+      <h3>Alıcıya söylemeniz gerekenler</h3>
+      <ol>
+        <li>Kurulumdan sonra platformu seçin (telefon veya TV).</li>
+        <li>Depolama / tüm dosyalar iznini verin; yoksa junk 0 görünebilir.</li>
+        <li>Günlük kullanım: ana ekran Optimizasyon. Seçerek silmek için ayrıntılı temizleyici.</li>
+        <li>Yanlış silinen dosya 48 saat çöp kutusundan dönebilir.</li>
+        <li>Pil “uzar” iddiası yoktur; pil kartı sistem özetine gider.</li>
+      </ol>
+      <div class="note ok">
+        <strong>Paylaşım özeti</strong>
+        Makay Cleaner, reklamsız yerel bir temizleyici ve depolama kokpitidir.
+        Mobil ve TV’de aynı APK çalışır. Xiaomi Güvenlik’in yerine geçmez; onun
+        gördüğü önbelleğin sideload’ın ulaşabildiği kısmını + sistem boşaltmasını
+        hedefler.
+      </div>
+    </section>
+
+    <footer>
+      Kaynak: Makay Cleaner uygulama kodu · sürüm 1.0.72 · sideload / yerel dağıtım<br />
+      Dosya: D:\MakayCleaner\MakayCleaner-Sunum.html
+    </footer>
+  </div>
+  <script>
+    const buttons = document.querySelectorAll("nav button");
+    const sections = document.querySelectorAll("section");
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        buttons.forEach((b) => b.classList.remove("on"));
+        sections.forEach((s) => s.classList.remove("on"));
+        btn.classList.add("on");
+        document.getElementById(btn.dataset.id).classList.add("on");
+      });
+    });
+  </script>
+</body>
+</html>

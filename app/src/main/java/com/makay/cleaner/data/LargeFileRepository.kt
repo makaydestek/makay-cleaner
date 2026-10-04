@@ -52,6 +52,9 @@ class LargeFileRepository(private val context: Context) {
         // Eski APK dosyaları
         largeFiles.addAll(scanApkFiles(minSizeBytes))
 
+        // Büyük arşiv dosyaları (zip, rar, 7z, tar, gz vb.)
+        largeFiles.addAll(scanArchiveFiles(minSizeBytes))
+
         return largeFiles
             .filter { com.makay.cleaner.util.SystemFileGuard.canDelete(it.filePath) }
             .distinctBy { it.filePath }
@@ -74,6 +77,39 @@ class LargeFileRepository(private val context: Context) {
                                 sizeFormatted = formatBytes(file.length()),
                                 category = FileCategory.OTHER,
                                 mimeType = "application/vnd.android.package-archive",
+                                dateAdded = file.lastModified() / 1000,
+                                dateFormatted = dateFormat.format(Date(file.lastModified()))
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return files
+    }
+
+    private fun scanArchiveFiles(minSizeBytes: Long): List<LargeFileInfo> {
+        val files = mutableListOf<LargeFileInfo>()
+        try {
+            val dirs = listOf(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                File(Environment.getExternalStorageDirectory(), "Download")
+            )
+            val archiveExtensions = setOf("zip", "rar", "7z", "tar", "gz", "bz2", "xz")
+            dirs.filter { it.exists() }.forEach { dir ->
+                dir.walkTopDown().maxDepth(3).forEach { file ->
+                    if (file.isFile && file.extension.lowercase() in archiveExtensions && file.length() >= minSizeBytes) {
+                        files.add(
+                            LargeFileInfo(
+                                id = file.hashCode().toLong(),
+                                displayName = file.name,
+                                filePath = file.absolutePath,
+                                sizeBytes = file.length(),
+                                sizeFormatted = formatBytes(file.length()),
+                                category = FileCategory.OTHER,
+                                mimeType = "application/x-archive",
                                 dateAdded = file.lastModified() / 1000,
                                 dateFormatted = dateFormat.format(Date(file.lastModified()))
                             )

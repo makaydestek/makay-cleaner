@@ -28,6 +28,22 @@ class SystemCleanerScanner {
             roots.add(File(ext, "Android/data"))
         }
 
+        // Android TV özel streaming/medya uygulama önbellekleri (YouTube TV, Netflix, VLC vb.)
+        val tvStreamingPackages = listOf(
+            "com.google.android.youtube.tv",
+            "com.netflix.ninja",
+            "org.videolan.vlc",
+            "com.amazon.firetv.youtube",
+            "com.iptv.xtream",
+            "com.tivimate.companion"
+        )
+        tvStreamingPackages.forEach { pkg ->
+            val cacheDir = File(ext, "Android/data/$pkg/cache")
+            if (cacheDir.exists() && cacheDir.isDirectory) {
+                roots.add(cacheDir)
+            }
+        }
+
         roots.forEach { root ->
             if (!root.exists()) return@forEach
             walk(root, results, maxItems)
@@ -36,7 +52,6 @@ class SystemCleanerScanner {
         // Boş klasörler (Download altında)
         findEmptyDirs(File(ext, "Download"), results, maxItems)
         return results.distinctBy { it.file.absolutePath }
-            .filter { it.file.canWrite() || it.file.parentFile?.canWrite() == true || it.sizeBytes == 0L }
             .sortedByDescending { it.sizeBytes }
     }
 

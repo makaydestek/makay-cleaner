@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.makay.cleaner.data.CleaningRecorder
 import com.makay.cleaner.data.LargeFileRepository
+import com.makay.cleaner.domain.model.FileCategory
 import com.makay.cleaner.domain.model.LargeFileInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +24,9 @@ data class LargeFileUiState(
     val totalSizeFormatted: String = "0 B",
     val selectedFiles: Set<Long> = emptySet(),
     val minSizeMB: Int = 10,
+    val categoryFilter: FileCategory? = null,
+    val maxAgeDays: Int? = null,
+    val visibleFiles: List<LargeFileInfo> = emptyList(),
     val error: String? = null,
     val message: String? = null
 )
@@ -42,21 +46,24 @@ class LargeFileViewModel(application: Application) : AndroidViewModel(applicatio
                 val files = withContext(Dispatchers.IO) {
                     repository.getLargeFiles(minSizeBytes)
                 }
-                val totalSize = files.sumOf { it.sizeBytes }
+                val visible = applyFilters(files, _uiState.value.categoryFilter, _uiState.value.maxAgeDays)
+                val totalSize = visible.sumOf { it.sizeBytes }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     hasScanned = true,
                     files = files,
+                    visibleFiles = visible,
                     totalSize = totalSize,
                     totalSizeFormatted = formatBytes(totalSize),
                     selectedFiles = emptySet(),
-                    message = if (files.isEmpty()) "Büyük dosya bulunamadı" else null
+                    message = if (visible.isEmpty()) "Büyük dosya bulunamadı" else null
                 )
                 CleaningRecorder.recordScan(
                     getApplication(),
                     "Büyük Dosya",
                     files.size,
-                    totalSize
+                    totalSize,
+                    CleaningRecorder.METRIC_LARGE
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -76,8 +83,42 @@ class LargeFileViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun selectAll() {
         _uiState.value = _uiState.value.copy(
-            selectedFiles = _uiState.value.files.map { it.id }.toSet()
+            selectedFiles = _uiState.value.visibleFiles.map { it.id }.toSet()
         )
+    }
+
+    fun setCategoryFilter(category: FileCategory?) {
+        _uiState.value = _uiState.value.copy(categoryFilter = category)
+        refreshVisible()
+    }
+
+    fun setMaxAgeDays(days: Int?) {
+        _uiState.value = _uiState.value.copy(maxAgeDays = days)
+        refreshVisible()
+    }
+
+    private fun refreshVisible() {
+        val s = _uiState.value
+        val visible = applyFilters(s.files, s.categoryFilter, s.maxAgeDays)
+        _uiState.value = s.copy(
+            visibleFiles = visible,
+            totalSize = visible.sumOf { it.sizeBytes },
+            totalSizeFormatted = formatBytes(visible.sumOf { it.sizeBytes }),
+            selectedFiles = s.selectedFiles.filter { id -> visible.any { it.id == id } }.toSet()
+        )
+    }
+
+    private fun applyFilters(
+        files: List<LargeFileInfo>,
+        category: FileCategory?,
+        maxAgeDays: Int?
+    ): List<LargeFileInfo> {
+        val cutoff = maxAgeDays?.let { System.currentTimeMillis() - it * 24L * 3600_000 }
+        return files.filter { file ->
+            val catOk = category == null || file.category == category
+            val ageOk = cutoff == null || file.dateAdded >= cutoff
+            catOk && ageOk
+        }
     }
 
     fun deselectAll() {
@@ -94,6 +135,7 @@ class LargeFileViewModel(application: Application) : AndroidViewModel(applicatio
             com.makay.cleaner.util.SystemFileGuard.consumeSkippedCount()
 
             withContext(Dispatchers.IO) {
+                trash.beginBatch()
                 filesToDelete.forEach { file ->
                     val size = file.sizeBytes
                     val ok = if (file.filePath.startsWith("content://")) {
@@ -118,22 +160,27 @@ class LargeFileViewModel(application: Application) : AndroidViewModel(applicatio
                 com.makay.cleaner.util.CleanResultTracker.record("Büyük Dosya", deletedCount, saved)
             }
 
-            val remainingFiles = _uiState.value.files.filter {
-                it.id !in selectedIds || (
-                    if (it.filePath.startsWith("content://")) it.id !in selectedIds
-                    else java.io.File(it.filePath).exists()
-                )
-            }.filter { file ->
-                if (file.filePath.startsWith("content://")) {
-                    file.id !in selectedIds
-                } else {
-                    java.io.File(file.filePath).exists()
-                }
+            val remainingFiles = applyFilters(
+                _uiState.value.files.filter { file ->
+                    if (file.id in selectedIds) {
+                        if (file.filePath.startsWith("content://")) false
+                        else java.io.File(file.filePath).exists()
+                    } else true
+                },
+                _uiState.value.categoryFilter,
+                _uiState.value.maxAgeDays
+            )
+            val allRemaining = _uiState.value.files.filter { file ->
+                if (file.id in selectedIds) {
+                    if (file.filePath.startsWith("content://")) false
+                    else java.io.File(file.filePath).exists()
+                } else true
             }
             val totalSize = remainingFiles.sumOf { it.sizeBytes }
 
             _uiState.value = _uiState.value.copy(
-                files = remainingFiles,
+                files = allRemaining,
+                visibleFiles = remainingFiles,
                 totalSize = totalSize,
                 totalSizeFormatted = formatBytes(totalSize),
                 selectedFiles = emptySet(),

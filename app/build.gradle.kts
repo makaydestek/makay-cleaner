@@ -1,4 +1,6 @@
-﻿plugins {
+﻿import java.util.Properties
+
+plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -14,6 +16,18 @@ val appVersionCode: Int = run {
     parts[0].toInt() * 10000 + parts[1].toInt() * 100 + parts[2].toInt()
 }
 
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun localProp(name: String) = localProps.getProperty(name)?.trim().orEmpty()
+val releaseStore = localProp("RELEASE_STORE_FILE")
+val hasReleaseKey = releaseStore.isNotEmpty() &&
+    localProp("RELEASE_STORE_PASSWORD").isNotEmpty() &&
+    localProp("RELEASE_KEY_ALIAS").isNotEmpty() &&
+    localProp("RELEASE_KEY_PASSWORD").isNotEmpty() &&
+    rootProject.file(releaseStore).isFile
+
 android {
     namespace = "com.makay.cleaner"
     compileSdk = 36
@@ -28,6 +42,17 @@ android {
         buildConfigField("String", "UPDATE_GITHUB_REPO", "\"makay-cleaner\"")
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = rootProject.file(releaseStore)
+                storePassword = localProp("RELEASE_STORE_PASSWORD")
+                keyAlias = localProp("RELEASE_KEY_ALIAS")
+                keyPassword = localProp("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             // Sideload kurulum boyutu / kararliligi icin R8 + resource shrink
@@ -37,7 +62,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            // Mevcut kurulumlar debug anahtariyla guncelleniyor. Uretim anahtari
+            // local.properties'te yoksa bu zinciri kirmamak icin debug imza kalir.
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
         debug {
             isMinifyEnabled = false
@@ -88,11 +119,38 @@ android {
     }
 }
 
-// Teslimat yalnizca proje/APK — ara cikti app/build altinda kalir, kurulum dosyasi APK\
-// Klasorde yalnizca: MakayCleaner_vX.Y.Z.apk + ayni adli .sha256 (eski surumler silinir)
+// Teslimat yalnizca proje/APK. Ara kopyalar APK/ disinda birakilmaz.
+// Klasorde yalnizca: MakayCleaner_vX.Y.Z.apk + ayni adli .sha256
+fun deleteDeliveryArtifactsIn(dir: java.io.File) {
+    if (!dir.exists()) return
+    dir.walkTopDown().forEach { f ->
+        if (!f.isFile) return@forEach
+        val n = f.name.lowercase()
+        if (n.endsWith(".apk") || n.endsWith(".apk.sha256") || n.endsWith(".aab")) {
+            f.delete()
+        }
+    }
+}
+
+fun deleteStrayDeliveryApks(keepDir: java.io.File) {
+    val root = rootProject.layout.projectDirectory.asFile
+    deleteDeliveryArtifactsIn(layout.buildDirectory.dir("outputs/apk").get().asFile)
+    deleteDeliveryArtifactsIn(layout.buildDirectory.dir("outputs/bundle").get().asFile)
+    deleteDeliveryArtifactsIn(root.resolve("app/release"))
+    deleteDeliveryArtifactsIn(root.resolve("release"))
+    root.listFiles()?.forEach { f ->
+        if (!f.isFile) return@forEach
+        val n = f.name.lowercase()
+        if (n.endsWith(".apk") || n.endsWith(".apk.sha256") || n.endsWith(".aab")) {
+            f.delete()
+        }
+    }
+    check(keepDir.exists())
+}
+
 tasks.register("publishReleaseApk") {
     group = "distribution"
-    description = "Release APK + SHA-256'yi APK/ klasorune yazar; eski dosyalari temizler"
+    description = "Release APK + SHA-256'yi yalnizca APK/ klasorune yazar; baska klasordeki kopyalari siler"
     doLast {
         val src = layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
         check(src.exists()) { "APK bulunamadi: ${src.absolutePath}" }
@@ -101,13 +159,15 @@ tasks.register("publishReleaseApk") {
         val ver = rootProject.file("VERSION.txt").readText().trim()
         val named = apkDir.resolve("MakayCleaner_v$ver.apk")
         val shaFile = apkDir.resolve("MakayCleaner_v$ver.apk.sha256")
+        val staging = apkDir.resolve(".staging-app-release.apk")
 
-        // Onceki surumler + latest / CURRENT / log — hepsi temizlenir
+        src.copyTo(staging, overwrite = true)
         apkDir.listFiles()?.forEach { f ->
-            if (f.isFile) f.delete()
+            if (f.isFile && f.name != staging.name) f.delete()
         }
+        staging.copyTo(named, overwrite = true)
+        staging.delete()
 
-        src.copyTo(named, overwrite = true)
         val ps = listOf(
             "powershell", "-NoProfile", "-Command",
             "\$h=(Get-FileHash -Algorithm SHA256 -Path '${named.absolutePath.replace("'", "''")}').Hash.ToLower(); " +
@@ -117,10 +177,15 @@ tasks.register("publishReleaseApk") {
         val proc = ProcessBuilder(ps).redirectErrorStream(true).start()
         val hex = proc.inputStream.bufferedReader().readText().trim()
         check(proc.waitFor() == 0 && hex.length == 64) { "SHA-256 olusturulamadi: $hex" }
+
+        deleteStrayDeliveryApks(apkDir)
+
+        check(named.exists()) { "Teslim APK APK/ klasorunde yok: ${named.absolutePath}" }
         println("Published: ${named.absolutePath}")
         println("SHA-256  : ${shaFile.absolutePath}")
         println("Version  : $ver (versionCode=$appVersionCode)")
         println("Fingerprint: $hex")
+        println("Teslimat: yalnizca ${apkDir.absolutePath}")
     }
 }
 
@@ -148,6 +213,7 @@ dependencies {
 
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.google.code.gson:gson:2.10.1")
 
     implementation("androidx.biometric:biometric:1.1.0")
@@ -156,4 +222,5 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation("junit:junit:4.13.2")
 }

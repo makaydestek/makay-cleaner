@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.makay.cleaner.domain.model.FileCategory
 import com.makay.cleaner.domain.model.LargeFileInfo
 import com.makay.cleaner.util.PermissionHelper
 import com.makay.cleaner.util.rememberStoragePermissionState
@@ -33,7 +34,10 @@ fun LargeFileScreen(
             TopAppBar(
                 title = { Text("🔍 Büyük Dosya Avcısı", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 }
@@ -86,6 +90,55 @@ fun LargeFileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            if (hasPermission) {
+                Text("Boyut", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(10, 50, 200).forEach { mb ->
+                        FilterChip(
+                            selected = uiState.minSizeMB == mb,
+                            onClick = { viewModel.updateMinSize(mb) },
+                            label = { Text(">$mb MB") }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Tür", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = uiState.categoryFilter == null,
+                        onClick = { viewModel.setCategoryFilter(null) },
+                        label = { Text("Tümü") }
+                    )
+                    FileCategory.entries.take(4).forEach { cat ->
+                        FilterChip(
+                            selected = uiState.categoryFilter == cat,
+                            onClick = { viewModel.setCategoryFilter(cat) },
+                            label = { Text(cat.displayName) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Tarih", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = uiState.maxAgeDays == null,
+                        onClick = { viewModel.setMaxAgeDays(null) },
+                        label = { Text("Tümü") }
+                    )
+                    FilterChip(
+                        selected = uiState.maxAgeDays == 7,
+                        onClick = { viewModel.setMaxAgeDays(7) },
+                        label = { Text("7 gün") }
+                    )
+                    FilterChip(
+                        selected = uiState.maxAgeDays == 30,
+                        onClick = { viewModel.setMaxAgeDays(30) },
+                        label = { Text("30 gün") }
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             uiState.message?.let {
                 Text(it, color = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -95,7 +148,7 @@ fun LargeFileScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            if (uiState.files.isNotEmpty()) {
+            if (uiState.visibleFiles.isNotEmpty() || (uiState.hasScanned && uiState.files.isNotEmpty())) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -116,7 +169,7 @@ fun LargeFileScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "${uiState.files.size} dosya • ${uiState.totalSizeFormatted}",
+                            text = "${uiState.visibleFiles.size} dosya • ${uiState.totalSizeFormatted}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -144,12 +197,22 @@ fun LargeFileScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(uiState.files, key = { it.id }) { file ->
-                        LargeFileItem(
-                            file = file,
-                            isSelected = file.id in uiState.selectedFiles,
-                            onSelectionChanged = { viewModel.toggleFileSelection(file.id) }
-                        )
+                    uiState.visibleFiles.groupBy { it.category }.forEach { (category, files) ->
+                        item(key = "cat_${category.name}") {
+                            Text(
+                                "${category.displayName} · ${files.size}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(files, key = { it.id }) { file ->
+                            LargeFileItem(
+                                file = file,
+                                isSelected = file.id in uiState.selectedFiles,
+                                onSelectionChanged = { viewModel.toggleFileSelection(file.id) }
+                            )
+                        }
                     }
                 }
 
@@ -157,7 +220,7 @@ fun LargeFileScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     var showConfirm by remember { mutableStateOf(false) }
                     if (showConfirm) {
-                        val selectedFiles = uiState.files.filter { it.id in uiState.selectedFiles }
+                        val selectedFiles = uiState.visibleFiles.filter { it.id in uiState.selectedFiles }
                         val selectedSize = selectedFiles.sumOf { it.sizeBytes }
                         ConfirmDeleteDialog(
                             title = "Büyük dosyaları temizle",

@@ -61,7 +61,8 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
                     getApplication(),
                     "Depolama Analizi",
                     cats.count { it.sizeBytes > 0 },
-                    cats.sumOf { it.sizeBytes }
+                    cats.sumOf { it.sizeBytes },
+                    com.makay.cleaner.data.CleaningRecorder.METRIC_STORAGE
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -109,11 +110,11 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
         val otherSize = maxOf(mediaStoreDownloadSize(cr), estimateDownloadsShallow())
 
         return listOf(
-            cat("Uygulama Önbelleği", cacheSize, 0xFFFF9800.toInt()),
-            cat("Büyük Dosyalar", largeSize, 0xFFF44336.toInt()),
-            cat("Medya Dosyaları", mediaSize + audioSize, 0xFF2196F3.toInt()),
-            cat("Belgeler", docsSize, 0xFF4CAF50.toInt()),
-            cat("Diğer", otherSize, 0xFF9E9E9E.toInt())
+            cat("cache", "Uygulama Önbelleği", cacheSize, 0xFFFF9800.toInt()),
+            cat("large", "Büyük Dosyalar", largeSize, 0xFFF44336.toInt()),
+            cat("media", "Medya Dosyaları", mediaSize + audioSize, 0xFF2196F3.toInt()),
+            cat("docs", "Belgeler", docsSize, 0xFF4CAF50.toInt()),
+            cat("other", "Diğer", otherSize, 0xFF9E9E9E.toInt())
         )
     }
 
@@ -122,15 +123,16 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
         val cache = safeCacheSize(ctx)
         val media = runCatching { mediaStoreImagesVideosSize(ctx.contentResolver) }.getOrDefault(0L)
         return listOf(
-            cat("Uygulama Önbelleği", cache, 0xFFFF9800.toInt()),
-            cat("Büyük Dosyalar", 0L, 0xFFF44336.toInt()),
-            cat("Medya Dosyaları", media, 0xFF2196F3.toInt()),
-            cat("Belgeler", 0L, 0xFF4CAF50.toInt()),
-            cat("Diğer", 0L, 0xFF9E9E9E.toInt())
+            cat("cache", "Uygulama Önbelleği", cache, 0xFFFF9800.toInt()),
+            cat("large", "Büyük Dosyalar", 0L, 0xFFF44336.toInt()),
+            cat("media", "Medya Dosyaları", media, 0xFF2196F3.toInt()),
+            cat("docs", "Belgeler", 0L, 0xFF4CAF50.toInt()),
+            cat("other", "Diğer", 0L, 0xFF9E9E9E.toInt())
         )
     }
 
-    private fun cat(name: String, size: Long, color: Int) = StorageCategory(
+    private fun cat(id: String, name: String, size: Long, color: Int) = StorageCategory(
+        id = id,
         name = name,
         icon = "",
         sizeBytes = size.coerceAtLeast(0),

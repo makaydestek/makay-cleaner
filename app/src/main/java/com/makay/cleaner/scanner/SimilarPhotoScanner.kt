@@ -75,13 +75,14 @@ class SimilarPhotoScanner(private val context: Context) {
 
     /** 9x8 gri ölçek fark hash → 64 bit string */
     private fun differenceHash(path: String): String? {
+        var bmp: Bitmap? = null
+        var scaled: Bitmap? = null
         return try {
             val opts = BitmapFactory.Options().apply { inSampleSize = 8 }
-            val bmp = BitmapFactory.decodeFile(path, opts) ?: return null
+            bmp = BitmapFactory.decodeFile(path, opts) ?: return null
             val w = 9
             val h = 8
-            val scaled = Bitmap.createScaledBitmap(bmp, w, h, true)
-            if (bmp !== scaled) bmp.recycle()
+            scaled = Bitmap.createScaledBitmap(bmp, w, h, true)
             val sb = StringBuilder(64)
             for (y in 0 until h) {
                 for (x in 0 until w - 1) {
@@ -90,10 +91,16 @@ class SimilarPhotoScanner(private val context: Context) {
                     sb.append(if (left < right) '1' else '0')
                 }
             }
-            scaled.recycle()
             sb.toString()
         } catch (_: Exception) {
             null
+        } finally {
+            try {
+                if (bmp !== scaled) bmp?.recycle()
+            } catch (_: Exception) {}
+            try {
+                scaled?.recycle()
+            } catch (_: Exception) {}
         }
     }
 

@@ -40,7 +40,7 @@ class AppCacheRepository(private val context: Context) {
             Environment.isExternalStorageManager()
         if (canManageOthers) {
             val androidData = File(Environment.getExternalStorageDirectory(), "Android/data")
-            if (androidData.exists() && androidData.canRead()) {
+            if (androidData.exists()) {
                 androidData.listFiles()?.forEach { appDir ->
                     if (!appDir.isDirectory) return@forEach
                     val pkg = appDir.name
@@ -53,11 +53,13 @@ class AppCacheRepository(private val context: Context) {
                         File(appDir, "cache"),
                         File(appDir, "code_cache"),
                         File(appDir, "files/cache"),
-                        File(appDir, "files/.cache")
+                        File(appDir, "files/.cache"),
+                        File(appDir, "files/Cache"),
+                        File(appDir, "cache/image_manager_disk_cache")
                     )
                     cacheCandidates.forEach { cacheDir ->
-                        // Yalnızca yazılabilir (silinebilir) cache klasörleri
-                        if (cacheDir.exists() && cacheDir.canWrite()) {
+                        // Okunabilen önbelleği say (Xiaomi gibi). Yazılamasa bile göster.
+                        if (cacheDir.exists()) {
                             collectFiles(cacheDir, pkg, label, result)
                         }
                     }
@@ -66,8 +68,8 @@ class AppCacheRepository(private val context: Context) {
         }
 
         return result
-            .filter { com.makay.cleaner.util.SystemFileGuard.canDelete(it.file) }
-            .filter { it.file.canWrite() || it.file.parentFile?.canWrite() == true }
+            .filter { com.makay.cleaner.util.FilePurger.canRemove(context, it.file) }
+            .filter { it.file.exists() && it.file.length() > 0 }
             .sortedByDescending { it.file.length() }
     }
 
@@ -129,7 +131,7 @@ class AppCacheRepository(private val context: Context) {
         appName: String,
         result: MutableList<CacheFileEntry>
     ) {
-        if (dir == null || !dir.exists() || !dir.canRead()) return
+        if (dir == null || !dir.exists()) return
         try {
             dir.listFiles()?.forEach { file ->
                 if (file.isFile && file.length() > 0) {

@@ -13,8 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -93,7 +93,7 @@ fun BatteryInfoScreen(onNavigateBack: () -> Unit) {
                 title = { Text("Pil", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
@@ -239,7 +239,7 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
                 title = { Text("Veri kullanımı", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
@@ -314,7 +314,7 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
                     }
                     Spacer(Modifier.width(12.dp))
                     Text("Ağ bağlantısını yönet", color = Color.White, modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.KeyboardArrowRight, null, tint = Color(0xFF636366))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color(0xFF636366))
                 }
             }
             Card(
@@ -378,7 +378,7 @@ private fun NavRow(title: String, trailing: String?, onClick: () -> Unit) {
             Text(title, color = Color.White, fontSize = 15.sp)
             if (trailing != null) Text(trailing, color = Color(0xFF8E8E93), fontSize = 12.sp)
         }
-        Icon(Icons.Default.KeyboardArrowRight, null, tint = Color(0xFF636366), modifier = Modifier.size(18.dp))
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color(0xFF636366), modifier = Modifier.size(18.dp))
     }
 }
 

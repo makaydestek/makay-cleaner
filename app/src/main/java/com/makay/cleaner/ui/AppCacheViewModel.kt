@@ -52,7 +52,8 @@ class AppCacheViewModel(application: Application) : AndroidViewModel(application
                     getApplication(),
                     "Uygulama Önbelleği",
                     files.size,
-                    files.sumOf { it.file.length() }
+                    files.sumOf { it.file.length() },
+                    CleaningRecorder.METRIC_CACHE
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -104,7 +105,13 @@ class AppCacheViewModel(application: Application) : AndroidViewModel(application
                         return@forEach
                     }
                     val size = entry.file.length()
-                    if (trash.moveToTrash(entry.file, "Önbellek")) {
+                    if (com.makay.cleaner.util.FilePurger.remove(
+                            getApplication(),
+                            entry.file,
+                            trash,
+                            "Önbellek"
+                        ) && !entry.file.exists()
+                    ) {
                         deleted++
                         saved += size
                     }

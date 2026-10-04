@@ -17,9 +17,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -68,13 +68,16 @@ fun CleanerHubScreen(
     fun reload() {
         scope.launch {
             loading = true
-            report = withContext(Dispatchers.IO) { JunkScanHelper.scan(application) }
+            report = null
+            report = withContext(Dispatchers.IO) { JunkScanHelper.deepScan(application) }
             loading = false
             val withSize = report?.categories?.filter { it.sizeBytes > 0 }?.map { it.id }?.toSet().orEmpty()
             if (withSize.isNotEmpty()) selected = withSize
+            else selected = emptySet()
         }
     }
 
+    // Her açılışta derin tarama (Optimize’in hızlı temizliğinden kalanları da bulur)
     LaunchedEffect(Unit) { reload() }
 
     val totalSelected = report?.categories
@@ -87,8 +90,27 @@ fun CleanerHubScreen(
             TopAppBar(
                 title = { Text("Temizleyici", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        idleContent = Color.White,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                    }
+                },
+                actions = {
+                    val (scanSrc, scanFocused) = rememberTvInteraction()
+                    TextButton(
+                        onClick = { if (!loading && !cleaning) reload() },
+                        enabled = !loading && !cleaning,
+                        interactionSource = scanSrc,
+                        modifier = Modifier.makayFocus(corner = 12.dp),
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = HubOrange,
+                            containerColor = Color.Transparent
+                        )
+                    ) {
+                        Text("Tara", fontWeight = FontWeight.SemiBold)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -104,6 +126,7 @@ fun CleanerHubScreen(
                     .background(Color.Black)
                     .padding(16.dp)
             ) {
+                val (cleanSrc, cleanFocused) = rememberTvInteraction()
                 Button(
                     onClick = {
                         scope.launch {
@@ -112,29 +135,33 @@ fun CleanerHubScreen(
                                 report?.categories?.filter { it.sizeBytes > 0 }?.map { it.id }?.toSet()
                                     ?: setOf("cache", "unused", "apk", "residue", "tmp")
                             }
+                            val before = report?.cleanableBytes ?: 0L
                             val result = withContext(Dispatchers.IO) {
                                 JunkScanHelper.cleanSelected(application, ids)
                             }
                             cleaning = false
+                            val removed = result.spaceSaved
                             Toast.makeText(
                                 context,
                                 when {
-                                    result.filesDeleted > 0 || result.spaceSaved > 0 ->
-                                        "Temizlendi: ${formatBytes(result.spaceSaved)} · ${result.filesDeleted} öğe"
-                                    else -> "Cihaz zaten temiz — silinebilir junk kalmadı"
+                                    removed > 0L ->
+                                        "Silindi: ${formatBytes(removed)}"
+                                    before > 0L ->
+                                        "Dosyalar duruyor. Skor, silinemeyen öğeler için yükselmez."
+                                    else -> "Silinecek dosya kalmadı"
                                 },
                                 Toast.LENGTH_LONG
                             ).show()
-                            report = withContext(Dispatchers.IO) { JunkScanHelper.scan(application) }
-                            val withSize = report?.categories?.filter { it.sizeBytes > 0 }?.map { it.id }?.toSet().orEmpty()
-                            if (withSize.isNotEmpty()) selected = withSize
+                            reload()
                         }
                     },
+                    interactionSource = cleanSrc,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(50),
-                    colors = ButtonDefaults.buttonColors(containerColor = HubOrange, contentColor = Color.White),
+                        .height(52.dp)
+                        .makayFocus(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = tvButtonColors(cleanFocused, HubOrange),
                     enabled = !loading && !cleaning && ((report?.totalBytes ?: 0L) > 0 || totalSelected > 0)
                 ) {
                     if (cleaning) {
@@ -164,14 +191,14 @@ fun CleanerHubScreen(
         ) {
             Spacer(Modifier.height(12.dp))
             JunkHeroOrb(
-                sizeLabel = if (loading) "…" else formatBytes(report?.totalBytes ?: 0L),
-                subtitle = "Çöp boyutu"
+                sizeLabel = if (loading) "…" else formatBytes(report?.cleanableBytes ?: 0L),
+                subtitle = if (loading) "Derin tarama yapılıyor…" else "Silinebilir junk"
             )
             Spacer(Modifier.height(28.dp))
             if (loading) {
                 CircularProgressIndicator(color = HubOrange)
                 Text(
-                    "Taranıyor…",
+                    "Optimize’ten daha geniş tarama…",
                     color = Color(0xFF8E8E93),
                     fontSize = 13.sp,
                     modifier = Modifier.padding(top = 12.dp)
@@ -193,13 +220,15 @@ fun CleanerHubScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = HubBlue)
                     ) { Text("İzin ver") }
                     Spacer(Modifier.height(12.dp))
-                    TextButton(onClick = {
-                        scope.launch {
-                            loading = true
-                            report = withContext(Dispatchers.IO) { JunkScanHelper.scan(application) }
-                            loading = false
-                        }
-                    }) { Text("Yeniden tara", color = HubOrange) }
+                }
+                if ((report?.totalBytes ?: 0L) == 0L && !needPerm) {
+                    Text(
+                        "Şu an silinebilir ek junk bulunamadı. Büyük dosya / medya için alt kategorilere bakın.",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
                 }
                 report?.categories?.forEach { cat ->
                     CleanerCategoryRow(
@@ -213,12 +242,21 @@ fun CleanerHubScreen(
                         onExpand = { onOpenCategory(cat.id) }
                     )
                 }
+                if ((report?.lockedBytes ?: 0L) > 0L) {
+                    Text(
+                        "Xiaomi yaklaşık ${formatBytes(report!!.lockedBytes)} daha sistem önbelleği gösterir; bu alan sideload ile silinemez.",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
                 Text(
-                    "Seçili öğeler 48 saatlik çöp kutusuna taşınır. Sistem dosyaları silinmez.",
+                    "Silinebilir önbellek + sistem boşaltması. Sistem dosyalarına dokunulmaz.",
                     color = Color(0xFF8E8E93),
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 12.dp)
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
             Spacer(Modifier.height(80.dp))
@@ -260,15 +298,25 @@ private fun CleanerCategoryRow(
     onToggle: () -> Unit,
     onExpand: () -> Unit
 ) {
+    var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onExpand)
-            .padding(vertical = 14.dp),
+            .tvClickable(corner = 12.dp, enabled = true, onFocused = { focused = it }, onClick = onExpand)
+            .padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("▾ $title", color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
-        Text(sizeLabel, color = Color(0xFF8E8E93), fontSize = 14.sp)
+        Text(
+            "▾ $title",
+            color = Color.White,
+            fontSize = 15.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            sizeLabel,
+            color = Color(0xFF8E8E93),
+            fontSize = 14.sp
+        )
         Spacer(Modifier.width(12.dp))
         Box(
             Modifier
@@ -396,9 +444,9 @@ fun SecurityScanScreen(
         }
 
         val j = junk ?: JunkScanHelper.JunkReport(emptyList(), 0)
-        val score = JunkScanHelper.optimizationScore(j.totalBytes, unusedApps = unused)
+        val score = JunkScanHelper.optimizationScore(j.cleanableBytes, unusedApps = unused)
         summary = ScanSummary(
-            junkBytes = j.totalBytes,
+            junkBytes = j.cleanableBytes,
             junkFiles = j.categories.sumOf { it.fileCount },
             unusedApps = unused,
             hasStorage = hasStorage,
@@ -408,7 +456,7 @@ fun SecurityScanScreen(
         CleaningRecorder.recordScan(application, "Güvenlik özeti", j.categories.sumOf { it.fileCount }, j.totalBytes)
         progress = 1f
         scanning = false
-        currentLabel = "Virüs motoru yok — cihaz sağlık özeti. Satırlara dokunun"
+        currentLabel = "Bu bir virüs taraması değildir — cihaz sağlık özeti. Satırlara dokunun"
     }
 
     Scaffold(
@@ -417,16 +465,19 @@ fun SecurityScanScreen(
             TopAppBar(
                 title = { Text("Güvenlik taraması", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        idleContent = Color.White,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToSettings) {
+                    TvIconButton(onClick = onNavigateToSettings, idleContent = Color.White) {
                         Icon(
                             painterResource(R.drawable.ic_hub_privacy),
                             contentDescription = null,
-                            tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -447,7 +498,13 @@ fun SecurityScanScreen(
                     }
                 }
                 Button(
-                    onClick = onNavigateBack,
+                    onClick = {
+                        if (scanning) {
+                            scanning = false
+                        } else {
+                            onNavigateBack()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
@@ -505,19 +562,37 @@ fun SecurityScanScreen(
                 }
             }
             Text(currentLabel, color = Color(0xFF8E8E93), fontSize = 12.sp, textAlign = TextAlign.Center)
+            if (!scanning) {
+                Text(
+                    "Makay antivirüs değildir. İzin, junk ve uygulama sağlığı özeti gösterir.",
+                    color = Color(0xFF8E8E93),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
             Spacer(Modifier.height(20.dp))
             checks.forEach { item ->
+                var focused by remember { mutableStateOf(false) }
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickable(enabled = !scanning) { openCheck(item.id) }
-                        .padding(vertical = 10.dp),
+                        .tvClickable(
+                            enabled = !scanning,
+                            corner = 10.dp,
+                            onFocused = { focused = it }
+                        ) { openCheck(item.id) }
+                        .padding(vertical = 10.dp, horizontal = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(item.title, color = Color.White, fontSize = 15.sp)
-                        Text(item.detail, color = Color(0xFF8E8E93), fontSize = 12.sp)
+                        Text(
+                            item.detail,
+                            color = Color(0xFF8E8E93),
+                            fontSize = 12.sp
+                        )
                     }
                     if (item.ok) {
                         Icon(Icons.Default.CheckCircle, null, tint = HubGreen, modifier = Modifier.size(22.dp))
@@ -525,7 +600,7 @@ fun SecurityScanScreen(
                         Text("!", color = HubOrange, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
                     Icon(
-                        Icons.Default.KeyboardArrowRight,
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         null,
                         tint = Color(0xFF636366),
                         modifier = Modifier.size(18.dp)
@@ -592,8 +667,8 @@ fun PrivacyHubScreen(
             TopAppBar(
                 title = { Text("Gizlilik koruması", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                    TvIconButton(onClick = onNavigateBack, idleContent = Color.White) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
@@ -649,39 +724,64 @@ fun PrivacyHubScreen(
 @Composable
 private fun PrivacyRow(emoji: String, title: String, sub: String, onClick: (Context) -> Unit) {
     val context = LocalContext.current
+    var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable { onClick(context) }
-            .padding(vertical = 12.dp),
+            .tvClickable(corner = 10.dp, onFocused = { focused = it }) { onClick(context) }
+            .padding(vertical = 12.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(emoji, fontSize = 20.sp, modifier = Modifier.width(36.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)
-            Text(sub, color = Color(0xFF8E8E93), fontSize = 12.sp)
+            Text(
+                sub,
+                color = Color(0xFF8E8E93),
+                fontSize = 12.sp
+            )
         }
-        Icon(Icons.Default.KeyboardArrowRight, null, tint = Color(0xFF636366))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            null,
+            tint = Color(0xFF636366)
+        )
     }
 }
 
 @Composable
 private fun PrivacyLinkCard(title: String, sub: String, onClick: () -> Unit) {
+    val (src, focused) = rememberTvInteraction()
     Card(
         onClick = onClick,
+        interactionSource = src,
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = HubCard),
-        modifier = Modifier.fillMaxWidth()
+        colors = tvCardColors(focused, HubCard),
+        modifier = Modifier
+            .fillMaxWidth()
+            .makayFocus(corner = 16.dp)
     ) {
         Row(
             Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)
-                Text(sub, color = Color(0xFF8E8E93), fontSize = 12.sp)
+                Text(
+                    title,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    sub,
+                    color = Color(0xFF8E8E93),
+                    fontSize = 12.sp
+                )
             }
-            Icon(Icons.Default.KeyboardArrowRight, null, tint = Color(0xFF636366))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                null,
+                tint = Color(0xFF636366)
+            )
         }
     }
 }
@@ -729,8 +829,8 @@ private fun BatteryInfoScreenUnused(onNavigateBack: () -> Unit) {
             TopAppBar(
                 title = { Text("Pil", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                    TvIconButton(onClick = onNavigateBack, idleContent = Color.White) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
@@ -758,7 +858,7 @@ private fun BatteryInfoScreenUnused(onNavigateBack: () -> Unit) {
                             1f to Color(0xFF1A5C2E)
                         )
                     )
-                    .clickable { openBatterySettings(context) }
+                    .tvClickable(corner = 24.dp) { openBatterySettings(context) }
                     .padding(20.dp)
             ) {
                 Column {
@@ -824,10 +924,11 @@ private fun BatteryInfoScreenUnused(onNavigateBack: () -> Unit) {
 
 @Composable
 private fun SettingsNavRow(title: String, trailing: String?, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .tvClickable(corner = 10.dp, onFocused = { focused = it }, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -835,10 +936,19 @@ private fun SettingsNavRow(title: String, trailing: String?, onClick: () -> Unit
         Text(title, color = Color.White, fontSize = 15.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (trailing != null) {
-                Text(trailing, color = Color(0xFF8E8E93), fontSize = 14.sp)
+                Text(
+                    trailing,
+                    color = Color(0xFF8E8E93),
+                    fontSize = 14.sp
+                )
                 Spacer(Modifier.width(6.dp))
             }
-            Icon(Icons.Default.KeyboardArrowRight, null, tint = Color(0xFF636366), modifier = Modifier.size(18.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                null,
+                tint = Color(0xFF636366),
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -873,8 +983,8 @@ private fun DataUsageScreenUnused(onNavigateBack: () -> Unit) {
             TopAppBar(
                 title = { Text("Veri kullanımı", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                    TvIconButton(onClick = onNavigateBack, idleContent = Color.White) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
@@ -976,7 +1086,7 @@ private fun DataUsageScreenUnused(onNavigateBack: () -> Unit) {
                     ) { Text("📶", fontSize = 18.sp) }
                     Spacer(Modifier.width(12.dp))
                     Text("Ağ bağlantısını yönet", color = Color.White, modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.KeyboardArrowRight, null, tint = Color(0xFF636366))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color(0xFF636366))
                 }
             }
             Card(
@@ -1048,8 +1158,8 @@ fun ManageAppsScreen(
             TopAppBar(
                 title = { Text("Uygulamaları yönet", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                    TvIconButton(onClick = onNavigateBack, idleContent = Color.White) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
@@ -1110,10 +1220,11 @@ fun ManageAppsScreen(
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     items(filtered.size) { i ->
                         val (label, pkg) = filtered[i]
+                        var focused by remember { mutableStateOf(false) }
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable {
+                                .tvClickable(corner = 10.dp, onFocused = { focused = it }) {
                                     try {
                                         application.startActivity(
                                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -1124,11 +1235,21 @@ fun ManageAppsScreen(
                                     } catch (_: Exception) {
                                     }
                                 }
-                                .padding(vertical = 14.dp),
+                                .padding(vertical = 14.dp, horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(label, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1)
-                            Icon(Icons.Default.KeyboardArrowRight, null, tint = Color(0xFF636366), modifier = Modifier.size(18.dp))
+                            Text(
+                                label,
+                                color = Color.White,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1
+                            )
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                null,
+                                tint = Color(0xFF636366),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }
@@ -1139,11 +1260,13 @@ fun ManageAppsScreen(
 
 @Composable
 private fun QuickTool(emoji: String, label: String, tint: Color, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(100.dp)
-            .clickable(onClick = onClick)
+            .tvClickable(corner = 16.dp, onFocused = { focused = it }, onClick = onClick)
+            .padding(6.dp)
     ) {
         Box(
             Modifier
@@ -1155,6 +1278,12 @@ private fun QuickTool(emoji: String, label: String, tint: Color, onClick: () -> 
             Text(emoji, fontSize = 18.sp)
         }
         Spacer(Modifier.height(6.dp))
-        Text(label, color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Center, maxLines = 2)
+        Text(
+            label,
+            color = Color.White,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2
+        )
     }
 }

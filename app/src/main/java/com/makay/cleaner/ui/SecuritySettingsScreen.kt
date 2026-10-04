@@ -33,6 +33,7 @@ fun SecuritySettingsScreen(
     var isBiometricAvailable by remember { mutableStateOf(biometricManager.isBiometricAvailable()) }
     
     var showSetPinDialog by remember { mutableStateOf(false) }
+    var showRemovePinDialog by remember { mutableStateOf(false) }
     var newPin by remember { mutableStateOf("") }
     var confirmPin by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -42,7 +43,7 @@ fun SecuritySettingsScreen(
             TopAppBar(
                 title = { Text("🔐 Güvenlik Ayarları", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 }
@@ -57,24 +58,46 @@ fun SecuritySettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "Sistem dosya koruması",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "/system, /vendor ve üretici paketleri silinmez. Güvenlik taraması virüs motoru değildir.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             // PIN Kilidi
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                TvFocusRow(
+                    onClick = {
+                        if (isPinEnabled) {
+                            showRemovePinDialog = true
+                        } else {
+                            showSetPinDialog = true
+                        }
+                    },
+                    modifier = Modifier.padding(8.dp)
+                ) { focused ->
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "PIN Kilidi",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = if (isPinEnabled) "Aktif" else "Kapalı",
@@ -91,7 +114,8 @@ fun SecuritySettingsScreen(
                                 appLockManager.removePin()
                                 isPinEnabled = false
                             }
-                        }
+                        },
+                        modifier = Modifier.tvSkipChildFocus()
                     )
                 }
             }
@@ -105,18 +129,21 @@ fun SecuritySettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ) else CardDefaults.cardColors()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                TvFocusRow(
+                    onClick = {
+                        if (isBiometricAvailable) {
+                            appLockManager.setBiometricEnabled(!isBiometricEnabled)
+                            isBiometricEnabled = !isBiometricEnabled
+                        }
+                    },
+                    modifier = Modifier.padding(8.dp)
+                ) { focused ->
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Biyometrik Kilidi",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = when {
@@ -125,8 +152,10 @@ fun SecuritySettingsScreen(
                                 else -> "Kapalı"
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (!isBiometricAvailable) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = when {
+                                !isBiometricAvailable -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
                     Switch(
@@ -137,7 +166,8 @@ fun SecuritySettingsScreen(
                                 isBiometricEnabled = enabled
                             }
                         },
-                        enabled = isBiometricAvailable
+                        enabled = isBiometricAvailable,
+                        modifier = Modifier.tvSkipChildFocus()
                     )
                 }
             }
@@ -251,6 +281,24 @@ fun SecuritySettingsScreen(
                 }) {
                     Text("İptal")
                 }
+            }
+        )
+    }
+
+    if (showRemovePinDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemovePinDialog = false },
+            title = { Text("PIN kilidini kapat") },
+            text = { Text("PIN kaldırılınca uygulama arka plana gidince kilitlenmez.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    appLockManager.removePin()
+                    isPinEnabled = false
+                    showRemovePinDialog = false
+                }) { Text("Kapat") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemovePinDialog = false }) { Text("İptal") }
             }
         )
     }

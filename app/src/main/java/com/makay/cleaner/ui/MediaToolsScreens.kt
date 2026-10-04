@@ -4,20 +4,27 @@ import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.makay.cleaner.data.CleaningRecorder
 import com.makay.cleaner.data.MediaHubRepository
 import com.makay.cleaner.data.RecycleBinRepository
 import com.makay.cleaner.util.CleanResultTracker
 import com.makay.cleaner.util.MediaCompressHelper
 import com.makay.cleaner.util.ProManager
+import com.makay.cleaner.util.PermissionHelper
+import com.makay.cleaner.util.rememberStoragePermissionState
 import com.makay.cleaner.scanner.SimilarPhotoScanner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,8 +42,10 @@ fun MediaHubScreen(
     var buckets by remember { mutableStateOf<List<MediaHubRepository.MediaBucket>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
+    var pendingBucket by remember { mutableStateOf<MediaHubRepository.MediaBucket?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val hasPermission = rememberStoragePermissionState()
 
     LaunchedEffect(Unit) {
         loading = true
@@ -49,7 +58,10 @@ fun MediaHubScreen(
             TopAppBar(
                 title = { Text("Medya merkezi", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 }
@@ -57,6 +69,11 @@ fun MediaHubScreen(
         }
     ) { padding ->
         when {
+            !hasPermission -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                PermissionWarningCard(
+                    message = "Medya taraması için depolama izni gerekli. İzin yokken 0 dosya temiz anlamına gelmez."
+                ) { PermissionHelper.requestStoragePermission(context) }
+            }
             loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
@@ -74,32 +91,66 @@ fun MediaHubScreen(
                             Text(bucket.description, style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(6.dp))
                             Text("${bucket.fileCount} dosya · ${formatBytes(bucket.totalBytes)}")
-                            TextButton(onClick = {
-                                scope.launch {
-                                    var deleted = 0
-                                    var saved = 0L
-                                    withContext(Dispatchers.IO) {
-                                        repo.pathsForBucket(bucket.id).forEach { path ->
-                                            val f = File(path)
-                                            val size = f.length()
-                                            if (trash.moveToTrash(f, bucket.title)) {
-                                                deleted++
-                                                saved += size
-                                            }
-                                        }
+                            Spacer(Modifier.height(8.dp))
+                            if (bucket.samplePaths.isNotEmpty()) {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(bucket.samplePaths) { p ->
+                                        AsyncImage(
+                                            model = File(p),
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(64.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
                                     }
-                                    CleaningRecorder.record(application, bucket.title, saved, deleted)
-                                    CleanResultTracker.record(bucket.title, deleted, saved)
-                                    summary = CleanResultTracker.last
-                                    buckets = withContext(Dispatchers.IO) { repo.scanBuckets() }
-                                    Toast.makeText(context, "$deleted dosya taşındı", Toast.LENGTH_SHORT).show()
                                 }
-                            }) { Text("Kategoriyi çöp kutusuna taşı") }
+                                Spacer(Modifier.height(8.dp))
+                            }
+                            TextButton(onClick = { pendingBucket = bucket }) {
+                                Text("Kategoriyi çöp kutusuna taşı")
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    pendingBucket?.let { bucket ->
+        ConfirmDeleteDialog(
+            title = bucket.title,
+            message = "Bu kategorideki dosyalar 48 saat çöp kutusunda tutulur.",
+            onConfirm = {
+                val target = bucket
+                pendingBucket = null
+                scope.launch {
+                    var deleted = 0
+                    var saved = 0L
+                    withContext(Dispatchers.IO) {
+                        trash.beginBatch()
+                        repo.pathsForBucket(target.id).forEach { path ->
+                            val f = File(path)
+                            val size = f.length()
+                            if (trash.movePathToTrash(path, target.title)) {
+                                deleted++
+                                saved += size
+                            }
+                        }
+                    }
+                    CleaningRecorder.record(application, target.title, saved, deleted)
+                    CleanResultTracker.record(target.title, deleted, saved)
+                    summary = CleanResultTracker.last
+                    buckets = withContext(Dispatchers.IO) { repo.scanBuckets() }
+                    Toast.makeText(context, "$deleted dosya taşındı", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { pendingBucket = null },
+            fileCount = bucket.fileCount,
+            totalBytes = bucket.totalBytes,
+            moveToTrash = true,
+            previewPaths = bucket.samplePaths
+        )
     }
 
     summary?.let { s ->
@@ -109,7 +160,14 @@ fun MediaHubScreen(
             spaceSaved = s.spaceSaved,
             protectedSkipped = s.protectedSkipped,
             movedToTrash = true,
-            onDismiss = { summary = null }
+            onDismiss = { summary = null },
+            onUndo = {
+                scope.launch {
+                    val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
+                    buckets = withContext(Dispatchers.IO) { repo.scanBuckets() }
+                    Toast.makeText(context, "$n öğe geri yüklendi", Toast.LENGTH_SHORT).show()
+                }
+            }
         )
     }
 }
@@ -130,6 +188,8 @@ fun SimilarPhotosScreen(
     val trash = remember { RecycleBinRepository(application) }
     var groups by remember { mutableStateOf<List<SimilarPhotoScanner.SimilarGroup>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var pendingGroup by remember { mutableStateOf<SimilarPhotoScanner.SimilarGroup?>(null) }
+    var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -144,7 +204,10 @@ fun SimilarPhotosScreen(
             TopAppBar(
                 title = { Text("Benzer fotoğraflar", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 }
@@ -169,31 +232,81 @@ fun SimilarPhotosScreen(
                                 "${group.paths.size} benzer · ${formatBytes(group.totalSize)}",
                                 fontWeight = FontWeight.SemiBold
                             )
-                            group.paths.take(4).forEach { Text(File(it).name, style = MaterialTheme.typography.bodySmall) }
-                            TextButton(onClick = {
-                                scope.launch {
-                                    var deleted = 0
-                                    var saved = 0L
-                                    withContext(Dispatchers.IO) {
-                                        group.paths.drop(1).forEach { path ->
-                                            val f = File(path)
-                                            val size = f.length()
-                                            if (trash.moveToTrash(f, "Benzer foto")) {
-                                                deleted++
-                                                saved += size
-                                            }
-                                        }
-                                    }
-                                    CleaningRecorder.record(application, "Benzer foto", saved, deleted)
-                                    Toast.makeText(context, "$deleted foto taşındı", Toast.LENGTH_SHORT).show()
-                                    groups = withContext(Dispatchers.IO) { scanner.scan() }
+                            Spacer(Modifier.height(6.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(group.paths) { path ->
+                                    AsyncImage(
+                                        model = File(path),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
                                 }
-                            }) { Text("Fazlalıkları çöp kutusuna taşı") }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            TextButton(onClick = { pendingGroup = group }) {
+                                Text("Fazlalıkları çöp kutusuna taşı")
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    pendingGroup?.let { group ->
+        val extras = group.paths.drop(1)
+        ConfirmDeleteDialog(
+            title = "Benzer fotoğraflar",
+            message = "En yeni fotoğraf tutulur; fazlalıklar 48 saat çöp kutusunda kalır.",
+            onConfirm = {
+                pendingGroup = null
+                scope.launch {
+                    var deleted = 0
+                    var saved = 0L
+                    withContext(Dispatchers.IO) {
+                        trash.beginBatch()
+                        extras.forEach { path ->
+                            val f = File(path)
+                            val size = f.length()
+                            if (trash.movePathToTrash(path, "Benzer foto")) {
+                                deleted++
+                                saved += size
+                            }
+                        }
+                    }
+                    CleaningRecorder.record(application, "Benzer foto", saved, deleted)
+                    CleanResultTracker.record("Benzer foto", deleted, saved)
+                    summary = CleanResultTracker.last
+                    Toast.makeText(context, "$deleted foto taşındı", Toast.LENGTH_SHORT).show()
+                    groups = withContext(Dispatchers.IO) { scanner.scan() }
+                }
+            },
+            onDismiss = { pendingGroup = null },
+            fileCount = extras.size,
+            totalBytes = extras.sumOf { File(it).length() },
+            moveToTrash = true,
+            previewPaths = extras.take(6)
+        )
+    }
+    summary?.let { s ->
+        CleanSummaryDialog(
+            category = s.category,
+            filesDeleted = s.filesDeleted,
+            spaceSaved = s.spaceSaved,
+            protectedSkipped = s.protectedSkipped,
+            movedToTrash = true,
+            onDismiss = { summary = null },
+            onUndo = {
+                scope.launch {
+                    val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
+                    groups = withContext(Dispatchers.IO) { scanner.scan() }
+                    Toast.makeText(context, "$n öğe geri yüklendi", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
     }
 }
 
@@ -220,7 +333,10 @@ fun MediaCompressScreen(
             TopAppBar(
                 title = { Text("Medya sıkıştırma", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 }

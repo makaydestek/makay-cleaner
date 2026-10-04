@@ -106,7 +106,7 @@ if not "!ERR!"=="0" (
 )
 echo.
 
-echo [4/4] Teslimat dogrulaniyor...
+echo [4/4] Teslimat dogrulaniyor (yalnizca APK\)...
 set "APK_TARGET=%APK_DIR%\MakayCleaner_v!VERSION!.apk"
 set "SHA_TARGET=%APK_DIR%\MakayCleaner_v!VERSION!.apk.sha256"
 if not exist "!APK_TARGET!" (
@@ -118,6 +118,17 @@ if not exist "!SHA_TARGET!" (
     echo [HATA] SHA-256 yok:
     echo  !SHA_TARGET!
     goto :END_FAIL
+)
+
+REM Proje kokunde / app\release altinda kopya birakma
+if exist "%PROJECT_DIR%\*.apk" del /q "%PROJECT_DIR%\*.apk" >nul 2>&1
+if exist "%PROJECT_DIR%\*.apk.sha256" del /q "%PROJECT_DIR%\*.apk.sha256" >nul 2>&1
+if exist "%PROJECT_DIR%\app\release" (
+    del /q "%PROJECT_DIR%\app\release\*.apk" >nul 2>&1
+    del /q "%PROJECT_DIR%\app\release\*.apk.sha256" >nul 2>&1
+)
+if exist "%PROJECT_DIR%\app\build\outputs\apk" (
+    del /q /s "%PROJECT_DIR%\app\build\outputs\apk\*.apk" >nul 2>&1
 )
 
 for %%A in ("!APK_TARGET!") do (

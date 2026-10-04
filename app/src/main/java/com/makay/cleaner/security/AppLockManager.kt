@@ -1,7 +1,6 @@
 package com.makay.cleaner.security
 
 import android.content.Context
-import java.security.MessageDigest
 import java.security.SecureRandom
 
 class AppLockManager(context: Context) {
@@ -34,11 +33,7 @@ class AppLockManager(context: Context) {
         secureStorage.saveBoolean("migrated", true)
     }
 
-    private fun hashPin(pin: String, salt: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hash = digest.digest((salt + pin).toByteArray())
-        return hash.joinToString("") { "%02x".format(it) }
-    }
+    private fun hashPin(pin: String, salt: String): String = PinHash.withSalt(pin, salt)
 
     private fun generateSalt(): String {
         val bytes = ByteArray(16)
@@ -67,10 +62,7 @@ class AppLockManager(context: Context) {
         return ok
     }
 
-    private fun hashPinLegacy(pin: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(pin.toByteArray()).joinToString("") { "%02x".format(it) }
-    }
+    private fun hashPinLegacy(pin: String): String = PinHash.legacy(pin)
 
     fun removePin() {
         secureStorage.remove(KEY_PIN_HASH)
@@ -97,5 +89,16 @@ class AppLockManager(context: Context) {
         val last = secureStorage.getString(KEY_LAST_UNLOCK).toLongOrNull() ?: 0L
         if (last == 0L) return true
         return System.currentTimeMillis() - last > RELOCK_TIMEOUT_MS
+    }
+}
+
+internal object PinHash {
+    fun withSalt(pin: String, salt: String): String = sha256(salt + pin)
+
+    fun legacy(pin: String): String = sha256(pin)
+
+    private fun sha256(value: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        return digest.digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 }

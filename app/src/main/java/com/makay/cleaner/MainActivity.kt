@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import com.makay.cleaner.data.ThemeRepository
 import com.makay.cleaner.ui.AppWithSplash
 import com.makay.cleaner.ui.formatBytes
@@ -30,6 +31,9 @@ import com.makay.cleaner.ui.theme.MakayCleanerTheme
 import com.makay.cleaner.update.AppUpdateHost
 import com.makay.cleaner.update.AppUpdateRepository
 import com.makay.cleaner.util.QuickCleanHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
 
 class MainActivity : FragmentActivity() {
@@ -194,15 +198,19 @@ class MainActivity : FragmentActivity() {
 
     private fun handleWidgetIntent(intent: Intent?) {
         if (intent?.action == ACTION_QUICK_CLEAN || intent?.getBooleanExtra("quick_clean", false) == true) {
-            val result = QuickCleanHelper.cleanAppCaches(this)
-            Toast.makeText(
-                this,
-                if (result.filesDeleted > 0)
-                    "Hızlı temizlik: ${formatBytes(result.spaceSaved)}"
-                else
-                    "Temizlenecek dosya yok",
-                Toast.LENGTH_SHORT
-            ).show()
+            lifecycleScope.launch(Dispatchers.IO) {
+                val result = QuickCleanHelper.cleanAppCaches(this@MainActivity)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        if (result.filesDeleted > 0)
+                            "Hızlı temizlik: ${formatBytes(result.spaceSaved)}"
+                        else
+                            "Temizlenecek dosya yok",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
         }
     }
 }

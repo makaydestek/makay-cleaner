@@ -13,7 +13,9 @@ import android.widget.Toast
 import com.makay.cleaner.MainActivity
 import com.makay.cleaner.R
 import com.makay.cleaner.notification.NotificationManager
-import com.makay.cleaner.util.QuickCleanHelper
+import com.makay.cleaner.util.JunkScanHelper
+import com.makay.cleaner.util.PlatformManager
+import com.makay.cleaner.util.TvRecommendationManager
 import java.text.DecimalFormat
 
 class CleanerWidgetProvider : AppWidgetProvider() {
@@ -31,19 +33,33 @@ class CleanerWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
         if (intent.action == ACTION_WIDGET_CLEAN) {
-            val result = QuickCleanHelper.cleanAppCaches(context)
-            Toast.makeText(
-                context,
-                if (result.filesDeleted > 0)
-                    "Temizlendi: ${formatBytes(result.spaceSaved)}"
-                else
-                    "Temizlenecek dosya yok",
-                Toast.LENGTH_SHORT
-            ).show()
-            refreshAll(context)
+            val pending = goAsync()
+            Thread {
+                try {
+                    if (PlatformManager.isTvMode(context)) {
+                        val report = JunkScanHelper.scan(context)
+                        val score = JunkScanHelper.optimizationScore(report.cleanableBytes)
+                        TvRecommendationManager.publishRecommendation(context, report.cleanableBytes, score)
+                    } else {
+                        val result = JunkScanHelper.cleanSelected(context, setOf("cache"), recordAs = "Widget")
+                        val text = if (result.spaceSaved > 0L) {
+                            "Temizlendi: ${formatBytes(result.spaceSaved)}"
+                        } else {
+                            "Silinebilir önbellek yok"
+                        }
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    refreshAll(context)
+                } finally {
+                    pending.finish()
+                }
+            }.start()
+            return
         }
+        super.onReceive(context, intent)
     }
 
     private fun updateAppWidget(

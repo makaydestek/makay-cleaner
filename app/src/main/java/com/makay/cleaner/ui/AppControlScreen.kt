@@ -63,7 +63,10 @@ fun AppControlScreen(
             TopAppBar(
                 title = { Text("Uygulama kontrolü", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 },
@@ -94,10 +97,23 @@ fun AppControlScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
             Text(
-                "Uzun süredir kullanılmayan uygulamalar kurulum tarihine göre listelenir.",
+                if (UnusedAppsHelper.hasUsageAccess(application))
+                    "Kullanılmayan uygulamalar son kullanım tarihine göre listelenir."
+                else
+                    "Kullanılmayan uygulamalar kurulum tarihine göre tahmin edilir. Kullanım izni isteğe bağlıdır ve sideload uyarısı için otomatik istenmez.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (!UnusedAppsHelper.hasUsageAccess(application)) {
+                TextButton(onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                }) { Text("Kullanım iznini aç (isteğe bağlı)") }
+            }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
@@ -200,8 +216,8 @@ fun ToolboxScreen(
             TopAppBar(
                 title = { Text("Araç kutusu", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Text("✕", color = Color.White, fontSize = 18.sp)
+                    TvIconButton(onClick = onNavigateBack, idleContent = Color.White) {
+                        Text("✕", fontSize = 18.sp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -239,12 +255,16 @@ fun ToolboxScreen(
                                     horizontalArrangement = Arrangement.SpaceEvenly
                                 ) {
                                     row.forEach { tool ->
+                                        var toolFocused by remember { mutableStateOf(false) }
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .clickable { onOpen(tool.id) }
-                                                .padding(4.dp)
+                                                .tvClickable(
+                                                    corner = 14.dp,
+                                                    onFocused = { toolFocused = it }
+                                                ) { onOpen(tool.id) }
+                                                .padding(8.dp)
                                         ) {
                                             Box(
                                                 Modifier

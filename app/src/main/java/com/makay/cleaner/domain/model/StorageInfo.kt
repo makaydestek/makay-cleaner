@@ -15,5 +15,6 @@ data class StorageCategory(
     val sizeBytes: Long,
     val sizeFormatted: String,
     val icon: String,
-    val color: Int
+    val color: Int,
+    val id: String = ""
 )

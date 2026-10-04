@@ -95,7 +95,8 @@ fun CleanSummaryDialog(
     protectedSkipped: Int,
     movedToTrash: Boolean,
     onDismiss: () -> Unit,
-    onOpenTrash: (() -> Unit)? = null
+    onOpenTrash: (() -> Unit)? = null,
+    onUndo: (() -> Unit)? = null
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -125,13 +126,18 @@ fun CleanSummaryDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Tamam") }
         },
-        dismissButton = if (onOpenTrash != null && movedToTrash) {
-            {
-                TextButton(onClick = {
-                    onDismiss()
-                    onOpenTrash()
-                }) { Text("Çöp kutusu") }
+        dismissButton = {
+            val extra = when {
+                onUndo != null && movedToTrash -> "Geri al"
+                onOpenTrash != null && movedToTrash -> "Çöp kutusu"
+                else -> null
             }
-        } else null
+            if (extra != null) {
+                TextButton(onClick = {
+                    if (onUndo != null) onUndo() else onOpenTrash?.invoke()
+                    onDismiss()
+                }) { Text(extra) }
+            }
+        }
     )
 }

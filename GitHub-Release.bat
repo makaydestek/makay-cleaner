@@ -33,7 +33,7 @@ set "SHA=%APK_DIR%\MakayCleaner_v!VERSION!.apk.sha256"
 
 if not exist "%APK%" (
   echo [HATA] APK yok: %APK%
-  echo Once APK-Hazirla.bat veya: gradlew assembleRelease
+  echo Once APK-Hazirla.bat calistirin. Teslim APK yalnizca APK\ klasorundedir.
   goto :FAIL
 )
 
@@ -101,8 +101,11 @@ if not errorlevel 1 (
   gh release upload "!TAG!" "%APK%" "%SHA%" --repo makaydestek/makay-cleaner --clobber
 ) else (
   echo Yeni release olusturuluyor...
-  REM Video Player ile ayni: baslik = surum, not = Initial commit
-  gh release create "!TAG!" "%APK%" "%SHA%" --repo makaydestek/makay-cleaner --title "!VERSION!" --notes "Initial commit"
+  REM Video Player ile ayni: baslik=surum, aciklama tamamen bos
+  set "NOTES_FILE=%TEMP%\makay-cleaner-release-notes.txt"
+  type nul > "!NOTES_FILE!"
+  gh release create "!TAG!" "%APK%" "%SHA%" --repo makaydestek/makay-cleaner --title "!VERSION!" --notes-file "!NOTES_FILE!"
+  del /q "!NOTES_FILE!" >nul 2>&1
 )
 
 if errorlevel 1 (

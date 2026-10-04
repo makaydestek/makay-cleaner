@@ -42,7 +42,10 @@ fun AnalyticsScreen(
             TopAppBar(
                 title = { Text("📊 Gelişmiş Analitikler", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 }

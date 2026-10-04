@@ -63,10 +63,19 @@ class RecycleBinRepository(private val context: Context) {
             val original = source.absolutePath
             val moved = source.renameTo(dest) || run {
                 source.copyTo(dest, overwrite = true)
+                source.setWritable(true)
                 source.delete()
             }
-            if (!moved && !dest.exists()) return false
-            if (source.exists() && dest.exists()) source.delete()
+            if (source.exists() && dest.exists()) {
+                source.setWritable(true)
+                source.delete()
+            }
+            // Orijinal duruyorsa temizlik başarısız — kopyayı geri al
+            if (source.exists()) {
+                if (dest.exists()) dest.delete()
+                return false
+            }
+            if (!dest.exists()) return false
             addIndex(
                 TrashItem(
                     id = id,
@@ -106,13 +115,14 @@ class RecycleBinRepository(private val context: Context) {
                 FileOutputStream(dest).use { output -> input.copyTo(output) }
             } ?: return false
             if (size <= 0) size = dest.length()
+            if (!dest.exists() || dest.length() <= 0L) return false
             val deleted = try {
                 context.contentResolver.delete(uri, null, null) > 0
             } catch (_: Exception) {
                 false
             }
             if (!deleted) {
-                dest.delete()
+                if (dest.exists()) dest.delete()
                 return false
             }
             addIndex(
@@ -244,6 +254,36 @@ class RecycleBinRepository(private val context: Context) {
         return saved to count
     }
 
+    fun hoursRemaining(item: TrashItem, now: Long = System.currentTimeMillis()): Long {
+        val left = RETENTION_MS - (now - item.deletedAt)
+        return (left.coerceAtLeast(0L) / (60L * 60L * 1000L))
+    }
+
+    @Volatile
+    private var lastBatchIds: List<String> = emptyList()
+
+    fun beginBatch() {
+        lastBatchIds = emptyList()
+    }
+
+    fun canUndoLastBatch(): Boolean = lastBatchIds.isNotEmpty()
+
+    fun undoLastBatch(): Pair<Int, Long> {
+        val ids = lastBatchIds
+        lastBatchIds = emptyList()
+        var count = 0
+        var bytes = 0L
+        ids.forEach { id ->
+            val item = loadIndex().find { it.id == id } ?: return@forEach
+            val size = item.sizeBytes
+            if (restore(id)) {
+                count++
+                bytes += size
+            }
+        }
+        return count to bytes
+    }
+
     fun purgeExpired() {
         val now = System.currentTimeMillis()
         val index = loadIndex().toMutableList()
@@ -262,6 +302,7 @@ class RecycleBinRepository(private val context: Context) {
         val index = loadIndex().toMutableList()
         index.add(item)
         saveIndex(index)
+        lastBatchIds = lastBatchIds + item.id
     }
 
     private fun loadIndex(): List<TrashItem> {

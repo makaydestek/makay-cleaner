@@ -16,11 +16,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.makay.cleaner.BuildConfig
 import com.makay.cleaner.data.ThemeRepository
 import com.makay.cleaner.ui.theme.ThemeMode
 import com.makay.cleaner.update.AppUpdateViewModel
 import com.makay.cleaner.update.findActivity
+import com.makay.cleaner.util.LanguageManager
+import com.makay.cleaner.util.PlatformManager
 import com.makay.cleaner.util.ProManager
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,7 +58,10 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text("Ayarlar", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 }
@@ -98,21 +102,27 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     ThemeMode.values().forEach { mode ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        TvFocusRow(
+                            onClick = {
+                                themeRepository.setThemeMode(mode)
+                                viewModel.setThemeMode(mode)
+                            }
+                        ) { focused ->
                             RadioButton(
                                 selected = currentTheme == mode,
-                                onClick = {
-                                    themeRepository.setThemeMode(mode)
-                                    viewModel.setThemeMode(mode)
-                                }
+                                onClick = null,
+                                modifier = Modifier.tvSkipChildFocus(),
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = MaterialTheme.colorScheme.primary,
+                                    unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text(text = mode.displayName, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = mode.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 }
@@ -123,18 +133,19 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                TvFocusRow(
+                    onClick = {
+                        themeRepository.setDynamicColor(!currentDynamic)
+                        viewModel.setDynamicColor(!currentDynamic)
+                    },
+                    modifier = Modifier.padding(8.dp)
+                ) { focused ->
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Dinamik Renk",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Android 12+ cihazlarda duvar kağıdına göre renk",
@@ -147,7 +158,78 @@ fun SettingsScreen(
                         onCheckedChange = {
                             themeRepository.setDynamicColor(it)
                             viewModel.setDynamicColor(it)
+                        },
+                        modifier = Modifier.tvSkipChildFocus(),
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
+
+            val currentPlatform = PlatformManager.rememberIsTvMode()
+            val currentLang by LanguageManager.lang.collectAsState()
+            LanguageManager.init(context)
+
+            Text(
+                text = LanguageManager.t("Cihaz ve dil", "Device and language", context),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        LanguageManager.t("Arayüz", "Interface", context),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    PlatformManager.Platform.entries.forEach { platform ->
+                        val selected = if (currentPlatform) {
+                            platform == PlatformManager.Platform.TV
+                        } else {
+                            platform == PlatformManager.Platform.MOBILE
                         }
+                        TvFocusRow(
+                            onClick = { PlatformManager.setPlatform(context, platform) }
+                        ) { _ ->
+                            RadioButton(
+                                selected = selected,
+                                onClick = null,
+                                modifier = Modifier.tvSkipChildFocus()
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                if (platform == PlatformManager.Platform.TV) "Android TV" else "Mobil / tablet",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    LanguageManager.Lang.entries.forEach { lang ->
+                        TvFocusRow(
+                            onClick = { LanguageManager.set(context, lang) }
+                        ) { _ ->
+                            RadioButton(
+                                selected = currentLang == lang,
+                                onClick = null,
+                                modifier = Modifier.tvSkipChildFocus()
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(lang.displayName, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                    Text(
+                        text = "İngilizce şu an yalnızca ilk açılış rehberini değiştirir. Uygulamanın geri kalanı Türkçe kalır.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }
@@ -165,16 +247,15 @@ fun SettingsScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    TvFocusRow(
+                        onClick = { viewModel.setAutoCleanEnabled(!uiState.autoCleanEnabled) }
+                    ) { focused ->
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Otomatik Temizlik",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = if (uiState.autoCleanEnabled)
@@ -187,7 +268,8 @@ fun SettingsScreen(
                         }
                         Switch(
                             checked = uiState.autoCleanEnabled,
-                            onCheckedChange = { viewModel.setAutoCleanEnabled(it) }
+                            onCheckedChange = { viewModel.setAutoCleanEnabled(it) },
+                            modifier = Modifier.tvSkipChildFocus()
                         )
                     }
 
@@ -201,116 +283,73 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             intervals.forEach { hours ->
+                                val (chipSrc, chipFocused) = rememberTvInteraction()
                                 FilterChip(
                                     selected = uiState.autoCleanIntervalHours == hours,
                                     onClick = { viewModel.setAutoCleanInterval(hours) },
-                                    label = { Text("${hours}s") }
+                                    interactionSource = chipSrc,
+                                    modifier = Modifier.makayFocus(corner = 20.dp),
+                                    label = {
+                                        Text("${hours}s")
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
                                 )
                             }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Yalnızca Wi‑Fi")
-                            Switch(
-                                checked = uiState.wifiOnly,
-                                onCheckedChange = { viewModel.setWifiOnly(it) }
-                            )
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Yalnızca şarjdayken")
-                            Switch(
-                                checked = uiState.chargingOnly,
-                                onCheckedChange = { viewModel.setChargingOnly(it) }
-                            )
-                        }
+                        SettingsToggleRow("Yalnızca Wi‑Fi", uiState.wifiOnly) { viewModel.setWifiOnly(it) }
+                        SettingsToggleRow("Yalnızca şarjdayken", uiState.chargingOnly) { viewModel.setChargingOnly(it) }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Kategoriler", fontWeight = FontWeight.SemiBold)
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Önbellek")
-                            Switch(
-                                checked = uiState.catCache,
-                                onCheckedChange = { viewModel.setCategoryCache(it) }
-                            )
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Eski APK")
-                            Switch(
-                                checked = uiState.catApk,
-                                onCheckedChange = { viewModel.setCategoryApk(it) }
-                            )
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Geçici / junk")
-                            Switch(
-                                checked = uiState.catTmp,
-                                onCheckedChange = { viewModel.setCategoryTmp(it) }
-                            )
-                        }
+                        SettingsToggleRow("Önbellek", uiState.catCache) { viewModel.setCategoryCache(it) }
+                        SettingsToggleRow("Eski APK", uiState.catApk) { viewModel.setCategoryApk(it) }
+                        SettingsToggleRow("Geçici / junk", uiState.catTmp) { viewModel.setCategoryTmp(it) }
                     }
                 }
             }
 
-            Button(
+            TvActionButton(
                 onClick = { viewModel.runManualClean() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = MaterialTheme.shapes.medium
+                idle = MaterialTheme.colorScheme.primary
             ) {
                 Text("⚡ Şimdi Temizle", style = MaterialTheme.typography.titleMedium)
             }
 
-            Button(
+            TvActionButton(
                 onClick = onNavigateToRecycleBin,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = MaterialTheme.shapes.medium
+                idle = MaterialTheme.colorScheme.primary
             ) {
                 Text("🗑️ Çöp kutusu", style = MaterialTheme.typography.titleMedium)
             }
 
             if (ProManager.isProUiVisible()) {
-                Button(
+                TvActionButton(
                     onClick = onNavigateToPro,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                    idle = Color(0xFF2E7D32)
                 ) {
                     Text("⭐ Pro / Gizlilik", style = MaterialTheme.typography.titleMedium)
                 }
             }
 
-            Button(
+            TvActionButton(
                 onClick = { updateVm?.checkManual() },
                 enabled = updateVm != null && updateState?.checking != true && updateState?.downloading != true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
+                idle = Color(0xFF1565C0)
             ) {
                 Text(
                     when {
@@ -332,32 +371,23 @@ fun SettingsScreen(
                         MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Text(
-                "Kaynak: github.com/makaydestek/makay-cleaner · v${BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
 
-            Button(
+            TvActionButton(
                 onClick = onNavigateToNotifications,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                idle = MaterialTheme.colorScheme.primary
             ) {
                 Text("🔔 Bildirim Ayarları", style = MaterialTheme.typography.titleMedium)
             }
 
-            Button(
+            TvActionButton(
                 onClick = onNavigateToSecurity,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5722))
+                idle = Color(0xFFFF5722)
             ) {
                 Text("🔐 Güvenlik Ayarları", style = MaterialTheme.typography.titleMedium)
             }
@@ -413,5 +443,25 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    TvFocusRow(onClick = { onCheckedChange(!checked) }) { focused ->
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.tvSkipChildFocus()
+        )
     }
 }

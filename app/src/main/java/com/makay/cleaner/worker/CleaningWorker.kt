@@ -1,23 +1,18 @@
 package com.makay.cleaner.worker
 
-import android.content.Context
-import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.makay.cleaner.data.CleaningRecorder
-import com.makay.cleaner.data.RecycleBinRepository
 import com.makay.cleaner.notification.NotificationManager
-import com.makay.cleaner.scanner.SystemCleanerScanner
-import com.makay.cleaner.util.QuickCleanHelper
-import com.makay.cleaner.util.SystemFileGuard
+import com.makay.cleaner.util.JunkScanHelper
+import com.makay.cleaner.util.PlatformManager
+import com.makay.cleaner.util.TvRecommendationManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 
 class CleaningWorker(
-    context: Context,
+    context: android.content.Context,
     params: WorkerParameters
 ) : CoroutineWorker(context, params) {
 
@@ -29,39 +24,32 @@ class CleaningWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            val doCache = inputData.getBoolean(KEY_DO_CACHE, true)
-            val doApk = inputData.getBoolean(KEY_DO_APK, true)
-            val doTmp = inputData.getBoolean(KEY_DO_TMP, false)
-
-            var totalSaved = 0L
-            var totalDeleted = 0
-
-            if (doCache) {
-                val quick = QuickCleanHelper.cleanAppCaches(applicationContext)
-                val external = cleanAccessibleUserCaches()
-                totalSaved += quick.spaceSaved + external.first
-                totalDeleted += quick.filesDeleted + external.second
+            val ids = mutableSetOf<String>()
+            if (inputData.getBoolean(KEY_DO_CACHE, true)) ids += "cache"
+            if (inputData.getBoolean(KEY_DO_APK, true)) ids += "apk"
+            if (inputData.getBoolean(KEY_DO_TMP, false)) {
+                ids += "tmp"
+                ids += "residue"
             }
-            if (doApk) {
-                val downloads = cleanOldApksInDownloads()
-                totalSaved += downloads.first
-                totalDeleted += downloads.second
-            }
-            if (doTmp) {
-                val junk = cleanTempJunk()
-                totalSaved += junk.first
-                totalDeleted += junk.second
-            }
+            if (ids.isEmpty()) return@withContext Result.success()
 
-            if (totalDeleted > 0) {
-                CleaningRecorder.record(
+            val result = JunkScanHelper.cleanSelected(
+                applicationContext,
+                ids,
+                recordAs = "Otomatik Temizlik"
+            )
+            val after = JunkScanHelper.scan(applicationContext)
+            val score = JunkScanHelper.optimizationScore(after.cleanableBytes)
+
+            if (PlatformManager.isTvMode(applicationContext)) {
+                TvRecommendationManager.publishRecommendation(
                     applicationContext,
-                    "Otomatik Temizlik",
-                    totalSaved,
-                    totalDeleted
+                    after.cleanableBytes,
+                    score
                 )
+            } else if (result.filesDeleted > 0 || result.spaceSaved > 0L) {
                 NotificationManager(applicationContext).sendCleaningComplete(
-                    totalSaved,
+                    result.spaceSaved,
                     deepLink = NotificationManager.DEEP_STATS
                 )
             }
@@ -73,89 +61,8 @@ class CleaningWorker(
         }
     }
 
-    private fun cleanAccessibleUserCaches(): Pair<Long, Int> {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-            return 0L to 0
-        }
-        var saved = 0L
-        var count = 0
-        try {
-            val androidData = File(Environment.getExternalStorageDirectory(), "Android/data")
-            androidData.listFiles()?.forEach { appDir ->
-                val pkg = appDir.name
-                if (!SystemFileGuard.canCleanPackageCache(applicationContext, pkg)) return@forEach
-                val cache = File(appDir, "cache")
-                if (!cache.exists() || !cache.canWrite()) return@forEach
-                if (SystemFileGuard.isProtectedPath(cache.absolutePath)) return@forEach
-
-                cache.listFiles()?.forEach { file ->
-                    try {
-                        if (!SystemFileGuard.canDelete(file)) return@forEach
-                        val size = if (file.isFile) file.length() else dirSize(file)
-                        if (file.deleteRecursively()) {
-                            saved += size
-                            count++
-                        }
-                    } catch (_: Exception) {
-                    }
-                }
-            }
-        } catch (_: Exception) {
-        }
-        return saved to count
-    }
-
-    private fun cleanOldApksInDownloads(): Pair<Long, Int> {
-        var saved = 0L
-        var count = 0
-        val trash = RecycleBinRepository(applicationContext)
-        try {
-            val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            if (!downloads.exists()) return 0L to 0
-            val cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
-            downloads.listFiles()?.forEach { file ->
-                if (!file.isFile) return@forEach
-                if (!file.extension.equals("apk", true)) return@forEach
-                if (file.lastModified() >= cutoff) return@forEach
-                if (!SystemFileGuard.canDelete(file)) return@forEach
-                val size = file.length()
-                if (trash.moveToTrash(file, "APK otomatik")) {
-                    saved += size
-                    count++
-                }
-            }
-        } catch (_: Exception) {
-        }
-        return saved to count
-    }
-
-    private fun cleanTempJunk(): Pair<Long, Int> {
-        var saved = 0L
-        var count = 0
-        val trash = RecycleBinRepository(applicationContext)
-        try {
-            SystemCleanerScanner().scan(maxItems = 400).forEach { item ->
-                if (item.reason.contains("Geçici") || item.reason.contains("Log") || item.reason.contains("Küçük")) {
-                    if (item.file.isFile && trash.moveToTrash(item.file, item.reason)) {
-                        saved += item.sizeBytes
-                        count++
-                    }
-                }
-            }
-        } catch (_: Exception) {
-        }
-        return saved to count
-    }
-
-    private fun dirSize(dir: File): Long {
-        var size = 0L
-        dir.listFiles()?.forEach { f ->
-            size += if (f.isFile) f.length() else dirSize(f)
-        }
-        return size
-    }
-
     private fun maybeSendStorageWarning() {
+        if (PlatformManager.isTvMode(applicationContext)) return
         try {
             val path = Environment.getDataDirectory()
             val stat = StatFs(path.path)

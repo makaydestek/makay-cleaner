@@ -27,7 +27,7 @@ fun NotificationScreen(
             TopAppBar(
                 title = { Text("Bildirim Ayarlari", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 }
@@ -48,18 +48,16 @@ fun NotificationScreen(
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                TvFocusRow(
+                    onClick = { viewModel.setReminderEnabled(!uiState.reminderEnabled) },
+                    modifier = Modifier.padding(8.dp)
+                ) { focused ->
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Temizlik Hatirlatmasi",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = if (uiState.reminderEnabled) 
@@ -72,7 +70,8 @@ fun NotificationScreen(
                     }
                     Switch(
                         checked = uiState.reminderEnabled,
-                        onCheckedChange = { viewModel.setReminderEnabled(it) }
+                        onCheckedChange = { viewModel.setReminderEnabled(it) },
+                        modifier = Modifier.tvSkipChildFocus()
                     )
                 }
             }
@@ -93,15 +92,17 @@ fun NotificationScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         listOf(6L, 12L, 24L, 48L, 168L).forEach { hours ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            TvFocusRow(
+                                onClick = { viewModel.setReminderInterval(hours) }
+                            ) { focused ->
                                 RadioButton(
                                     selected = uiState.reminderIntervalHours == hours,
-                                    onClick = { viewModel.setReminderInterval(hours) }
+                                    onClick = null,
+                                    modifier = Modifier.tvSkipChildFocus(),
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = MaterialTheme.colorScheme.primary,
+                                        unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(
@@ -113,7 +114,8 @@ fun NotificationScreen(
                                         168L -> "Haftalik"
                                         else -> "$hours saatte"
                                     },
-                                    style = MaterialTheme.typography.bodyLarge
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }

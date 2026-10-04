@@ -96,7 +96,10 @@ fun DuplicatePhotosScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    TvIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.tvRequestInitialFocus()
+                    ) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 },
@@ -250,11 +253,12 @@ fun DuplicatePhotosScreen(
                     var saved = 0L
                     SystemFileGuard.consumeSkippedCount()
                     withContext(Dispatchers.IO) {
+                        trash.beginBatch()
                         activeGroups.flatMap { it.photos }
                             .filter { it.path in selectedPaths }
                             .forEach { photo ->
                                 val size = photo.sizeBytes
-                                val ok = trash.moveToTrash(File(photo.path), "Yinelenen foto")
+                                val ok = trash.movePathToTrash(photo.uri.toString(), "Yinelenen foto")
                                 if (ok) {
                                     deleted++
                                     saved += size
@@ -289,7 +293,14 @@ fun DuplicatePhotosScreen(
             spaceSaved = s.spaceSaved,
             protectedSkipped = s.protectedSkipped,
             movedToTrash = true,
-            onDismiss = { summary = null }
+            onDismiss = { summary = null },
+            onUndo = {
+                scope.launch {
+                    val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
+                    Toast.makeText(context, "$n öğe geri yüklendi", Toast.LENGTH_SHORT).show()
+                    runScan()
+                }
+            }
         )
     }
 }

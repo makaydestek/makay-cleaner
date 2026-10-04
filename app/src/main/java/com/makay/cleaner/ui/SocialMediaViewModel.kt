@@ -60,7 +60,8 @@ class SocialMediaViewModel(application: Application) : AndroidViewModel(applicat
                     getApplication(),
                     "Sosyal Medya",
                     allFiles.size,
-                    totalSize
+                    totalSize,
+                    CleaningRecorder.METRIC_SOCIAL
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
