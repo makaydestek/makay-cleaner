@@ -1,5 +1,7 @@
-# MakayCleaner — VERSION.txt ile build.gradle senkron kontrolu
-# Cikti: VERSION|CODE   ornek: 1.0.43|10043
+# MakayCleaner - VERSION.txt ile build.gradle senkron kontrolu
+# Cikti: VERSION|CODE   ornek: 1.0.43|1000043
+# Not: code formul app/build.gradle.kts ile AYNI olmak zorunda:
+#      major * 1_000_000 + minor * 1_000 + patch
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -16,5 +18,5 @@ if ($v -notmatch '^(\d+)\.(\d+)\.(\d+)$') {
     exit 1
 }
 
-$code = ([int]$Matches[1] * 10000) + ([int]$Matches[2] * 100) + [int]$Matches[3]
+$code = ([int]$Matches[1] * 1000000) + ([int]$Matches[2] * 1000) + [int]$Matches[3]
 Write-Output "$v|$code"

@@ -293,19 +293,40 @@ echo.
 
 echo Eski GitHub surumleri siliniyor (yalnizca !TAG! kalir)...
 set "TAGS_FILE=%TEMP%\makay-cleaner-tags.txt"
+set "ALL_TAGS=%TEMP%\makay-all-tags.txt"
+
+REM Once tum tag adlarini topla; sonra gereksiz release'leri sil;
+REM en sonda release'siz kalan tag'leri temizle (etiket birikimini onle).
+gh api "repos/%REPO%/tags" --paginate --jq ".[].name" > "!ALL_TAGS!" 2>nul
+
 gh release list --repo %REPO% --json tagName -q ".[].tagName" > "!TAGS_FILE!" 2>nul
 if exist "!TAGS_FILE!" (
     for /f "usebackq delims=" %%T in ("!TAGS_FILE!") do (
         if /i not "%%T"=="!TAG!" (
             gh release delete "%%T" --repo %REPO% --yes --cleanup-tag >nul 2>&1
             if errorlevel 1 (
-                echo  [UYARI] silinemedi: %%T
+                echo  [UYARI] release silinemedi: %%T
             ) else (
-                echo  - silindi: %%T
+                echo  - release silindi: %%T
             )
         )
     )
     del /q "!TAGS_FILE!" >nul 2>&1
+)
+
+REM Release'siz kalan tag'ler artik yalnizca bunlar olabilir.
+if exist "!ALL_TAGS!" (
+    for /f "usebackq delims=" %%T in ("!ALL_TAGS!") do (
+        if /i not "%%T"=="!TAG!" (
+            gh api -X DELETE "repos/%REPO%/git/refs/tags/%%T" >nul 2>&1
+            if errorlevel 1 (
+                echo  [UYARI] tag silinemedi: %%T
+            ) else (
+                echo  - tag silindi: %%T
+            )
+        )
+    )
+    del /q "!ALL_TAGS!" >nul 2>&1
 )
 echo.
 
