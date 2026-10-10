@@ -81,18 +81,27 @@ if errorlevel 1 (
     goto :END_FAIL
 )
 
-REM JDK 17 zorunlu
-if exist "C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot\bin\java.exe" (
-    set "JAVA_HOME=C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot"
-) else if exist "C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot\bin\java.exe" (
-    set "JAVA_HOME=C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot"
-) else if exist "C:\Program Files\Android\Android Studio\jbr\bin\java.exe" (
-    set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"
+REM JDK 17+ zorunlu (AGP 8.7 / Gradle 8.9).
+REM Once mevcut JAVA_HOME, yoksa bilinen kurulum yerleri taranir.
+set "JDK_FOUND="
+if defined JAVA_HOME if exist "%JAVA_HOME%\bin\java.exe" set "JDK_FOUND=%JAVA_HOME%"
+if not defined JDK_FOUND (
+    for %%D in (
+        "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot"
+        "C:\Program Files\Microsoft\jdk-21.0.10.7-hotspot"
+        "C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot"
+        "C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot"
+        "C:\Program Files\Android\Android Studio\jbr"
+    ) do (
+        if not defined JDK_FOUND if exist "%%~D\bin\java.exe" set "JDK_FOUND=%%~D"
+    )
 )
-if not defined JAVA_HOME (
-    echo [HATA] JDK 17 bulunamadi.
+if not defined JDK_FOUND (
+    echo [HATA] JDK 17+ bulunamadi.
+    echo        JAVA_HOME tanimlayin veya Android Studio kurun.
     goto :END_FAIL
 )
+set "JAVA_HOME=!JDK_FOUND!"
 set "PATH=%JAVA_HOME%\bin;%PATH%"
 echo  JAVA    : %JAVA_HOME%
 echo  Surum   : !VERSION!
