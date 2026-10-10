@@ -31,7 +31,7 @@ class NotificationRepository(private val context: Context) {
     }
 
     fun getNotificationSettings(): Pair<Boolean, Long> {
-        val enabled = prefs.getBoolean(KEY_REMINDER_ENABLED, true)
+        val enabled = prefs.getBoolean(KEY_REMINDER_ENABLED, false)
         val intervalHours = prefs.getLong(KEY_REMINDER_INTERVAL_HOURS, 24)
         return Pair(enabled, intervalHours)
     }

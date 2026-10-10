@@ -49,8 +49,13 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
                 val info = calculateStorageInfo()
-                val cats = withTimeoutOrNull(12_000L) { analyzeCategoriesFast() }
-                    ?: analyzeCategoriesMinimal()
+                val hasStorageAccess = PermissionHelper.hasStoragePermission(getApplication())
+                val cats = if (hasStorageAccess) {
+                    withTimeoutOrNull(12_000L) { analyzeCategoriesFast() }
+                        ?: analyzeCategoriesMinimal()
+                } else {
+                    analyzeCategoriesWithoutPermission()
+                }
                 _uiState.value = StorageUiState(
                     isLoading = false,
                     storageInfo = info,
@@ -68,7 +73,11 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     storageInfo = runCatching { calculateStorageInfo() }.getOrNull(),
-                    categories = analyzeCategoriesMinimal(),
+                    categories = if (PermissionHelper.hasStoragePermission(getApplication())) {
+                        analyzeCategoriesMinimal()
+                    } else {
+                        analyzeCategoriesWithoutPermission()
+                    },
                     errorMessage = null
                 )
             }
@@ -126,6 +135,17 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
             cat("cache", "Uygulama Önbelleği", cache, 0xFFFF9800.toInt()),
             cat("large", "Büyük Dosyalar", 0L, 0xFFF44336.toInt()),
             cat("media", "Medya Dosyaları", media, 0xFF2196F3.toInt()),
+            cat("docs", "Belgeler", 0L, 0xFF4CAF50.toInt()),
+            cat("other", "Diğer", 0L, 0xFF9E9E9E.toInt())
+        )
+    }
+
+    private fun analyzeCategoriesWithoutPermission(): List<StorageCategory> {
+        val cache = safeCacheSize(getApplication())
+        return listOf(
+            cat("cache", "Uygulama Önbelleği", cache, 0xFFFF9800.toInt()),
+            cat("large", "Büyük Dosyalar", 0L, 0xFFF44336.toInt()),
+            cat("media", "Medya Dosyaları", 0L, 0xFF2196F3.toInt()),
             cat("docs", "Belgeler", 0L, 0xFF4CAF50.toInt()),
             cat("other", "Diğer", 0L, 0xFF9E9E9E.toInt())
         )

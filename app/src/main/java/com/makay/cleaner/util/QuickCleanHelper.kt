@@ -3,6 +3,7 @@ package com.makay.cleaner.util
 import android.content.Context
 import android.os.Environment
 import com.makay.cleaner.data.CleaningRecorder
+import com.makay.cleaner.data.RecycleBinRepository
 import java.io.File
 
 /**
@@ -29,7 +30,7 @@ object QuickCleanHelper {
         thumbs.forEach { dir ->
             dir.listFiles()?.forEach { file ->
                 val size = if (file.isFile) file.length() else 0L
-                if (FilePurger.remove(context, file, trash = null, category = "Küçük resim") && size > 0L) {
+                if (FilePurger.remove(context, file, trash = RecycleBinRepository(context), category = "Küçük resim") && size > 0L) {
                     deleted++
                     saved += size
                 }

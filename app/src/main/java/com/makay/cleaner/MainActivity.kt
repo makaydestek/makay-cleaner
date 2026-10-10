@@ -2,7 +2,6 @@ package com.makay.cleaner
 
 import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -20,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
@@ -60,9 +58,7 @@ class MainActivity : FragmentActivity() {
 
     private val runtimePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        checkStoragePermission()
-    }
+    ) { checkStoragePermission() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -72,7 +68,6 @@ class MainActivity : FragmentActivity() {
 
         themeRepository = ThemeRepository.getInstance(this)
         checkStoragePermission()
-        requestRuntimePermissionsIfNeeded()
         consumeUpdateIntent(intent)
 
         setContent {
@@ -121,62 +116,38 @@ class MainActivity : FragmentActivity() {
         _updatePromptToken.longValue = System.currentTimeMillis()
     }
 
-    private fun requestRuntimePermissionsIfNeeded() {
-        val needed = mutableListOf<String>()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                needed += Manifest.permission.POST_NOTIFICATIONS
-            }
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                needed += Manifest.permission.READ_MEDIA_IMAGES
-            }
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                needed += Manifest.permission.READ_MEDIA_VIDEO
-            }
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                needed += Manifest.permission.READ_MEDIA_AUDIO
-            }
-        } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                needed += Manifest.permission.READ_EXTERNAL_STORAGE
-                needed += Manifest.permission.WRITE_EXTERNAL_STORAGE
-            }
-        }
-        if (needed.isNotEmpty()) {
-            runtimePermissionLauncher.launch(needed.toTypedArray())
-        }
-    }
-
     private fun checkStoragePermission() {
         _hasStoragePermission.value = com.makay.cleaner.util.PermissionHelper.hasStoragePermission(this)
     }
 
     fun requestStoragePermission() {
+        if (com.makay.cleaner.util.PermissionHelper.hasStoragePermission(this)) return
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Depolama erişimi gerekli")
+            .setMessage(
+                "Makay Cleaner, cihazdaki gereksiz dosyaları taramak ve yalnızca seçtiğiniz öğeleri temizlemek için depolama erişimi ister. " +
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                        "Android 11 ve üzeri cihazlarda bu izin, paylaşılan depolamadaki dosyaları yönetme erişimidir. İzni bir sonraki sistem ekranında açabilirsiniz."
+                    else
+                        "İzin verilmezse depolama taraması ve temizliği çalışmaz."
+            )
+            .setNegativeButton("Şimdi değil", null)
+            .setPositiveButton("Devam et") { _, _ -> openStorageAccessSettings() }
+            .show()
+    }
+
+    private fun openStorageAccessSettings() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                intent.data = Uri.parse("package:$packageName")
+                    .setData(Uri.parse("package:$packageName"))
                 storagePermissionLauncher.launch(intent)
             } catch (_: Exception) {
-                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                storagePermissionLauncher.launch(intent)
+                storagePermissionLauncher.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
             }
         } else {
             runtimePermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE
-                )
+                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
             )
         }
     }

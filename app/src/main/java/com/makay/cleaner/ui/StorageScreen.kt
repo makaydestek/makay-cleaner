@@ -108,6 +108,7 @@ fun StorageScreen(
     var expandedCategory by remember { mutableStateOf<String?>(null) }
     var showWhy by remember { mutableStateOf(false) }
     var whyDialog by remember { mutableStateOf(false) }
+    var confirmOptimization by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(cleanMessage) {
@@ -125,6 +126,7 @@ fun StorageScreen(
             scanned = true
             return@LaunchedEffect
         }
+        viewModel.refresh()
         val (junk, locked, unused) = withContext(Dispatchers.IO) {
             val report = runCatching { JunkScanHelper.scan(context) }.getOrNull()
             val u = runCatching { UnusedAppsHelper.getUnusedApps(context).size }.getOrDefault(0)
@@ -242,7 +244,9 @@ fun StorageScreen(
                     healthScore >= 100 -> "Yeniden tara"
                     else -> "Optimizasyon"
                 },
-                onOptimizeClick = { runOptimization() }
+                onOptimizeClick = {
+                    if (hasPermission) confirmOptimization = true else runOptimization()
+                }
             )
 
             Spacer(Modifier.height(14.dp))
@@ -309,6 +313,24 @@ fun StorageScreen(
                     },
                     confirmButton = {
                         TextButton(onClick = { whyDialog = false }) { Text("Tamam") }
+                    }
+                )
+            }
+            if (confirmOptimization) {
+                AlertDialog(
+                    onDismissRequest = { confirmOptimization = false },
+                    title = { Text("Optimizasyon başlatılsın mı?") },
+                    text = {
+                        Text("Bulunan gereksiz dosyalar çöp kutusuna taşınır ve 48 saat içinde geri yüklenebilir. Uygulama önbellekleri doğrudan temizlenir.")
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            confirmOptimization = false
+                            runOptimization()
+                        }) { Text("Temizle") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { confirmOptimization = false }) { Text("Vazgeç") }
                     }
                 )
             }

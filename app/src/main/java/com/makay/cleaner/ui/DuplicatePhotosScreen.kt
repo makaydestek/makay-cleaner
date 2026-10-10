@@ -24,6 +24,8 @@ import com.makay.cleaner.data.RecycleBinRepository
 import com.makay.cleaner.scanner.DuplicatePhotoScanner
 import com.makay.cleaner.util.CleanResultTracker
 import com.makay.cleaner.util.SystemFileGuard
+import com.makay.cleaner.util.PermissionHelper
+import com.makay.cleaner.util.rememberStoragePermissionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -52,8 +54,10 @@ fun DuplicatePhotosScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val widthClass = rememberWidthClass()
+    val hasStoragePermission = rememberStoragePermissionState()
 
     fun runScan() {
+        if (!hasStoragePermission) return
         scope.launch {
             loading = true
             progressText = "Aynı fotoğraflar aranıyor…"
@@ -71,7 +75,9 @@ fun DuplicatePhotosScreen(
         }
     }
 
-    LaunchedEffect(Unit) { runScan() }
+    LaunchedEffect(hasStoragePermission) {
+        if (hasStoragePermission) runScan() else loading = false
+    }
 
     val activeGroups = if (tabIndex == 0) exactGroups else similarGroups
     val selectedInTab = activeGroups.flatMap { it.photos }.count { it.path in selectedPaths }
@@ -104,14 +110,20 @@ fun DuplicatePhotosScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = { runScan() }, enabled = !loading) {
+                    TextButton(
+                        onClick = {
+                            if (hasStoragePermission) runScan()
+                            else PermissionHelper.requestStoragePermission(context)
+                        },
+                        enabled = !loading
+                    ) {
                         Text("Yenile")
                     }
                 }
             )
         },
         bottomBar = {
-            if (!loading && selectedInTab > 0) {
+            if (hasStoragePermission && !loading && selectedInTab > 0) {
                 Surface(tonalElevation = 3.dp, shadowElevation = 8.dp) {
                     Row(
                         Modifier
@@ -170,6 +182,9 @@ fun DuplicatePhotosScreen(
                 }
 
                 when {
+                    !hasStoragePermission -> PermissionWarningCard(
+                        "Yinelenen fotoğrafları taramak ve seçtiklerinizi çöp kutusuna taşımak için depolama erişimi gerekir."
+                    ) { PermissionHelper.requestStoragePermission(context) }
                     loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()

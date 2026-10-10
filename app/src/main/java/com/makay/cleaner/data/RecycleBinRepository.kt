@@ -61,15 +61,18 @@ class RecycleBinRepository(private val context: Context) {
             val size = source.length()
             val name = source.name
             val original = source.absolutePath
-            val moved = source.renameTo(dest) || run {
+            val moved = source.renameTo(dest) || try {
                 source.copyTo(dest, overwrite = true)
-                source.setWritable(true)
-                source.delete()
+                if (dest.length() == size && source.delete()) true
+                else {
+                    dest.delete()
+                    false
+                }
+            } catch (_: Exception) {
+                dest.delete()
+                false
             }
-            if (source.exists() && dest.exists()) {
-                source.setWritable(true)
-                source.delete()
-            }
+            if (!moved) return false
             // Orijinal duruyorsa temizlik başarısız — kopyayı geri al
             if (source.exists()) {
                 if (dest.exists()) dest.delete()
@@ -111,11 +114,18 @@ class RecycleBinRepository(private val context: Context) {
             val id = UUID.randomUUID().toString()
             val dest = File(trashRoot, id)
             var size = sizeBytes
-            context.contentResolver.openInputStream(uri)?.use { input ->
+            val copied = context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(dest).use { output -> input.copyTo(output) }
             } ?: return false
+            if (sizeBytes > 0L && copied != sizeBytes) {
+                dest.delete()
+                return false
+            }
             if (size <= 0) size = dest.length()
-            if (!dest.exists() || dest.length() <= 0L) return false
+            if (!dest.exists() || dest.length() != copied || copied <= 0L) {
+                dest.delete()
+                return false
+            }
             val deleted = try {
                 context.contentResolver.delete(uri, null, null) > 0
             } catch (_: Exception) {
@@ -154,6 +164,7 @@ class RecycleBinRepository(private val context: Context) {
             return false
         }
         return try {
+            val expectedLength = trashFile.length()
             val ok = if (item.mediaStoreUri != null || item.originalPath.startsWith("content://")) {
                 restoreToMediaStore(item, trashFile)
             } else {
@@ -166,7 +177,7 @@ class RecycleBinRepository(private val context: Context) {
                     trashFile.copyTo(target, overwrite = true)
                     trashFile.delete()
                 }
-                moved || target.exists()
+                moved && target.exists() && target.length() == expectedLength
             }
             if (ok) {
                 if (trashFile.exists()) trashFile.delete()
@@ -235,7 +246,8 @@ class RecycleBinRepository(private val context: Context) {
     fun purgePermanently(id: String): Boolean {
         val index = loadIndex().toMutableList()
         val item = index.find { it.id == id } ?: return false
-        File(item.trashPath).delete()
+        val file = File(item.trashPath)
+        if (file.exists() && !file.delete() && file.exists()) return false
         index.removeAll { it.id == id }
         saveIndex(index)
         return true
@@ -245,12 +257,15 @@ class RecycleBinRepository(private val context: Context) {
         val index = loadIndex()
         var saved = 0L
         var count = 0
+        val keep = mutableListOf<TrashItem>()
         index.forEach { item ->
-            saved += item.sizeBytes
-            File(item.trashPath).delete()
-            count++
+            val file = File(item.trashPath)
+            if (!file.exists() || (file.delete() && !file.exists())) {
+                saved += item.sizeBytes
+                count++
+            } else keep.add(item)
         }
-        saveIndex(emptyList())
+        saveIndex(keep)
         return saved to count
     }
 
@@ -290,7 +305,8 @@ class RecycleBinRepository(private val context: Context) {
         val keep = mutableListOf<TrashItem>()
         index.forEach { item ->
             if (now - item.deletedAt > RETENTION_MS) {
-                File(item.trashPath).delete()
+                val file = File(item.trashPath)
+                if (file.exists() && !file.delete() && file.exists()) keep.add(item)
             } else {
                 keep.add(item)
             }

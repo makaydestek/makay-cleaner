@@ -361,7 +361,8 @@ fun MainAppContent() {
         }
         AppScreen.Permissions -> {
             PermissionScreen(
-                onPermissionsGranted = { currentScreen = AppScreen.Storage }
+                onPermissionsGranted = { currentScreen = AppScreen.Storage },
+                onPermissionsDenied = { currentScreen = AppScreen.Storage }
             )
         }
         AppScreen.RecycleBin -> {

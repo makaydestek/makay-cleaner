@@ -9,11 +9,17 @@ plugins {
 // Tek surum kaynagi: proje kokundeki VERSION.txt (ornek: 1.0.43)
 val appVersionName: String = rootProject.file("VERSION.txt").readText().trim().ifEmpty { "1.0.0" }
 val appVersionCode: Int = run {
-    val parts = appVersionName.split('.')
-    require(parts.size == 3 && parts.all { it.toIntOrNull() != null }) {
+    val parts = appVersionName.split('.').map { it.toLongOrNull() }
+    require(parts.size == 3 && parts.all { it != null && it >= 0L }) {
         "VERSION.txt gecersiz: '$appVersionName' (beklenen: 1.0.43)"
     }
-    parts[0].toInt() * 10000 + parts[1].toInt() * 100 + parts[2].toInt()
+    val (major, minor, patch) = parts.filterNotNull()
+    require(major in 0L..2100L && minor < 1000L && patch < 1000L) {
+        "VERSION.txt icinde major 0..2100, minor ve patch 0..999 araliginda olmali"
+    }
+    val code = major * 1_000_000L + minor * 1_000L + patch
+    require(code in 1L..2_100_000_000L) { "VERSION.txt versionCode sinirini asiyor" }
+    code.toInt()
 }
 
 val localProps = Properties().apply {

@@ -43,6 +43,8 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _state.update { it.copy(checking = true, error = null) }
             val result = runCatching {
+                // Uygulama her yeni açıldığında GitHub Releases'i kontrol et.
+                // Otomatik kontrol aralığı yalnızca arka plan/diğer tetikleyicilere uygulanır.
                 withContext(Dispatchers.IO) { repository.checkForUpdate(force = true) }
             }
             val update = result.getOrNull()

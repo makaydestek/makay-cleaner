@@ -1,6 +1,11 @@
 package com.makay.cleaner.ui
 
+import android.Manifest
 import android.app.Application
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,9 +14,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,6 +28,44 @@ fun NotificationScreen(
     viewModel: NotificationViewModel = viewModel(factory = NotificationViewModel.Factory(application))
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    var showNotificationRationale by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) viewModel.setReminderEnabled(true)
+    }
+
+    fun setReminderEnabled(enabled: Boolean) {
+        if (!enabled) {
+            viewModel.setReminderEnabled(false)
+        } else if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            showNotificationRationale = true
+        } else {
+            viewModel.setReminderEnabled(true)
+        }
+    }
+
+    if (showNotificationRationale) {
+        AlertDialog(
+            onDismissRequest = { showNotificationRationale = false },
+            title = { Text("Bildirim izni") },
+            text = { Text("Temizlik hatırlatmalarını gösterebilmek için bildirim izni gerekir. İzin vermezseniz hatırlatmalar kapalı kalır.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showNotificationRationale = false
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }) { Text("Devam et") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotificationRationale = false }) { Text("Şimdi değil") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -49,7 +94,7 @@ fun NotificationScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 TvFocusRow(
-                    onClick = { viewModel.setReminderEnabled(!uiState.reminderEnabled) },
+                    onClick = { setReminderEnabled(!uiState.reminderEnabled) },
                     modifier = Modifier.padding(8.dp)
                 ) { focused ->
                     Column(modifier = Modifier.weight(1f)) {
@@ -70,7 +115,7 @@ fun NotificationScreen(
                     }
                     Switch(
                         checked = uiState.reminderEnabled,
-                        onCheckedChange = { viewModel.setReminderEnabled(it) },
+                        onCheckedChange = { setReminderEnabled(it) },
                         modifier = Modifier.tvSkipChildFocus()
                     )
                 }

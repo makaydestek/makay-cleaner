@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class NotificationUiState(
-    val reminderEnabled: Boolean = true,
+    val reminderEnabled: Boolean = false,
     val reminderIntervalHours: Long = 24
 )
 

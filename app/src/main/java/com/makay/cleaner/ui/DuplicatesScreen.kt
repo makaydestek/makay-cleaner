@@ -17,6 +17,8 @@ import com.makay.cleaner.data.RecycleBinRepository
 import com.makay.cleaner.scanner.DuplicateScanner
 import com.makay.cleaner.util.CleanResultTracker
 import com.makay.cleaner.util.ProManager
+import com.makay.cleaner.util.PermissionHelper
+import com.makay.cleaner.util.rememberStoragePermissionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,10 +42,13 @@ fun DuplicatesScreen(
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val hasStoragePermission = rememberStoragePermissionState()
 
-    LaunchedEffect(Unit) {
-        loading = true
-        groups = withContext(Dispatchers.IO) { scanner.scan() }
+    LaunchedEffect(hasStoragePermission) {
+        if (hasStoragePermission) {
+            loading = true
+            groups = withContext(Dispatchers.IO) { scanner.scan() }
+        }
         loading = false
     }
 
@@ -60,6 +65,9 @@ fun DuplicatesScreen(
         }
     ) { padding ->
         when {
+            !hasStoragePermission -> PermissionWarningCard(
+                "Yinelenen dosyaları taramak ve seçtiklerinizi çöp kutusuna taşımak için depolama erişimi gerekir."
+            ) { PermissionHelper.requestStoragePermission(context) }
             loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }

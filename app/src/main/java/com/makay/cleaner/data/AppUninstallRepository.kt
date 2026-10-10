@@ -34,9 +34,14 @@ class AppUninstallRepository(private val context: Context) {
         
         installedApps.forEach { packageInfo ->
             try {
-                val appName = packageInfo.applicationInfo?.loadLabel(packageManager)?.toString() 
-                    ?: packageInfo.packageName
                 val packageName = packageInfo.packageName
+                val appName = if (packageName == context.packageName) {
+                    context.getString(com.makay.cleaner.R.string.app_name)
+                } else {
+                    packageInfo.applicationInfo?.loadLabel(packageManager)?.toString()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: packageName
+                }
                 val isSystemApp = (packageInfo.applicationInfo?.flags ?: 0) and ApplicationInfo.FLAG_SYSTEM != 0
                 val versionName = packageInfo.versionName ?: "Bilinmiyor"
                 

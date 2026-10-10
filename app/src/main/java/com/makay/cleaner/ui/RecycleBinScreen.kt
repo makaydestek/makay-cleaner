@@ -31,6 +31,8 @@ fun RecycleBinScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val dateFmt = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
+    var confirmEmpty by remember { mutableStateOf(false) }
+    var pendingPermanentDelete by remember { mutableStateOf<RecycleBinRepository.TrashItem?>(null) }
 
     fun refresh() {
         items = repo.listItems()
@@ -50,17 +52,7 @@ fun RecycleBinScreen(
                 },
                 actions = {
                     if (items.isNotEmpty()) {
-                        TextButton(onClick = {
-                            scope.launch {
-                                val (saved, count) = withContext(Dispatchers.IO) { repo.emptyBin() }
-                                refresh()
-                                Toast.makeText(
-                                    context,
-                                    "$count öğe kalıcı silindi (${formatBytes(saved)})",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        }) { Text("Boşalt") }
+                        TextButton(onClick = { confirmEmpty = true }) { Text("Boşalt") }
                     }
                 }
             )
@@ -110,17 +102,48 @@ fun RecycleBinScreen(
                                         ).show()
                                     }
                                 }) { Text("Geri yükle") }
-                                TextButton(onClick = {
-                                    scope.launch {
-                                        withContext(Dispatchers.IO) { repo.purgePermanently(item.id) }
-                                        refresh()
-                                    }
-                                }) { Text("Kalıcı sil") }
+                                TextButton(onClick = { pendingPermanentDelete = item }) { Text("Kalıcı sil") }
                             }
                         }
                     }
                 }
             }
         }
+    }
+    if (confirmEmpty) {
+        AlertDialog(
+            onDismissRequest = { confirmEmpty = false },
+            title = { Text("Çöp kutusu boşaltılsın mı?") },
+            text = { Text("Bu işlem dosyaları kalıcı olarak siler ve geri alınamaz.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmEmpty = false
+                    scope.launch {
+                        val (saved, count) = withContext(Dispatchers.IO) { repo.emptyBin() }
+                        refresh()
+                        Toast.makeText(context, "$count öğe kalıcı silindi (${formatBytes(saved)})", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("Kalıcı sil") }
+            },
+            dismissButton = { TextButton(onClick = { confirmEmpty = false }) { Text("Vazgeç") } }
+        )
+    }
+    pendingPermanentDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingPermanentDelete = null },
+            title = { Text("Kalıcı olarak silinsin mi?") },
+            text = { Text("${item.displayName} geri alınamayacak şekilde silinir.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingPermanentDelete = null
+                    scope.launch {
+                        val ok = withContext(Dispatchers.IO) { repo.purgePermanently(item.id) }
+                        refresh()
+                        Toast.makeText(context, if (ok) "Kalıcı olarak silindi" else "Silme başarısız", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("Kalıcı sil") }
+            },
+            dismissButton = { TextButton(onClick = { pendingPermanentDelete = null }) { Text("Vazgeç") } }
+        )
     }
 }

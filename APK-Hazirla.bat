@@ -1,12 +1,20 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Makay Cleaner - APK Hazirlama
+title Makay Cleaner - APK Hazirlama + GitHub Yayin
 
 REM ============================================================
-REM  MakayCleaner Release APK
-REM  Tek surum kaynagi: VERSION.txt
-REM  Tek teslimat klasoru: APK\
-REM  Cikti: yalnizca MakayCleaner_vX.Y.Z.apk + .apk.sha256
+REM  MakayCleaner - tek adimli yayin hatti
+REM
+REM   1) Acik (commitlenmemis) degisiklikleri commit et
+REM   2) VERSION.txt surumunu artir
+REM   3) Release APK derle  -> APK\MakayCleaner_vX.Y.Z.apk + .sha256
+REM   4) Surum degisikligini commit et + depoya it (push)
+REM   5) GitHub Release olustur + APK/SHA yukle
+REM   6) Eski release'leri sil (yalnizca yeni surum kalir)
+REM
+REM  Gereksinim: git, gh (winget install GitHub.cli), gh auth login
+REM  Guncel giris: Gh-Giris.bat
+REM  Script ile calistirma: APK-Hazirla.bat /nopause
 REM ============================================================
 
 cd /d "%~dp0"
@@ -21,17 +29,57 @@ set "GRADLEW=%PROJECT_DIR%\gradlew.bat"
 set "BUMP_PS1=%PROJECT_DIR%\tools\bump-version.ps1"
 set "READ_PS1=%PROJECT_DIR%\tools\read-version.ps1"
 set "VERSION_FILE=%PROJECT_DIR%\VERSION.txt"
+set "REPO=makaydestek/makay-cleaner"
+set "NOPAUSE=0"
+if /i "%~1"=="/nopause" set "NOPAUSE=1"
+
+REM GitHub CLI PATH'e ekle (yeni kurulumlar icin)
+set "PATH=%ProgramFiles%\GitHub CLI;%LocalAppData%\Programs\GitHub CLI;%PATH%"
 
 if not exist "%APK_DIR%" mkdir "%APK_DIR%"
 
 echo.
 echo ================================================
-echo  Makay Cleaner - APK Hazirlama
+echo  Makay Cleaner - APK + GitHub yayini
 echo ================================================
 echo  Proje   : %PROJECT_DIR%
-echo  Teslimat: %APK_DIR%
-echo  Surum   : %VERSION_FILE%
+echo  Repo    : https://github.com/%REPO%/releases
 echo.
+
+REM --- Onceden tanimli surum (commit mesaji icin) ---
+set "VERSION="
+for /f "usebackq delims=" %%V in ("%VERSION_FILE%") do (
+    if not defined VERSION set "VERSION=%%V"
+)
+if not defined VERSION (
+    echo [HATA] VERSION.txt okunamadi.
+    goto :END_FAIL
+)
+
+REM --- On kontroller ---
+if not exist "%GRADLEW%" (
+    echo [HATA] gradlew.bat yok: %GRADLEW%
+    goto :END_FAIL
+)
+if not exist "%BUMP_PS1%" (
+    echo [HATA] bump-version.ps1 yok: %BUMP_PS1%
+    goto :END_FAIL
+)
+if not exist "%READ_PS1%" (
+    echo [HATA] read-version.ps1 yok: %READ_PS1%
+    goto :END_FAIL
+)
+where git >nul 2>&1
+if errorlevel 1 (
+    echo [HATA] git bulunamadi.  winget install Git.Git
+    goto :END_FAIL
+)
+where gh >nul 2>&1
+if errorlevel 1 (
+    echo [HATA] GitHub CLI ^(gh^) bulunamadi.
+    echo        winget install --id GitHub.cli
+    goto :END_FAIL
+)
 
 REM JDK 17 zorunlu
 if exist "C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot\bin\java.exe" (
@@ -41,27 +89,37 @@ if exist "C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot\bin\java.exe" (
 ) else if exist "C:\Program Files\Android\Android Studio\jbr\bin\java.exe" (
     set "JAVA_HOME=C:\Program Files\Android\Android Studio\jbr"
 )
-
 if not defined JAVA_HOME (
     echo [HATA] JDK 17 bulunamadi.
     goto :END_FAIL
 )
-
 set "PATH=%JAVA_HOME%\bin;%PATH%"
 echo  JAVA    : %JAVA_HOME%
+echo  Surum   : !VERSION!
 echo.
 
-if not exist "%GRADLEW%" (
-    echo [HATA] gradlew.bat yok: %GRADLEW%
-    goto :END_FAIL
+REM ============================================================
+echo [1/6] Acik degisiklikler commit ediliyor...
+REM ============================================================
+git add -A >nul 2>&1
+git diff --cached --quiet >nul 2>&1
+if errorlevel 1 (
+    git commit -m "Makay Cleaner v!VERSION!: birikimli guncelleme" >nul 2>&1
+    if errorlevel 1 (
+        echo [HATA] Commit basarisiz.
+        git commit -m "Makay Cleaner v!VERSION!: birikimli guncelleme"
+        goto :END_FAIL
+    )
+    for /f "delims=" %%H in ('git rev-parse --short HEAD 2^>nul') do set "C1=%%H"
+    echo  [OK] !C1!  "Makay Cleaner v!VERSION!: birikimli guncelleme"
+) else (
+    echo  Atlandi - bekleyen degisiklik yok.
 )
+echo.
 
-if not exist "%BUMP_PS1%" (
-    echo [HATA] bump-version.ps1 yok: %BUMP_PS1%
-    goto :END_FAIL
-)
-
-echo [1/4] Surum artiriliyor (VERSION.txt)...
+REM ============================================================
+echo [2/6] Surum artiriliyor (VERSION.txt)...
+REM ============================================================
 set "OLD_VERSION="
 set "VERSION="
 for /f "usebackq tokens=1,2 delims=|" %%A in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%BUMP_PS1%"`) do (
@@ -74,10 +132,10 @@ if not defined VERSION (
 )
 echo  Onceki : !OLD_VERSION!
 echo  Yeni   : !VERSION!
-echo.
 
 REM Surum dosyasini dogrula (tek kaynak)
 set "CHECK_VER="
+set "CHECK_CODE="
 for /f "usebackq tokens=1,2 delims=|" %%A in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%READ_PS1%"`) do (
     set "CHECK_VER=%%A"
     set "CHECK_CODE=%%B"
@@ -89,14 +147,12 @@ if /I not "!CHECK_VER!"=="!VERSION!" (
 echo  Kod    : !CHECK_CODE!  (versionCode)
 echo.
 
-echo [2/4] Gradle durduruluyor...
-call "%GRADLEW%" --stop >nul 2>&1
-echo.
-
-echo [3/4] Release APK derleniyor + APK\ klasorune yayinlaniyor (v!VERSION!)...
+REM ============================================================
+echo [3/6] Release APK derleniyor + APK\ klasorune yayinlaniyor (v!VERSION!)...
+REM ============================================================
 echo  Bu islem birka dakika surebilir.
 echo.
-REM assembleRelease bitince publishReleaseApk: eski dosyalari siler, yalnizca vX.Y.Z + sha256 yazar
+call "%GRADLEW%" --stop >nul 2>&1
 call "%GRADLEW%" assembleRelease --no-daemon
 set "ERR=!ERRORLEVEL!"
 if not "!ERR!"=="0" (
@@ -106,7 +162,9 @@ if not "!ERR!"=="0" (
 )
 echo.
 
-echo [4/4] Teslimat dogrulaniyor (yalnizca APK\)...
+REM ============================================================
+echo [4/6] Teslimat dogrulaniyor...
+REM ============================================================
 set "APK_TARGET=%APK_DIR%\MakayCleaner_v!VERSION!.apk"
 set "SHA_TARGET=%APK_DIR%\MakayCleaner_v!VERSION!.apk.sha256"
 if not exist "!APK_TARGET!" (
@@ -115,56 +173,152 @@ if not exist "!APK_TARGET!" (
     goto :END_FAIL
 )
 if not exist "!SHA_TARGET!" (
-    echo [HATA] SHA-256 yok:
-    echo  !SHA_TARGET!
-    goto :END_FAIL
+    echo [UYARI] SHA dosyasi yok, olusturuluyor...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+        "$h=(Get-FileHash -Algorithm SHA256 '!APK_TARGET!').Hash.ToLower();" ^
+        "[IO.File]::WriteAllText('!SHA_TARGET!', ($h + '  MakayCleaner_v!VERSION!.apk' + [Environment]::NewLine));" ^
+        "Write-Output $h" >nul 2>&1
+    if not exist "!SHA_TARGET!" (
+        echo [HATA] SHA-256 olusturulamadi.
+        goto :END_FAIL
+    )
 )
-
-REM Proje kokunde / app\release altinda kopya birakma
+REM Proje kokunda / app\release altinda kopya birakma
 if exist "%PROJECT_DIR%\*.apk" del /q "%PROJECT_DIR%\*.apk" >nul 2>&1
 if exist "%PROJECT_DIR%\*.apk.sha256" del /q "%PROJECT_DIR%\*.apk.sha256" >nul 2>&1
 if exist "%PROJECT_DIR%\app\release" (
     del /q "%PROJECT_DIR%\app\release\*.apk" >nul 2>&1
     del /q "%PROJECT_DIR%\app\release\*.apk.sha256" >nul 2>&1
 )
-if exist "%PROJECT_DIR%\app\build\outputs\apk" (
-    del /q /s "%PROJECT_DIR%\app\build\outputs\apk\*.apk" >nul 2>&1
-)
 
 for %%A in ("!APK_TARGET!") do (
     set "SIZE_BYTES=%%~zA"
     set "APK_DATE=%%~tA"
 )
-set /a SIZE_MB=!SIZE_BYTES! / 1048576
-
-echo.
-echo [OK] APK hazir — klasorde yalnizca bu surum:
-echo  Dosya : !APK_TARGET!
-echo  SHA   : !SHA_TARGET!
-echo  Surum : !VERSION!  (versionCode !CHECK_CODE!)
-echo  Boyut : !SIZE_MB! MB
-echo  Tarih : !APK_DATE!
+set /a SIZE_KB=!SIZE_BYTES! / 1024
+echo  [OK] MakayCleaner_v!VERSION!.apk  ^(!SIZE_KB! KB^)
+echo  [OK] MakayCleaner_v!VERSION!.apk.sha256
 echo.
 
-start "" explorer "%APK_DIR%"
-goto :END_OK
+REM ============================================================
+echo [5/6] Depoya yayinlaniyor (git commit + push)...
+REM ============================================================
+git add "VERSION.txt" >nul 2>&1
+git diff --cached --quiet -- "VERSION.txt" >nul 2>&1
+if errorlevel 1 (
+    git commit -m "Yayin: MakayCleaner v!VERSION!" -- "VERSION.txt" >nul 2>&1
+    if errorlevel 1 (
+        echo [HATA] Surum commit'i basarisiz.
+        git commit -m "Yayin: MakayCleaner v!VERSION!" -- "VERSION.txt"
+        goto :END_FAIL
+    )
+    for /f "delims=" %%H in ('git rev-parse --short HEAD 2^>nul') do set "C2=%%H"
+    echo  [OK] !C2!  "Yayin: MakayCleaner v!VERSION!"
+) else (
+    echo  Surum dosyasi zaten islenmis.
+)
+git push origin main >nul 2>&1
+if errorlevel 1 (
+    echo  [UYARI] Depoya itilemedi - manuel "git push" yapin.
+) else (
+    echo  [OK] origin/main guncellendi.
+)
+echo.
+
+REM ============================================================
+echo [6/6] GitHub Release olusturuluyor (tag = !VERSION!)...
+REM ============================================================
+gh auth status >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo  ----------------------------------------
+    echo   GitHub oturumu yok - giris basliyor.
+    echo   KOD BU SIYAH PENCEREDE gorunecek.
+    echo   Enter'a basin, tarayicida kodu yapistirin.
+    echo  ----------------------------------------
+    echo.
+    if "!NOPAUSE!"=="1" (
+        echo [HATA] /nopause modunda etkilesimli giris yapilamaz.
+        echo        Once: Gh-Giris.bat
+        goto :END_FAIL
+    )
+    pause >nul
+    gh auth login -h github.com -p https -w -c -s "repo,read:org,gist,workflow"
+    if errorlevel 1 (
+        echo [HATA] gh auth login basarisiz. Alternatif: Gh-Giris.bat
+        goto :END_FAIL
+    )
+    gh auth status >nul 2>&1
+    if errorlevel 1 (
+        echo [HATA] Hala oturum yok. Gh-Giris.bat ile tekrar deneyin.
+        goto :END_FAIL
+    )
+    echo.
+    echo  [OK] GitHub oturumu acildi.
+    echo.
+)
+
+set "TAG=!VERSION!"
+set "APK=!APK_TARGET!"
+set "SHA=!SHA_TARGET!"
+
+gh release view "!TAG!" --repo %REPO% >nul 2>&1
+if errorlevel 1 (
+    echo  Yeni release olusturuluyor...
+    set "NOTES_FILE=%TEMP%\makay-cleaner-release-notes.txt"
+    type nul > "!NOTES_FILE!"
+    gh release create "!TAG!" "!APK!" "!SHA!" --repo %REPO% --title "!VERSION!" --notes-file "!NOTES_FILE!"
+    set "REL_ERR=!ERRORLEVEL!"
+    del /q "!NOTES_FILE!" >nul 2>&1
+) else (
+    echo  Release !TAG! mevcut - assetler guncelleniyor...
+    gh release upload "!TAG!" "!APK!" "!SHA!" --repo %REPO% --clobber
+    set "REL_ERR=!ERRORLEVEL!"
+)
+if not "!REL_ERR!"=="0" (
+    echo [HATA] Release basarisiz. "gh auth status" ve yetkileri kontrol edin.
+    goto :END_FAIL
+)
+echo  [OK] https://github.com/%REPO%/releases/tag/!TAG!
+echo.
+
+echo Eski GitHub surumleri siliniyor (yalnizca !TAG! kalir)...
+set "TAGS_FILE=%TEMP%\makay-cleaner-tags.txt"
+gh release list --repo %REPO% --json tagName -q ".[].tagName" > "!TAGS_FILE!" 2>nul
+if exist "!TAGS_FILE!" (
+    for /f "usebackq delims=" %%T in ("!TAGS_FILE!") do (
+        if /i not "%%T"=="!TAG!" (
+            gh release delete "%%T" --repo %REPO% --yes --cleanup-tag >nul 2>&1
+            if errorlevel 1 (
+                echo  [UYARI] silinemedi: %%T
+            ) else (
+                echo  - silindi: %%T
+            )
+        )
+    )
+    del /q "!TAGS_FILE!" >nul 2>&1
+)
+echo.
+
+if "!NOPAUSE!"=="0" start "" explorer "%APK_DIR%"
+
+echo ================================================
+echo  Tamamlandi - MakayCleaner v!VERSION!
+echo  Kurulum : APK\MakayCleaner_v!VERSION!.apk
+echo  Release : https://github.com/%REPO%/releases/tag/!VERSION!
+echo ================================================
+if "!NOPAUSE!"=="0" (
+    echo.
+    pause
+)
+endlocal
+exit /b 0
 
 :END_FAIL
 echo.
 echo ================================================
 echo  Islem basarisiz - pencereyi kapatmak icin tus
 echo ================================================
-echo.
-pause
+if not "!NOPAUSE!"=="1" pause
 endlocal
 exit /b 1
-
-:END_OK
-echo ================================================
-echo  Tamamlandi - MakayCleaner v!VERSION!
-echo  Kurulum: APK\MakayCleaner_v!VERSION!.apk
-echo ================================================
-echo.
-pause
-endlocal
-exit /b 0

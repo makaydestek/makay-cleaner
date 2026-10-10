@@ -110,20 +110,12 @@ object FilePurger {
         category: String
     ): Boolean {
         if (!file.isFile) return false
-        runCatching {
-            file.setWritable(true)
-            file.setReadable(true)
-            if (file.delete() && !file.exists()) return true
-        }
+        if (trash != null) return trash.moveToTrash(file, category) && !file.exists()
+        runCatching { if (file.delete() && !file.exists()) return true }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            runCatching {
-                java.nio.file.Files.deleteIfExists(file.toPath())
-                if (!file.exists()) return true
-            }
+            runCatching { java.nio.file.Files.deleteIfExists(file.toPath()) }
         }
-        if (deleteViaMediaStore(context, file) && !file.exists()) return true
-        if (trash != null && trash.moveToTrash(file, category) && !file.exists()) return true
-        return !file.exists()
+        return (!file.exists()) || (deleteViaMediaStore(context, file) && !file.exists())
     }
 
     private fun removeDirectory(

@@ -1,7 +1,6 @@
 package com.makay.cleaner.ui
 
 import android.Manifest
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -17,6 +16,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun PermissionScreen(
     onPermissionsGranted: () -> Unit,
+    onPermissionsDenied: () -> Unit,
     viewModel: PermissionViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -64,7 +64,11 @@ fun PermissionScreen(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = context.getString(com.makay.cleaner.R.string.permission_body),
+            text = if (uiState.needsAllFilesAccess) {
+                "Tarama ve seçtiğiniz dosyaları temizleme özelliği için Android ayarlarında depolama erişimini açmanız gerekir. Bu özel izin, Android 11 ve üzeri cihazlarda paylaşılan depolamadaki dosyaları yönetmeye olanak tanır. İzin vermezseniz bu özellik çalışmaz; diğer ekranları kullanabilirsiniz."
+            } else {
+                "Tarama ve seçtiğiniz dosyaları temizleme özelliği için depolama izni gerekir. İzin vermezseniz bu özellik çalışmaz; diğer ekranları kullanabilirsiniz."
+            },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -76,28 +80,39 @@ fun PermissionScreen(
             Button(
                 onClick = {
                     val intent = viewModel.getAllFilesAccessIntent()
-                    settingsLauncher.launch(intent)
+                    try {
+                        settingsLauncher.launch(intent)
+                    } catch (_: Exception) {
+                        settingsLauncher.launch(
+                            android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        )
+                    }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
-                Text("Tüm Dosyalara Erişim İzni Ver", style = MaterialTheme.typography.titleMedium)
+                Text("Depolama iznini aç", style = MaterialTheme.typography.titleMedium)
             }
         } else {
             Button(
                 onClick = {
-                    val permissionsToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
-                    } else {
-                        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    }
-                    permissionLauncher.launch(permissionsToRequest)
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.READ_EXTERNAL_STORAGE,
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE
+                        )
+                    )
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
-                Text("İzin Ver ve Devam Et", style = MaterialTheme.typography.titleMedium)
+                Text("İzin ver ve devam et", style = MaterialTheme.typography.titleMedium)
             }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        TextButton(onClick = onPermissionsDenied) {
+            Text("Şimdi değil")
         }
 
         if (uiState.showRationale && !uiState.needsAllFilesAccess) {
@@ -105,7 +120,7 @@ fun PermissionScreen(
             Text(
                 text = "İzin verilmeden temizlik işlemi yapılamaz.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

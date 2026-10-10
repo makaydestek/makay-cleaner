@@ -16,6 +16,8 @@ import com.makay.cleaner.data.CleaningRecorder
 import com.makay.cleaner.data.RecycleBinRepository
 import com.makay.cleaner.scanner.SystemCleanerScanner
 import com.makay.cleaner.util.CleanResultTracker
+import com.makay.cleaner.util.PermissionHelper
+import com.makay.cleaner.util.rememberStoragePermissionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -34,10 +36,13 @@ fun SystemCleanerScreen(
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val hasStoragePermission = rememberStoragePermissionState()
 
-    LaunchedEffect(Unit) {
-        loading = true
-        items = withContext(Dispatchers.IO) { scanner.scan() }
+    LaunchedEffect(hasStoragePermission) {
+        if (hasStoragePermission) {
+            loading = true
+            items = withContext(Dispatchers.IO) { scanner.scan() }
+        }
         loading = false
     }
 
@@ -84,6 +89,14 @@ fun SystemCleanerScreen(
         }
     ) { padding ->
         when {
+            !hasStoragePermission -> Box(
+                Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                PermissionWarningCard(
+                    "Gereksiz dosyaları taramak ve seçtiklerinizi temizlemek için depolama erişimi gerekir."
+                ) { PermissionHelper.requestStoragePermission(context) }
+            }
             loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }

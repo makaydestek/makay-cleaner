@@ -19,6 +19,8 @@ import com.makay.cleaner.scanner.VideoArchiveHelper
 import com.makay.cleaner.scanner.VideoItem
 import com.makay.cleaner.scanner.VideoScanner
 import com.makay.cleaner.util.CleanResultTracker
+import com.makay.cleaner.util.PermissionHelper
+import com.makay.cleaner.util.rememberStoragePermissionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -37,10 +39,13 @@ fun VideoToolsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val widthClass = rememberWidthClass()
+    val hasStoragePermission = rememberStoragePermissionState()
 
-    LaunchedEffect(Unit) {
-        loading = true
-        videos = withContext(Dispatchers.IO) { scanner.scan() }
+    LaunchedEffect(hasStoragePermission) {
+        if (hasStoragePermission) {
+            loading = true
+            videos = withContext(Dispatchers.IO) { scanner.scan() }
+        }
         loading = false
     }
 
@@ -67,6 +72,9 @@ fun VideoToolsScreen(
             } else Modifier.fillMaxWidth()
             Box(mod) {
                 when {
+                    !hasStoragePermission -> PermissionWarningCard(
+                        "Video taraması için depolama erişimi gerekir. İzin verilmezse dosyalar taranmaz."
+                    ) { PermissionHelper.requestStoragePermission(context) }
                     loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
@@ -213,10 +221,13 @@ fun ApkRemnantScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val widthClass = rememberWidthClass()
+    val hasStoragePermission = rememberStoragePermissionState()
 
-    LaunchedEffect(Unit) {
-        loading = true
-        items = withContext(Dispatchers.IO) { scanner.scan() }
+    LaunchedEffect(hasStoragePermission) {
+        if (hasStoragePermission) {
+            loading = true
+            items = withContext(Dispatchers.IO) { scanner.scan() }
+        }
         loading = false
     }
 
@@ -259,6 +270,12 @@ fun ApkRemnantScreen(
             Modifier.fillMaxSize().padding(paddingValues),
             contentAlignment = Alignment.TopCenter
         ) {
+            if (!hasStoragePermission) {
+                PermissionWarningCard(
+                    "APK kalıntılarını taramak ve seçtiklerinizi temizlemek için depolama erişimi gerekir."
+                ) { PermissionHelper.requestStoragePermission(context) }
+                return@Box
+            }
             val mod = if (widthClass != AppWidthClass.Compact) {
                 Modifier.widthIn(max = 840.dp).fillMaxWidth()
             } else Modifier.fillMaxWidth()

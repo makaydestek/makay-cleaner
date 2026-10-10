@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.dp
 import com.makay.cleaner.data.CleaningRecorder
 import com.makay.cleaner.scanner.CorpseFinder
 import com.makay.cleaner.util.CleanResultTracker
+import com.makay.cleaner.util.PermissionHelper
+import com.makay.cleaner.util.rememberStoragePermissionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,10 +33,13 @@ fun CorpseFinderScreen(
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val hasStoragePermission = rememberStoragePermissionState()
 
-    LaunchedEffect(Unit) {
-        loading = true
-        corpses = withContext(Dispatchers.IO) { finder.scan() }
+    LaunchedEffect(hasStoragePermission) {
+        if (hasStoragePermission) {
+            loading = true
+            corpses = withContext(Dispatchers.IO) { finder.scan() }
+        }
         loading = false
     }
 
@@ -73,6 +78,9 @@ fun CorpseFinderScreen(
         }
     ) { padding ->
         when {
+            !hasStoragePermission -> PermissionWarningCard(
+                "Uygulama kalıntılarını taramak ve seçtiklerinizi temizlemek için depolama erişimi gerekir."
+            ) { PermissionHelper.requestStoragePermission(context) }
             loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }

@@ -1,6 +1,7 @@
 package com.makay.cleaner.ui
 
 import android.Manifest
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -9,7 +10,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.Settings
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +23,9 @@ data class PermissionState(
     val needsAllFilesAccess: Boolean = false
 )
 
-class PermissionViewModel(private val context: Context) : ViewModel() {
+class PermissionViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val context: Context = application.applicationContext
 
     private val _uiState = MutableStateFlow(PermissionState())
     val uiState: StateFlow<PermissionState> = _uiState.asStateFlow()
@@ -35,10 +38,6 @@ class PermissionViewModel(private val context: Context) : ViewModel() {
         val isGranted = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
                 Environment.isExternalStorageManager()
-            }
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
-                hasPermission(Manifest.permission.READ_MEDIA_IMAGES) &&
-                hasPermission(Manifest.permission.READ_MEDIA_VIDEO)
             }
             else -> {
                 hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE) &&
@@ -58,7 +57,7 @@ class PermissionViewModel(private val context: Context) : ViewModel() {
     }
 
     fun getAllFilesAccessIntent(): Intent {
-        return Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).apply {
+        return Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
             data = Uri.parse("package:${context.packageName}")
         }
     }

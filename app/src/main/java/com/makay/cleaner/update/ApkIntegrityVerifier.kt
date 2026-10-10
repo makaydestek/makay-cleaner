@@ -45,14 +45,14 @@ class ApkIntegrityVerifier(context: Context) {
             )
         }
 
-        val expected = expectedSha256?.trim()?.lowercase()?.takeIf { it.length == 64 }
-        if (expected != null) {
-            val actual = sha256Hex(apkFile)
-            if (!actual.equals(expected, ignoreCase = true)) {
-                return Result.Failed(
-                    "SHA-256 doğrulaması başarısız. Dosya değiştirilmiş olabilir; kurulum iptal edildi."
-                )
-            }
+        val expected = expectedSha256?.trim()?.lowercase()
+            ?.takeIf { it.matches(Regex("[0-9a-f]{64}")) }
+            ?: return Result.Failed("Yayın SHA-256 özeti bulunamadı veya geçersiz; kurulum iptal edildi.")
+        val actual = sha256Hex(apkFile)
+        if (!actual.equals(expected, ignoreCase = true)) {
+            return Result.Failed(
+                "SHA-256 doğrulaması başarısız. Dosya değiştirilmiş olabilir; kurulum iptal edildi."
+            )
         }
 
         val archiveInfo = readArchivePackageInfo(apkFile)

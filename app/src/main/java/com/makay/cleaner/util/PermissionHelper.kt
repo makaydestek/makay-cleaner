@@ -28,23 +28,12 @@ object PermissionHelper {
 
     fun hasStoragePermission(context: Context): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (Environment.isExternalStorageManager()) return true
-            // Settings donusu / OEM gecikmesi icin yedek kontrol
-            return canReadExternalStorage()
+            return Environment.isExternalStorageManager()
         }
         return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.READ_EXTERNAL_STORAGE
         ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun canReadExternalStorage(): Boolean {
-        return try {
-            val dir = Environment.getExternalStorageDirectory()
-            dir != null && dir.exists() && dir.canRead() && dir.listFiles() != null
-        } catch (_: Exception) {
-            false
-        }
     }
 
     fun findActivity(context: Context): Activity? {

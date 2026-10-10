@@ -47,9 +47,11 @@ fun MediaHubScreen(
     val context = LocalContext.current
     val hasPermission = rememberStoragePermissionState()
 
-    LaunchedEffect(Unit) {
-        loading = true
-        buckets = withContext(Dispatchers.IO) { repo.scanBuckets() }
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            loading = true
+            buckets = withContext(Dispatchers.IO) { repo.scanBuckets() }
+        }
         loading = false
     }
 
@@ -192,10 +194,13 @@ fun SimilarPhotosScreen(
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val hasStoragePermission = rememberStoragePermissionState()
 
-    LaunchedEffect(Unit) {
-        loading = true
-        groups = withContext(Dispatchers.IO) { scanner.scan() }
+    LaunchedEffect(hasStoragePermission) {
+        if (hasStoragePermission) {
+            loading = true
+            groups = withContext(Dispatchers.IO) { scanner.scan() }
+        }
         loading = false
     }
 
@@ -215,6 +220,9 @@ fun SimilarPhotosScreen(
         }
     ) { padding ->
         when {
+            !hasStoragePermission -> PermissionWarningCard(
+                "Benzer fotoğrafları taramak ve seçtiklerinizi çöp kutusuna taşımak için depolama erişimi gerekir."
+            ) { PermissionHelper.requestStoragePermission(context) }
             loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
