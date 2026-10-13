@@ -1,6 +1,8 @@
 # Built application files
 *.apk
 *.apk.sha256
+# R8 obfuscation haritasi - APK ile ayni klasorde durur, repoya girmez
+*-mapping.txt
 *.ap_
 *.aab
 

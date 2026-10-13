@@ -176,6 +176,7 @@ echo [4/6] Teslimat dogrulaniyor...
 REM ============================================================
 set "APK_TARGET=%APK_DIR%\MakayCleaner_v!VERSION!.apk"
 set "SHA_TARGET=%APK_DIR%\MakayCleaner_v!VERSION!.apk.sha256"
+set "MAP_TARGET=%APK_DIR%\MakayCleaner_v!VERSION!-mapping.txt"
 if not exist "!APK_TARGET!" (
     echo [HATA] Beklenen APK yok:
     echo  !APK_TARGET!
@@ -191,6 +192,10 @@ if not exist "!SHA_TARGET!" (
         echo [HATA] SHA-256 olusturulamadi.
         goto :END_FAIL
     )
+)
+REM R8 obfuscation haritasi - publishReleaseApk gorevi APK/ klasorune yazar.
+if not exist "!MAP_TARGET!" (
+    echo [UYARI] R8 mapping.txt yok - release stack trace'leri cozulemez.
 )
 REM Proje kokunda / app\release altinda kopya birakma
 if exist "%PROJECT_DIR%\*.apk" del /q "%PROJECT_DIR%\*.apk" >nul 2>&1
@@ -270,18 +275,31 @@ if errorlevel 1 (
 set "TAG=!VERSION!"
 set "APK=!APK_TARGET!"
 set "SHA=!SHA_TARGET!"
+set "MAP=!MAP_TARGET!"
+REM gh bos argumani reddettigi icin mapping yalnizca varsa asset listesine katilir.
 
 gh release view "!TAG!" --repo %REPO% >nul 2>&1
 if errorlevel 1 (
     echo  Yeni release olusturuluyor...
     set "NOTES_FILE=%TEMP%\makay-cleaner-release-notes.txt"
     type nul > "!NOTES_FILE!"
-    gh release create "!TAG!" "!APK!" "!SHA!" --repo %REPO% --title "!VERSION!" --notes-file "!NOTES_FILE!"
+    REM Mapping yalnizca varsa yuklenir; gh bos argumani reddettigi icin dallandirilir.
+    if exist "!MAP!" (
+        gh release create "!TAG!" "!APK!" "!SHA!" "!MAP!" --repo %REPO% --title "!VERSION!" --notes-file "!NOTES_FILE!"
+    ) else (
+        echo  [UYARI] mapping yok, APK + SHA-256 yukleniyor.
+        gh release create "!TAG!" "!APK!" "!SHA!" --repo %REPO% --title "!VERSION!" --notes-file "!NOTES_FILE!"
+    )
     set "REL_ERR=!ERRORLEVEL!"
     del /q "!NOTES_FILE!" >nul 2>&1
 ) else (
     echo  Release !TAG! mevcut - assetler guncelleniyor...
-    gh release upload "!TAG!" "!APK!" "!SHA!" --repo %REPO% --clobber
+    if exist "!MAP!" (
+        gh release upload "!TAG!" "!APK!" "!SHA!" "!MAP!" --repo %REPO% --clobber
+    ) else (
+        echo  [UYARI] mapping yok, APK + SHA-256 yukleniyor.
+        gh release upload "!TAG!" "!APK!" "!SHA!" --repo %REPO% --clobber
+    )
     set "REL_ERR=!ERRORLEVEL!"
 )
 if not "!REL_ERR!"=="0" (

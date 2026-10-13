@@ -156,7 +156,7 @@ fun deleteStrayDeliveryApks(keepDir: java.io.File) {
 
 tasks.register("publishReleaseApk") {
     group = "distribution"
-    description = "Release APK + SHA-256'yi yalnizca APK/ klasorune yazar; baska klasordeki kopyalari siler"
+    description = "Release APK + SHA-256 + R8 mapping'i yalnizca APK/ klasorune yazar; baska klasordeki kopyalari siler"
     doLast {
         val src = layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
         check(src.exists()) { "APK bulunamadi: ${src.absolutePath}" }
@@ -173,6 +173,18 @@ tasks.register("publishReleaseApk") {
         }
         staging.copyTo(named, overwrite = true)
         staging.delete()
+
+        // R8 obfuscation haritasi - release APK'nin stack trace'leri buradan
+        // cozulebilir. APK ile ayni klasorde (surumli adla) ve GitHub Release
+        // asset'i olarak yayinlanir. Eski surumun haritasi dosya adinda
+        // oldugundan yeni yayinda kendiliginden degisir.
+        val mappingSrc = layout.buildDirectory.file("outputs/mapping/release/mapping.txt").get().asFile
+        val mappingOut = apkDir.resolve("MakayCleaner_v$ver-mapping.txt")
+        if (mappingSrc.exists()) {
+            mappingSrc.copyTo(mappingOut, overwrite = true)
+        } else {
+            mappingOut.delete()
+        }
 
         val ps = listOf(
             "powershell", "-NoProfile", "-Command",
