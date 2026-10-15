@@ -784,13 +784,21 @@ private fun HomeScoreHero(
                 )
             }
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Metinler çemberin daralan kenarlarına taşmasın: içerik, dairenin içine
+            // sığan güvenli kutuya (safe inset) sabitlenir; alt satır bu kutuya sarılır.
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = ring * 0.18f)
+            ) {
                 Text(
                     text = "$score",
                     color = textPrimary,
-                    fontSize = if (isTv) 42.sp else 52.sp,
+                    fontSize = if (isTv) 40.sp else 46.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = (-1).sp
+                    letterSpacing = (-1).sp,
+                    maxLines = 1
                 )
                 Text(
                     text = if (score >= 100) "İyi durumda" else "Skor",
@@ -805,14 +813,15 @@ private fun HomeScoreHero(
                         trackColor = track
                     )
                 } else {
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = subtitle,
                         color = textSecondary,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        maxLines = 2
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

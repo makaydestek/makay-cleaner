@@ -128,7 +128,7 @@ fun AppCacheScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TextButton(onClick = { viewModel.selectAll() }) { Text("Tümünü Seç") }
-                    TextButton(onClick = { viewModel.clearSelection() }) { Text("Temizle") }
+                    TextButton(onClick = { viewModel.clearSelection() }) { Text("Seçimi kaldır") }
                 }
 
                 if (uiState.selectedPaths.isNotEmpty()) {

@@ -10,7 +10,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -88,6 +92,11 @@ fun MainAppContent() {
     var recycleReturn by remember { mutableStateOf<AppScreen>(AppScreen.Toolbox) }
     var dupPhotosReturn by remember { mutableStateOf<AppScreen>(AppScreen.Toolbox) }
     var mediaHubReturn by remember { mutableStateOf<AppScreen>(AppScreen.MediaCleanHub) }
+    var mediaCleanReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
+    var cleanerReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
+    var uninstallReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
+    var securityReturn by remember { mutableStateOf<AppScreen>(AppScreen.Settings) }
+    var permissionsReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
     var appControlReturn by remember { mutableStateOf<AppScreen>(AppScreen.Toolbox) }
     var hubReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
     val context = LocalContext.current
@@ -97,6 +106,7 @@ fun MainAppContent() {
     val lifecycleOwner = LocalLifecycleOwner.current
     val uninstallRepo = remember { AppUninstallRepository(context.applicationContext) }
     val deepLink by com.makay.cleaner.util.DeepLinkBus.link.collectAsState()
+    val resumeScope = rememberCoroutineScope()
 
     LaunchedEffect(deepLink) {
         val link = com.makay.cleaner.util.DeepLinkBus.consume() ?: return@LaunchedEffect
@@ -112,7 +122,10 @@ fun MainAppContent() {
                 AppScreen.RecycleBin
             }
             com.makay.cleaner.notification.NotificationManager.DEEP_LARGE -> AppScreen.LargeFiles
-            com.makay.cleaner.notification.NotificationManager.DEEP_MEDIA -> AppScreen.MediaCleanHub
+            com.makay.cleaner.notification.NotificationManager.DEEP_MEDIA -> {
+                mediaCleanReturn = AppScreen.Storage
+                AppScreen.MediaCleanHub
+            }
             com.makay.cleaner.notification.NotificationManager.DEEP_DUP_PHOTOS -> {
                 dupPhotosReturn = AppScreen.Storage
                 AppScreen.DuplicatePhotos
@@ -129,16 +142,21 @@ fun MainAppContent() {
                         isLocked = true
                         currentScreen = AppScreen.Lock
                     }
-                    val result = uninstallRepo.processPendingUninstallCleanup()
-                    if (result != null) {
-                        val (pkg, cleanup) = result
-                        val (saved, count) = cleanup
-                        if (count > 0 || saved > 0) {
-                            Toast.makeText(
-                                context,
-                                "$pkg kalıntıları temizlendi (${formatBytes(saved)})",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                    // Kalıntı temizliği dosya I/O içerir; ana thread'de ANR riskine karşı arka planda
+                    resumeScope.launch(Dispatchers.IO) {
+                        val result = uninstallRepo.processPendingUninstallCleanup()
+                        if (result != null) {
+                            val (pkg, cleanup) = result
+                            val (saved, count) = cleanup
+                            if (count > 0 || saved > 0) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(
+                                        context,
+                                        "$pkg kalıntıları temizlendi (${formatBytes(saved)})",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
                         }
                     }
                 }
@@ -157,17 +175,20 @@ fun MainAppContent() {
 
     BackHandler(enabled = currentScreen !is AppScreen.Storage && currentScreen !is AppScreen.Lock) {
         currentScreen = when (currentScreen) {
-            AppScreen.Notifications, AppScreen.Security, AppScreen.Pro -> AppScreen.Settings
+            AppScreen.Notifications, AppScreen.Pro -> AppScreen.Settings
+            AppScreen.Security -> securityReturn
             AppScreen.RecycleBin -> recycleReturn
-            AppScreen.SystemCleaner, AppScreen.CorpseFinder, AppScreen.ApkRemnants,
-            AppScreen.MediaCleanHub -> AppScreen.Toolbox
-            AppScreen.CleanerHub, AppScreen.SecurityScan, AppScreen.PrivacyHub,
+            AppScreen.SystemCleaner, AppScreen.CorpseFinder, AppScreen.ApkRemnants -> AppScreen.Toolbox
+            AppScreen.MediaCleanHub -> mediaCleanReturn
+            AppScreen.CleanerHub -> cleanerReturn
+            AppScreen.SecurityScan, AppScreen.PrivacyHub,
             AppScreen.BatteryInfo, AppScreen.DataUsage, AppScreen.ManageApps -> hubReturn
             AppScreen.AppControl -> appControlReturn
+            AppScreen.Uninstall -> uninstallReturn
             AppScreen.VideoTools, AppScreen.MediaHub, AppScreen.SimilarPhotos, AppScreen.MediaCompress,
             AppScreen.Duplicates -> mediaHubReturn
             AppScreen.DuplicatePhotos -> dupPhotosReturn
-            AppScreen.Permissions -> AppScreen.Storage
+            AppScreen.Permissions -> permissionsReturn
             else -> AppScreen.Storage
         }
     }
@@ -186,7 +207,10 @@ fun MainAppContent() {
             StorageScreen(
                 onNavigateToCache = { currentScreen = AppScreen.Cache },
                 onNavigateToLargeFiles = { currentScreen = AppScreen.LargeFiles },
-                onNavigateToUninstall = { currentScreen = AppScreen.Uninstall },
+                onNavigateToUninstall = {
+                    uninstallReturn = AppScreen.Storage
+                    currentScreen = AppScreen.Uninstall
+                },
                 onNavigateToSocialMedia = { currentScreen = AppScreen.SocialMedia },
                 onNavigateToStats = { currentScreen = AppScreen.Stats },
                 onNavigateToSettings = { currentScreen = AppScreen.Settings },
@@ -201,14 +225,20 @@ fun MainAppContent() {
                     dupPhotosReturn = AppScreen.Storage
                     currentScreen = AppScreen.DuplicatePhotos
                 },
-                onNavigateToMediaClean = { currentScreen = AppScreen.MediaCleanHub },
-                onNavigateToPermissions = { currentScreen = AppScreen.Permissions },
+                onNavigateToMediaClean = {
+                    mediaCleanReturn = AppScreen.Storage
+                    currentScreen = AppScreen.MediaCleanHub
+                },
+                onNavigateToPermissions = {
+                    permissionsReturn = AppScreen.Storage
+                    currentScreen = AppScreen.Permissions
+                },
                 onNavigateToAppControl = {
                     appControlReturn = AppScreen.Storage
                     currentScreen = AppScreen.AppControl
                 },
                 onNavigateToCleanerHub = {
-                    hubReturn = AppScreen.Storage
+                    cleanerReturn = AppScreen.Storage
                     currentScreen = AppScreen.CleanerHub
                 },
                 onNavigateToSecurityScan = {
@@ -240,7 +270,7 @@ fun MainAppContent() {
             LargeFileScreen(application = app, onNavigateBack = { currentScreen = AppScreen.Storage })
         }
         AppScreen.Uninstall -> {
-            AppUninstallScreen(application = app, onNavigateBack = { currentScreen = AppScreen.Storage })
+            AppUninstallScreen(application = app, onNavigateBack = { currentScreen = uninstallReturn })
         }
         AppScreen.SocialMedia -> {
             SocialMediaScreen(application = app, onNavigateBack = { currentScreen = AppScreen.Storage })
@@ -253,7 +283,10 @@ fun MainAppContent() {
                 application = app,
                 onNavigateBack = { currentScreen = AppScreen.Storage },
                 onNavigateToNotifications = { currentScreen = AppScreen.Notifications },
-                onNavigateToSecurity = { currentScreen = AppScreen.Security },
+                onNavigateToSecurity = {
+                    securityReturn = AppScreen.Settings
+                    currentScreen = AppScreen.Security
+                },
                 onNavigateToPro = { currentScreen = AppScreen.Pro },
                 onNavigateToRecycleBin = {
                     recycleReturn = AppScreen.Settings
@@ -265,7 +298,7 @@ fun MainAppContent() {
             NotificationScreen(application = app, onNavigateBack = { currentScreen = AppScreen.Settings })
         }
         AppScreen.Security -> {
-            SecuritySettingsScreen(application = app, onNavigateBack = { currentScreen = AppScreen.Settings })
+            SecuritySettingsScreen(application = app, onNavigateBack = { currentScreen = securityReturn })
         }
         AppScreen.Analytics -> {
             AnalyticsScreen(application = app, onNavigateBack = { currentScreen = AppScreen.Storage })
@@ -308,6 +341,10 @@ fun MainAppContent() {
                 onNavigateBack = { currentScreen = AppScreen.Storage },
                 onOpen = { id ->
                     hubReturn = AppScreen.Toolbox
+                    cleanerReturn = AppScreen.Toolbox
+                    mediaCleanReturn = AppScreen.Toolbox
+                    permissionsReturn = AppScreen.Toolbox
+                    securityReturn = AppScreen.Toolbox
                     currentScreen = when (id) {
                         "cleaner" -> AppScreen.CleanerHub
                         "media_clean" -> AppScreen.MediaCleanHub
@@ -341,7 +378,7 @@ fun MainAppContent() {
         AppScreen.MediaCleanHub -> {
             MediaCleanHubScreen(
                 application = app,
-                onNavigateBack = { currentScreen = AppScreen.Toolbox },
+                onNavigateBack = { currentScreen = mediaCleanReturn },
                 onOpen = { id ->
                     mediaHubReturn = AppScreen.MediaCleanHub
                     currentScreen = when (id) {
@@ -361,8 +398,8 @@ fun MainAppContent() {
         }
         AppScreen.Permissions -> {
             PermissionScreen(
-                onPermissionsGranted = { currentScreen = AppScreen.Storage },
-                onPermissionsDenied = { currentScreen = AppScreen.Storage }
+                onPermissionsGranted = { currentScreen = permissionsReturn },
+                onPermissionsDenied = { currentScreen = permissionsReturn }
             )
         }
         AppScreen.RecycleBin -> {
@@ -422,7 +459,7 @@ fun MainAppContent() {
         AppScreen.CleanerHub -> {
             CleanerHubScreen(
                 application = app,
-                onNavigateBack = { currentScreen = hubReturn },
+                onNavigateBack = { currentScreen = cleanerReturn },
                 onOpenCategory = { id ->
                     currentScreen = when (id) {
                         "cache" -> AppScreen.Cache
@@ -440,13 +477,16 @@ fun MainAppContent() {
                 application = app,
                 onNavigateBack = { currentScreen = hubReturn },
                 onNavigateToSettings = { currentScreen = AppScreen.Settings },
+                onOpenPermissions = {
+                    permissionsReturn = AppScreen.SecurityScan
+                    currentScreen = AppScreen.Permissions
+                },
                 onOpenCleaner = {
-                    hubReturn = AppScreen.Storage
+                    cleanerReturn = AppScreen.SecurityScan
                     currentScreen = AppScreen.CleanerHub
                 },
-                onOpenPermissions = { currentScreen = AppScreen.Permissions },
                 onOpenManageApps = {
-                    hubReturn = AppScreen.SecurityScan
+                    appControlReturn = AppScreen.SecurityScan
                     currentScreen = AppScreen.AppControl
                 }
             )
@@ -454,9 +494,14 @@ fun MainAppContent() {
         AppScreen.PrivacyHub -> {
             PrivacyHubScreen(
                 onNavigateBack = { currentScreen = hubReturn },
-                onOpenAppLock = { currentScreen = AppScreen.Security },
-                onOpenPermissions = { currentScreen = AppScreen.Permissions },
-                onOpenPro = { }
+                onOpenAppLock = {
+                    securityReturn = AppScreen.PrivacyHub
+                    currentScreen = AppScreen.Security
+                },
+                onOpenPermissions = {
+                    permissionsReturn = AppScreen.PrivacyHub
+                    currentScreen = AppScreen.Permissions
+                }
             )
         }
         AppScreen.BatteryInfo -> {
@@ -469,12 +514,18 @@ fun MainAppContent() {
             ManageAppsScreen(
                 application = app,
                 onNavigateBack = { currentScreen = hubReturn },
-                onOpenAppLock = { currentScreen = AppScreen.Security },
+                onOpenAppLock = {
+                    securityReturn = AppScreen.ManageApps
+                    currentScreen = AppScreen.Security
+                },
                 onOpenAppControl = {
                     appControlReturn = AppScreen.ManageApps
                     currentScreen = AppScreen.AppControl
                 },
-                onOpenUninstall = { currentScreen = AppScreen.Uninstall }
+                onOpenUninstall = {
+                    uninstallReturn = AppScreen.ManageApps
+                    currentScreen = AppScreen.Uninstall
+                }
             )
         }
     }

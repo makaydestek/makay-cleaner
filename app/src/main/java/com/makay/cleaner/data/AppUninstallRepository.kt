@@ -161,14 +161,44 @@ class AppUninstallRepository(private val context: Context) {
     }
 
     fun markPendingUninstall(packageName: String) {
-        pendingPrefs.edit().putString("pending_package", packageName).apply()
+        if (packageName.isBlank()) return
+        val current = getPendingUninstallPackages()
+        if (packageName in current) return
+        val updated = current + packageName
+        pendingPrefs.edit()
+            .putString("pending_packages", updated.joinToString("\n"))
+            .putString("pending_package", packageName) // eski sürümler için geriye uyumluluk
+            .apply()
     }
 
     fun getPendingUninstallPackage(): String? =
         pendingPrefs.getString("pending_package", null)
 
+    fun getPendingUninstallPackages(): List<String> {
+        val multi = pendingPrefs.getString("pending_packages", null)
+            ?.split('\n')
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+        if (multi.isNotEmpty()) return multi
+        return listOfNotNull(pendingPrefs.getString("pending_package", null))
+    }
+
     fun clearPendingUninstall() {
-        pendingPrefs.edit().remove("pending_package").apply()
+        pendingPrefs.edit()
+            .remove("pending_package")
+            .remove("pending_packages")
+            .apply()
+    }
+
+    private fun setPendingUninstallPackages(packages: List<String>) {
+        if (packages.isEmpty()) {
+            clearPendingUninstall()
+            return
+        }
+        pendingPrefs.edit()
+            .putString("pending_packages", packages.joinToString("\n"))
+            .putString("pending_package", packages.last())
+            .apply()
     }
 
     /**
@@ -203,24 +233,42 @@ class AppUninstallRepository(private val context: Context) {
 
     /**
      * Bekleyen kaldırma tamamlandıysa kalıntıları temizler.
+     * Birden fazla paket bekliyorsa kaldırılmış olanların tamamı işlenir;
+     * hâlâ kurulu olanlar listede beklemeye devam eder.
      */
     fun processPendingUninstallCleanup(): Pair<String, Pair<Long, Int>>? {
-        val packageName = getPendingUninstallPackage() ?: return null
-        val stillInstalled = try {
-            packageManager.getPackageInfo(packageName, 0)
-            true
-        } catch (_: PackageManager.NameNotFoundException) {
-            false
-        }
+        val pending = getPendingUninstallPackages()
+        if (pending.isEmpty()) return null
 
-        if (stillInstalled) return null
+        var totalSaved = 0L
+        var totalCount = 0
+        val cleaned = mutableListOf<String>()
 
-        val result = cleanLeftoverFiles(packageName)
-        clearPendingUninstall()
-        if (result.first > 0 || result.second > 0) {
-            CleaningRecorder.record(context, "Uygulama Kalıntıları", result.first, result.second)
+        val remaining = pending.filter { packageName ->
+            val stillInstalled = try {
+                packageManager.getPackageInfo(packageName, 0)
+                true
+            } catch (_: PackageManager.NameNotFoundException) {
+                false
+            }
+
+            if (stillInstalled) {
+                true
+            } else {
+                val result = cleanLeftoverFiles(packageName)
+                totalSaved += result.first
+                totalCount += result.second
+                if (result.first > 0 || result.second > 0) {
+                    CleaningRecorder.record(context, "Uygulama Kalıntıları", result.first, result.second)
+                }
+                cleaned += packageName
+                false
+            }
         }
-        return packageName to result
+        setPendingUninstallPackages(remaining)
+
+        if (cleaned.isEmpty()) return null
+        return cleaned.joinToString(", ") to (totalSaved to totalCount)
     }
 
     private fun deleteRecursivelyCounted(file: File?): Pair<Long, Int> {

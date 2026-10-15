@@ -98,9 +98,24 @@ class RecycleBinRepository(private val context: Context) {
 
     fun movePathToTrash(path: String, category: String = "Genel"): Boolean {
         if (path.startsWith("content://")) {
-            return moveUriToTrash(Uri.parse(path), "media", 0L, category)
+            val uri = Uri.parse(path)
+            // Çöp kutusunda gerçek dosya adı görünsün; her şey "media" olmasın
+            val name = queryDisplayName(uri) ?: uri.lastPathSegment ?: "dosya"
+            return moveUriToTrash(uri, name, 0L, category)
         }
         return moveToTrash(File(path), category)
+    }
+
+    private fun queryDisplayName(uri: Uri): String? = try {
+        context.contentResolver.query(
+            uri,
+            arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
+            null, null, null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+    } catch (_: Exception) {
+        null
     }
 
     fun moveUriToTrash(

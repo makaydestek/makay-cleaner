@@ -181,7 +181,7 @@ fun LargeFileScreen(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { viewModel.selectAll() }) { Text("Tümünü Seç") }
-                    TextButton(onClick = { viewModel.deselectAll() }) { Text("Temizle") }
+                    TextButton(onClick = { viewModel.deselectAll() }) { Text("Seçimi kaldır") }
                 }
 
                 if (uiState.selectedFiles.isNotEmpty()) {

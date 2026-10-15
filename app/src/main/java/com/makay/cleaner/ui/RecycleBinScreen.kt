@@ -13,6 +13,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.makay.cleaner.data.RecycleBinRepository
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,15 +30,30 @@ fun RecycleBinScreen(
     onNavigateBack: () -> Unit
 ) {
     val repo = remember { RecycleBinRepository(application) }
-    var items by remember { mutableStateOf(repo.listItems()) }
+    var items by remember { mutableStateOf<List<RecycleBinRepository.TrashItem>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val dateFmt = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
     var confirmEmpty by remember { mutableStateOf(false) }
     var pendingPermanentDelete by remember { mutableStateOf<RecycleBinRepository.TrashItem?>(null) }
 
     fun refresh() {
-        items = repo.listItems()
+        scope.launch {
+            val list = withContext(Dispatchers.IO) { repo.listItems() }
+            items = list
+            loading = false
+        }
+    }
+
+    // İlk yükleme ve her dönüşte ON_RESUME gözlemcisi tarafından yapılır
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(
@@ -58,7 +76,14 @@ fun RecycleBinScreen(
             )
         }
     ) { padding ->
-        if (items.isEmpty()) {
+        if (loading) {
+            Box(
+                Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
+        } else if (items.isEmpty()) {
             Box(
                 Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center

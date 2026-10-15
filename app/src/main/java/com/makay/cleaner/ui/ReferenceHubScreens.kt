@@ -8,6 +8,7 @@ import android.os.BatteryManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -39,6 +40,7 @@ import com.makay.cleaner.data.CleaningRecorder
 import com.makay.cleaner.util.JunkScanHelper
 import com.makay.cleaner.util.PermissionHelper
 import com.makay.cleaner.util.UnusedAppsHelper
+import com.makay.cleaner.util.rememberStoragePermissionState
 import com.makay.cleaner.R
 import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +66,7 @@ fun CleanerHubScreen(
     var selected by remember { mutableStateOf(setOf("cache", "unused", "apk", "residue", "tmp")) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val liveStorage = rememberStoragePermissionState()
 
     fun reload() {
         scope.launch {
@@ -77,7 +80,7 @@ fun CleanerHubScreen(
         }
     }
 
-    // Her açılışta derin tarama (Optimize’in hızlı temizliğinden kalanları da bulur)
+    // Her açılışta tarama (Optimize’in hızlı temizliğinden kalanları da bulur)
     LaunchedEffect(Unit) { reload() }
 
     val totalSelected = report?.categories
@@ -192,7 +195,7 @@ fun CleanerHubScreen(
             Spacer(Modifier.height(12.dp))
             JunkHeroOrb(
                 sizeLabel = if (loading) "…" else formatBytes(report?.cleanableBytes ?: 0L),
-                subtitle = if (loading) "Derin tarama yapılıyor…" else "Silinebilir junk"
+                subtitle = if (loading) "Tarama yapılıyor…" else "Silinebilir junk"
             )
             Spacer(Modifier.height(28.dp))
             if (loading) {
@@ -204,7 +207,7 @@ fun CleanerHubScreen(
                     modifier = Modifier.padding(top = 12.dp)
                 )
             } else {
-                val needPerm = !com.makay.cleaner.util.PermissionHelper.hasStoragePermission(application)
+                val needPerm = !liveStorage
                 if (needPerm && (report?.totalBytes ?: 0L) == 0L) {
                     Text(
                         "Junk boyutları için depolama izni gerekli. İzin verdikten sonra tekrar tarayın.",
@@ -367,6 +370,7 @@ fun SecurityScanScreen(
         val junkBytes: Long,
         val junkFiles: Int,
         val unusedApps: Int,
+        val appsScanned: Boolean,
         val hasStorage: Boolean,
         val hasUsage: Boolean,
         val score: Int
@@ -377,6 +381,10 @@ fun SecurityScanScreen(
     var currentLabel by remember { mutableStateOf("Başlatılıyor…") }
     var checks by remember { mutableStateOf(listOf<CheckItem>()) }
     var summary by remember { mutableStateOf<ScanSummary?>(null) }
+    var scanToken by remember { mutableIntStateOf(0) }
+    var stopRequested by remember { mutableStateOf(false) }
+    val liveStorage = rememberStoragePermissionState()
+    var knownStorage by remember { mutableStateOf<Boolean?>(null) }
 
     fun openCheck(id: String) {
         when (id) {
@@ -387,7 +395,19 @@ fun SecurityScanScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    // İzin durumu değişince (verildi / geri alındı) tarama kendiliğinden yenilensin
+    LaunchedEffect(liveStorage) {
+        val prev = knownStorage
+        knownStorage = liveStorage
+        if (prev != null && prev != liveStorage && !scanning) scanToken++
+    }
+
+    LaunchedEffect(scanToken) {
+        stopRequested = false
+        scanning = true
+        summary = null
+        checks = emptyList()
+        progress = 0f
         val steps = listOf(
             "Depolama erişimi kontrol ediliyor…",
             "Gizlilik ayarları…",
@@ -397,9 +417,11 @@ fun SecurityScanScreen(
         )
         var junk: JunkScanHelper.JunkReport? = null
         var unused = 0
-        val hasStorage = PermissionHelper.hasStoragePermission(application)
+        var appsScanned = false
+        val hasStorage = liveStorage
 
         for (i in steps.indices) {
+            if (stopRequested) break
             currentLabel = steps[i]
             delay(450)
             progress = (i + 1) / steps.size.toFloat()
@@ -432,6 +454,7 @@ fun SecurityScanScreen(
                     unused = withContext(Dispatchers.IO) {
                         UnusedAppsHelper.getUnusedApps(application).size
                     }
+                    appsScanned = true
                     checks = checks + CheckItem(
                         "apps",
                         "Uygulama sağlığı",
@@ -443,20 +466,36 @@ fun SecurityScanScreen(
             }
         }
 
-        val j = junk ?: JunkScanHelper.JunkReport(emptyList(), 0)
+        val j = junk
+        if (j == null) {
+            // Tarama daha ilk adımda durduruldu: eksik veriden skor gösterme
+            summary = null
+            progress = 1f
+            scanning = false
+            currentLabel = "Tarama durduruldu — yeniden tarayarak başlayın"
+            return@LaunchedEffect
+        }
         val score = JunkScanHelper.optimizationScore(j.cleanableBytes, unusedApps = unused)
         summary = ScanSummary(
             junkBytes = j.cleanableBytes,
             junkFiles = j.categories.sumOf { it.fileCount },
             unusedApps = unused,
+            appsScanned = appsScanned,
             hasStorage = hasStorage,
-            hasUsage = true, // kullanım erişimi artık istenmez
+            hasUsage = UnusedAppsHelper.hasUsageAccess(application),
             score = score
         )
-        CleaningRecorder.recordScan(application, "Güvenlik özeti", j.categories.sumOf { it.fileCount }, j.totalBytes)
+        // Durdurulmuş tarama geçmişe işlenmez
+        if (!stopRequested) {
+            CleaningRecorder.recordScan(application, "Güvenlik özeti", j.categories.sumOf { it.fileCount }, j.totalBytes)
+        }
         progress = 1f
         scanning = false
-        currentLabel = "Bu bir virüs taraması değildir — cihaz sağlık özeti. Satırlara dokunun"
+        currentLabel = if (stopRequested) {
+            "Tarama durduruldu — sonuçlar eksik olabilir"
+        } else {
+            "Bu bir virüs taraması değildir — cihaz sağlık özeti. Satırlara dokunun"
+        }
     }
 
     Scaffold(
@@ -497,10 +536,21 @@ fun SecurityScanScreen(
                         Text("Temizleyiciye git · ${formatBytes(summary!!.junkBytes)}", fontWeight = FontWeight.Bold)
                     }
                 }
+                if (!scanning) {
+                    OutlinedButton(
+                        onClick = { scanToken++ },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, Color(0xFF636366)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Text("Yeniden tara", fontWeight = FontWeight.SemiBold)
+                    }
+                }
                 Button(
                     onClick = {
                         if (scanning) {
-                            scanning = false
+                            stopRequested = true
                         } else {
                             onNavigateBack()
                         }
@@ -549,13 +599,17 @@ fun SecurityScanScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         if (scanning) "${(progress * 100).toInt()}%"
-                        else "${summary?.score ?: 0}",
+                        else summary?.let { "${it.score}" } ?: "—",
                         color = Color.White,
                         fontSize = 40.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        if (scanning) "Taranıyor…" else "Sağlık skoru",
+                        when {
+                            scanning -> "Taranıyor…"
+                            summary == null -> "Sonuç yok — yeniden tarayın"
+                            else -> "Sağlık skoru"
+                        },
                         color = Color.White.copy(0.8f),
                         fontSize = 13.sp
                     )
@@ -574,6 +628,11 @@ fun SecurityScanScreen(
             Spacer(Modifier.height(20.dp))
             checks.forEach { item ->
                 var focused by remember { mutableStateOf(false) }
+                val isStorage = item.id == "storage"
+                val ok = if (isStorage) liveStorage else item.ok
+                val detail = if (isStorage) {
+                    if (liveStorage) "Erişim açık" else "İzin gerekli · dokunun"
+                } else item.detail
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -589,12 +648,12 @@ fun SecurityScanScreen(
                     Column(Modifier.weight(1f)) {
                         Text(item.title, color = Color.White, fontSize = 15.sp)
                         Text(
-                            item.detail,
+                            detail,
                             color = Color(0xFF8E8E93),
                             fontSize = 12.sp
                         )
                     }
-                    if (item.ok) {
+                    if (ok) {
                         Icon(Icons.Default.CheckCircle, null, tint = HubGreen, modifier = Modifier.size(22.dp))
                     } else {
                         Text("!", color = HubOrange, fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -617,14 +676,24 @@ fun SecurityScanScreen(
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Sonuç özeti", color = Color.White, fontWeight = FontWeight.Bold)
                         Text("• Junk adayı: ${formatBytes(s.junkBytes)} (${s.junkFiles} öğe)", color = Color(0xFFAEAEB2), fontSize = 13.sp)
-                        Text("• Kullanılmayan uygulama: ${s.unusedApps}", color = Color(0xFFAEAEB2), fontSize = 13.sp)
                         Text(
-                            "• Depolama izni: ${if (s.hasStorage) "açık" else "kapalı"}",
+                            "• Kullanılmayan uygulama: " +
+                                (if (s.appsScanned) "${s.unusedApps}" else "— (adım atlandı)"),
+                            color = Color(0xFFAEAEB2),
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            "• Depolama izni: ${if (liveStorage) "açık" else "kapalı"}",
+                            color = Color(0xFFAEAEB2),
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            "• Kullanım istatistiği izni: ${if (s.hasUsage) "açık" else "kapalı (isteğe bağlı)"}",
                             color = Color(0xFFAEAEB2),
                             fontSize = 13.sp
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (!s.hasStorage) {
+                            if (!liveStorage) {
                                 TextButton(onClick = onOpenPermissions) {
                                     Text("İzinler", color = HubBlue)
                                 }
@@ -658,8 +727,7 @@ fun SecurityScanScreen(
 fun PrivacyHubScreen(
     onNavigateBack: () -> Unit,
     onOpenAppLock: () -> Unit,
-    onOpenPermissions: () -> Unit,
-    onOpenPro: () -> Unit
+    onOpenPermissions: () -> Unit
 ) {
     Scaffold(
         containerColor = Color.Black,
@@ -691,7 +759,7 @@ fun PrivacyHubScreen(
                 Column(Modifier.padding(16.dp)) {
                     Text("Hassas işlemler", fontWeight = FontWeight.Bold, color = Color.White)
                     Text(
-                        "Hassas izinleri talep eden uygulamalar — sistem ayarlarına yönlendirilir",
+                        "Konum, kişi, mikrofon ve telefon izinleri — sistem ayarlarında bu uygulama için ince ayar",
                         color = Color(0xFF8E8E93),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(bottom = 8.dp)

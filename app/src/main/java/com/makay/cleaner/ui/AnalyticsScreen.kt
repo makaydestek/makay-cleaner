@@ -1,6 +1,8 @@
 package com.makay.cleaner.ui
 
 import android.app.Application
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,9 +17,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -30,6 +35,8 @@ fun AnalyticsScreen(
     viewModel: AnalyticsViewModel = viewModel(factory = AnalyticsViewModel.Factory(application))
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    var showClearConfirm by remember { mutableStateOf(false) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
 
@@ -294,8 +301,32 @@ fun AnalyticsScreen(
                 ) {
                     Button(
                         onClick = {
-                            val jsonData = viewModel.exportData()
-                            // JSON verisi gösterilebilir veya paylaştırılabilir
+                            runCatching {
+                                val jsonData = viewModel.exportData()
+                                val dir = File(application.cacheDir, "exports").apply { mkdirs() }
+                                val file = File(dir, "makay-cleaner-analitik.json")
+                                file.writeText(jsonData)
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file
+                                )
+                                val share = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/json"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    putExtra(Intent.EXTRA_SUBJECT, "Makay Cleaner analitik verisi")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(
+                                    Intent.createChooser(share, "Dışa aktar")
+                                )
+                            }.onFailure {
+                                Toast.makeText(
+                                    context,
+                                    "Dışa aktarım başarısız: ${it.message}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -306,7 +337,7 @@ fun AnalyticsScreen(
                     }
 
                     OutlinedButton(
-                        onClick = { viewModel.clearAnalytics() },
+                        onClick = { showClearConfirm = true },
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp),
@@ -321,6 +352,29 @@ fun AnalyticsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("Analitik verileri silinsin mi?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Temizlik geçmişi, kullanım istatistikleri ve grafik verileri kalıcı olarak " +
+                        "silinir. Bu işlem geri alınamaz."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearConfirm = false
+                    viewModel.clearAnalytics()
+                    Toast.makeText(context, "Analitik verileri silindi", Toast.LENGTH_SHORT).show()
+                }) { Text("Sil") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("Vazgeç") }
+            }
+        )
     }
 }
 

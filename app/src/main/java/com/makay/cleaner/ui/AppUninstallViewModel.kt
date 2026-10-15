@@ -8,10 +8,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.makay.cleaner.data.AppUninstallRepository
 import com.makay.cleaner.domain.model.AppUninstallInfo
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class AppUninstallUiState(
     val isLoading: Boolean = false,
@@ -39,9 +41,15 @@ class AppUninstallViewModel(application: Application) : AndroidViewModel(applica
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
             try {
-                val apps = repository.getAllApps()
+                val apps = withContext(Dispatchers.IO) {
+                    val loaded = repository.getAllApps()
+                    val ninetyDays = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
+                    val unusedCount = loaded.count { !it.isSystemApp && it.installDate < ninetyDays }
+                    com.makay.cleaner.data.CleaningRecorder.updateUnusedAppsCount(getApplication(), unusedCount)
+                    loaded
+                }
                 val totalSize = apps.sumOf { it.sizeBytes }
-                
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     apps = apps,
@@ -49,9 +57,8 @@ class AppUninstallViewModel(application: Application) : AndroidViewModel(applica
                     totalSize = totalSize,
                     totalSizeFormatted = formatBytes(totalSize)
                 )
-                val ninetyDays = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
-                val unusedCount = apps.count { !it.isSystemApp && it.installDate < ninetyDays }
-                com.makay.cleaner.data.CleaningRecorder.updateUnusedAppsCount(getApplication(), unusedCount)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

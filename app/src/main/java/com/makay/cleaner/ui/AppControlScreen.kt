@@ -42,7 +42,6 @@ fun AppControlScreen(
     var unused by remember { mutableStateOf<List<UnusedAppInfo>>(emptyList()) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
-    var showUnusedOnly by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val uninstallRepo = remember { AppUninstallRepository(application) }
@@ -84,8 +83,9 @@ fun AppControlScreen(
                                 }
                                 Toast.makeText(
                                     context,
-                                    "${selected.size} uygulama kaldırma ekranı açıldı",
-                                    Toast.LENGTH_SHORT
+                                    "${selected.size} uygulama için kaldırma ekranı açıldı. " +
+                                        "Her birinde «Kaldır»a dokunun; kalıntılar otomatik temizlenir.",
+                                    Toast.LENGTH_LONG
                                 ).show()
                                 selected = emptySet()
                             }
@@ -116,11 +116,6 @@ fun AppControlScreen(
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = showUnusedOnly,
-                    onClick = { showUnusedOnly = true },
-                    label = { Text("Kullanılmayan") }
-                )
                 TextButton(onClick = { reload() }) { Text("Yenile") }
             }
             Spacer(Modifier.height(8.dp))

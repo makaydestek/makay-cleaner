@@ -67,6 +67,32 @@ fun AppUninstallScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                uiState.error?.let { err ->
+                    item(key = "load_error") {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(
+                                    "Uygulama listesi yüklenemedi",
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    err,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                TextButton(onClick = { viewModel.loadApps() }) {
+                                    Text("Tekrar dene", color = MaterialTheme.colorScheme.onErrorContainer)
+                                }
+                            }
+                        }
+                    }
+                }
                 item {
                     AppUninstallSummaryCard(
                         totalApps = filteredApps.size,
