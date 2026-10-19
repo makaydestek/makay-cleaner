@@ -13,7 +13,6 @@ import android.widget.Toast
 import com.makay.cleaner.MainActivity
 import com.makay.cleaner.R
 import com.makay.cleaner.notification.NotificationManager
-import com.makay.cleaner.util.HomeMetricsCache
 import com.makay.cleaner.util.JunkScanHelper
 import com.makay.cleaner.util.PlatformManager
 import com.makay.cleaner.util.TvRecommendationManager
@@ -45,13 +44,13 @@ class CleanerWidgetProvider : AppWidgetProvider() {
                     } else {
                         val result = JunkScanHelper.cleanSelected(
                             context,
-                            JunkScanHelper.SAFE_CATEGORY_IDS,
+                            setOf("cache"),
                             recordAs = "Widget",
                             useTrash = false,
                             reclaimSystemCache = true
                         )
                         val text = if (result.spaceSaved > 0L) {
-                            "Temizlendi: ${formatBytes(result.spaceSaved)}"
+                            "Boşalan: ${formatBytes(result.spaceSaved)}"
                         } else {
                             "Silinebilir önbellek yok"
                         }
@@ -76,34 +75,15 @@ class CleanerWidgetProvider : AppWidgetProvider() {
     ) {
         val views = RemoteViews(context.packageName, R.layout.widget_cleaner)
         val storageInfo = getStorageInfo()
-        val junkBytes = HomeMetricsCache.junkBytes(context)
-        val score = HomeMetricsCache.score(context)
 
-        views.setTextViewText(R.id.tv_health_score, "Skor $score")
         views.setTextViewText(R.id.tv_used_storage, storageInfo.usedFormatted)
         views.setTextViewText(R.id.tv_free_storage, storageInfo.freeFormatted)
-        views.setTextViewText(
-            R.id.tv_usage_percent,
-            if (junkBytes > 0L) {
-                "${storageInfo.usagePercent.toInt()}% dolu · ${formatBytes(junkBytes)} junk"
-            } else {
-                "${storageInfo.usagePercent.toInt()}% dolu"
-            }
-        )
+        views.setTextViewText(R.id.tv_usage_percent, "${storageInfo.usagePercent.toInt()}% Dolu")
         views.setProgressBar(R.id.progress_storage, 100, storageInfo.usagePercent.toInt(), false)
 
-        // Skor / doluluk → ana ekran (Optimizasyon)
-        views.setOnClickPendingIntent(
-            R.id.tv_health_score,
-            deepLinkPending(context, appWidgetId + 10, NotificationManager.DEEP_HOME)
-        )
         views.setOnClickPendingIntent(
             R.id.tv_usage_percent,
-            deepLinkPending(context, appWidgetId, NotificationManager.DEEP_HOME)
-        )
-        views.setOnClickPendingIntent(
-            R.id.widget_root,
-            deepLinkPending(context, appWidgetId + 50, NotificationManager.DEEP_HOME)
+            deepLinkPending(context, appWidgetId, NotificationManager.DEEP_CACHE)
         )
         views.setOnClickPendingIntent(
             R.id.btn_open_media,

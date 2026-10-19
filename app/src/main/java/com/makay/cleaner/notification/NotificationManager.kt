@@ -99,19 +99,13 @@ class NotificationManager(private val context: Context) {
         )
     }
 
-    fun sendCleaningReminder(usagePercent: Int? = null) {
+    fun sendCleaningReminder() {
         if (PlatformManager.isTvMode(context)) return
-        // Ana ekran → tek dokunuş Optimizasyon
-        val pendingIntent = createPendingIntent(DEEP_HOME, NOTIFICATION_ID_REMINDER)
-        val body = if (usagePercent != null) {
-            "Cihaz %$usagePercent dolu — tek dokunuşla optimize edin"
-        } else {
-            "Tek dokunuşla optimize etmek için Makay Cleaner’ı açın"
-        }
+        val pendingIntent = createPendingIntent(DEEP_SUGGESTIONS, NOTIFICATION_ID_REMINDER)
         val notification = NotificationCompat.Builder(context, CHANNEL_CLEANING_REMINDER)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle("Optimizasyon zamanı")
-            .setContentText(body)
+            .setContentTitle("🧹 Temizlik Zamanı!")
+            .setContentText("Cihazınızı temizlemek için Makay Cleaner'ı açın.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -119,7 +113,7 @@ class NotificationManager(private val context: Context) {
         notificationManager.notify(NOTIFICATION_ID_REMINDER, notification)
     }
 
-    fun sendCleaningComplete(spaceSaved: Long, deepLink: String = DEEP_HOME) {
+    fun sendCleaningComplete(spaceSaved: Long, deepLink: String = DEEP_STATS) {
         if (PlatformManager.isTvMode(context)) return
         val pendingIntent = createPendingIntent(deepLink, NOTIFICATION_ID_COMPLETE)
         val savedText = when {
@@ -129,8 +123,8 @@ class NotificationManager(private val context: Context) {
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_CLEANING_COMPLETE)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle("Temizlik tamamlandı")
-            .setContentText("$savedText alan kazandırıldı")
+            .setContentTitle("✅ Temizlik Tamamlandı!")
+            .setContentText("$savedText alan kazandırıldı.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -138,13 +132,13 @@ class NotificationManager(private val context: Context) {
         notificationManager.notify(NOTIFICATION_ID_COMPLETE, notification)
     }
 
-    fun sendStorageWarning(usagePercent: Int = 90, deepLink: String = DEEP_HOME) {
+    fun sendStorageWarning(usagePercent: Int = 90, deepLink: String = DEEP_CACHE) {
         if (PlatformManager.isTvMode(context)) return
         val pendingIntent = createPendingIntent(deepLink, NOTIFICATION_ID_WARNING)
         val notification = NotificationCompat.Builder(context, CHANNEL_STORAGE_WARNING)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle("Depolama uyarısı")
-            .setContentText("Depolama %$usagePercent dolu — tek dokunuşla optimize edin")
+            .setContentTitle("⚠️ Depolama Uyarısı")
+            .setContentText("Depolama alanı %$usagePercent dolu. Temizlik yapın!")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

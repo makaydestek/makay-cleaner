@@ -63,8 +63,7 @@ fun CleanerHubScreen(
     var report by remember { mutableStateOf<JunkScanHelper.JunkReport?>(null) }
     var loading by remember { mutableStateOf(true) }
     var cleaning by remember { mutableStateOf(false) }
-    // Varsayılan: yalnızca güvenli kategoriler (önbellek + geçici)
-    var selected by remember { mutableStateOf(JunkScanHelper.SAFE_CATEGORY_IDS) }
+    var selected by remember { mutableStateOf(setOf("cache", "unused", "apk", "residue", "tmp")) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val liveStorage = rememberStoragePermissionState()
@@ -76,8 +75,8 @@ fun CleanerHubScreen(
             report = withContext(Dispatchers.IO) { JunkScanHelper.deepScan(application) }
             loading = false
             val withSize = report?.categories?.filter { it.sizeBytes > 0 }?.map { it.id }?.toSet().orEmpty()
-            // Güvenli olanları seç; riskli kategoriler kapalı kalır
-            selected = withSize.intersect(JunkScanHelper.SAFE_CATEGORY_IDS)
+            if (withSize.isNotEmpty()) selected = withSize
+            else selected = emptySet()
         }
     }
 
@@ -124,40 +123,23 @@ fun CleanerHubScreen(
             )
         },
         bottomBar = {
-            Column(
+            Box(
                 Modifier
                     .fillMaxWidth()
                     .background(Color.Black)
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(16.dp)
             ) {
-                val safeIds = report?.categories
-                    ?.filter { it.sizeBytes > 0 && JunkScanHelper.isSafeCategory(it.id) }
-                    ?.map { it.id }
-                    ?.toSet()
-                    .orEmpty()
-                TextButton(
-                    onClick = { selected = safeIds },
-                    enabled = !loading && !cleaning && safeIds.isNotEmpty(),
-                    modifier = Modifier.makayFocus(corner = 10.dp)
-                ) {
-                    Text("Güvenli olanları seç", color = HubOrange, fontSize = 13.sp)
-                }
-                Text(
-                    "APK, indirme ve artık dosyalar varsayılan olarak kapalı — incelemeniz önerilir.",
-                    color = Color(0xFF8E8E93),
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                Spacer(Modifier.height(6.dp))
                 val (cleanSrc, cleanFocused) = rememberTvInteraction()
                 Button(
                     onClick = {
                         scope.launch {
                             cleaning = true
-                            val ids = selected.ifEmpty { safeIds }
+                            val ids = selected.ifEmpty {
+                                report?.categories?.filter { it.sizeBytes > 0 }?.map { it.id }?.toSet()
+                                    ?: setOf("cache", "unused", "apk", "residue", "tmp")
+                            }
                             val before = report?.cleanableBytes ?: 0L
                             val result = withContext(Dispatchers.IO) {
-                                // cache/tmp kalıcı; APK/indirme/artık çöpe (alan hemen açılmaz)
                                 JunkScanHelper.cleanSelected(
                                     application,
                                     ids,
@@ -173,13 +155,13 @@ fun CleanerHubScreen(
                                 context,
                                 when {
                                     removed > 0L && trashed > 0L ->
-                                        "Boşalan: ${formatBytes(removed)} · Çöpe: ${formatBytes(trashed)} (48s)"
+                                        "Boşalan: ${formatBytes(removed)} · Çöpe: ${formatBytes(trashed)}"
                                     removed > 0L ->
                                         "Boşalan alan: ${formatBytes(removed)}"
                                     trashed > 0L ->
-                                        "Çöpe alındı: ${formatBytes(trashed)} — diskte hâlâ yer kaplar (48s)"
+                                        "Çöpe alındı: ${formatBytes(trashed)} (diskte yer kaplar)"
                                     before > 0L ->
-                                        "Dosyalar silinemedi. Sistem/kilitli önbellek sideload ile düşmeyebilir."
+                                        "Dosyalar duruyor. Skor, silinemeyen öğeler için yükselmez."
                                     else -> "Silinecek dosya kalmadı"
                                 },
                                 Toast.LENGTH_LONG
@@ -263,9 +245,8 @@ fun CleanerHubScreen(
                     )
                 }
                 report?.categories?.forEach { cat ->
-                    val needsReview = cat.id in JunkScanHelper.REVIEW_CATEGORY_IDS
                     CleanerCategoryRow(
-                        title = if (needsReview) "${cat.title} · incele" else cat.title,
+                        title = cat.title,
                         sizeLabel = formatBytes(cat.sizeBytes),
                         checked = cat.id in selected && cat.sizeBytes > 0,
                         enabled = cat.sizeBytes > 0 && !cleaning,

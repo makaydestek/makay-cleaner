@@ -19,39 +19,47 @@ fun FirstLaunchGuideScreen(
     onDone: () -> Unit
 ) {
     var step by remember { mutableIntStateOf(0) }
-    // 3 adım: izin → skor/optimizasyon → çöp kutusu (OEM tarzı kısa rehber)
     val steps = listOf(
         Triple(
             LanguageManager.t("Depolama izni", "Storage permission", context),
             LanguageManager.t(
-                "Junk ve medya boyutları için Android 11+ tüm dosyalara erişim gerekir. Sistem önbelleğini sideload uygulama silemez; skor yalnızca silinebilir alanı sayar.",
-                "Android 11+ needs All files access for junk and media. Locked system cache is not scored — only removable junk counts.",
+                "Junk ve medya boyutları için Android 11+ tüm dosyalara erişim gerekir. İzin yoksa 0 B görünür.",
+                "Android 11+ needs All files access for junk and media sizes. Without it you may see 0 B.",
                 context
             ),
-            "1/3"
+            "1/4"
         ),
         Triple(
-            LanguageManager.t("Skor ve Optimizasyon", "Score and Optimize", context),
+            LanguageManager.t("Optimizasyon", "Optimize", context),
             LanguageManager.t(
-                "Ana ekrandaki skor yalnızca silinebilir junk’a göre yükselir. Optimizasyon kalıcı siler ve boş alanı ölçer; sistem önbelleği skora girmez.",
-                "The score follows removable junk only. Optimize permanently deletes and measures free space; OEM system cache is not scored.",
+                "Ana ekrandaki Optimizasyon yalnızca silinebilir junk’ı temizler. Skor bu kısma göre yükselir.",
+                "Home Optimize cleans only removable junk. The score follows that amount.",
                 context
             ),
-            "2/3"
+            "2/4"
         ),
         Triple(
             LanguageManager.t("Çöp kutusu", "Recycle bin", context),
             LanguageManager.t(
-                "Uygun dosyalar 48 saat geri alınabilir. Süre dolunca kalıcı silinir.",
+                "Silinen uygun dosyalar 48 saat geri alınabilir. Süre dolunca kalıcı silinir.",
                 "Eligible files stay in the recycle bin for 48 hours, then they are deleted permanently.",
                 context
             ),
-            "3/3"
+            "3/4"
+        ),
+        Triple(
+            LanguageManager.t("Xiaomi farkı", "Xiaomi difference", context),
+            LanguageManager.t(
+                "Xiaomi sistem önbelleğini de sayar. Makay sideload olduğu için o kilitli kısmı dosya dosya silemez.",
+                "Xiaomi also counts system cache. As a sideload app Makay cannot delete that locked part file by file.",
+                context
+            ),
+            "4/4"
         )
     )
     val current = steps[step]
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
+    Surface(Modifier.fillMaxSize(), color = Color.Black) {
         Column(
             Modifier
                 .fillMaxSize()

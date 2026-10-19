@@ -14,15 +14,12 @@ class NotificationWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             val notificationManager = NotificationManager(applicationContext)
-            val usage = runCatching {
-                val path = android.os.Environment.getDataDirectory()
-                val stat = android.os.StatFs(path.path)
-                val used = stat.totalBytes - stat.freeBytes
-                ((used.toFloat() / stat.totalBytes.toFloat()) * 100f).toInt()
-            }.getOrNull()
-            notificationManager.sendCleaningReminder(usage)
+            
+            // Temizlik hatırlatması gönder
+            notificationManager.sendCleaningReminder()
+            
             Result.success()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             Result.retry()
         }
     }
