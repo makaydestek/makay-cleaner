@@ -13,8 +13,20 @@ import java.io.File
 /**
  * Skor yalnızca silinebilen dosya junk’ıdır. RAM tahmini skora girmez;
  * kilitli sistem önbelleği ayrı tutulur.
+ *
+ * Optimizasyon kazancı: yalnızca kaynak dosyası gerçekten yok olan
+ * kalıcı silmeler + (mümkünse) sistem önbelleği geri kazanımı.
+ * Çöp kutusuna taşıma “alan kazandık” sayılmaz.
  */
 object JunkScanHelper {
+
+    /** Öncelikli güvenli varsayılanlar (önbellek + geçici). */
+    val SAFE_CATEGORY_IDS: Set<String> = setOf("cache", "tmp")
+
+    /** Kullanıcı onayı önerilen kategoriler (APK / indirme / artık). */
+    val REVIEW_CATEGORY_IDS: Set<String> = setOf("apk", "unused", "residue")
+
+    fun isSafeCategory(id: String): Boolean = id in SAFE_CATEGORY_IDS
 
     data class JunkCategory(
         val id: String,
@@ -32,8 +44,14 @@ object JunkScanHelper {
 
     data class CleanResult(
         val filesDeleted: Int,
+        /** Gerçekten boşalan / kalıcı silinen bayt (çöp taşıması hariç). */
         val spaceSaved: Long,
-        val categoriesCleaned: Int
+        val categoriesCleaned: Int,
+        /** Çöp kutusuna taşınan (diskte hâlâ yer kaplar). */
+        val movedToTrashBytes: Long = 0L,
+        /** StatFs ile ölçülen boş alan artışı. */
+        val freeSpaceGained: Long = 0L,
+        val lockedRemaining: Long = 0L
     )
 
     fun scan(context: Context): JunkReport = scanInternal(context)
@@ -55,13 +73,13 @@ object JunkScanHelper {
             .filter { FilePurger.canRemove(context, File(it.path)) && File(it.path).takeUnique() }
         val apks = apkItems(0)
             .filter { FilePurger.canRemove(context, it.file) && it.file.takeUnique() }
-        val unused = unusedDownloadFiles(context, 7).filter { it.takeUnique() }
+        val unused = unusedDownloadFiles(context, 7).filter {
+            FilePurger.canRemove(context, it) && it.takeUnique()
+        }
 
         val walkedCache = cacheFiles.sumOf { it.length() }
         val statsCache = SystemCacheReclaimer.queryCacheBytes(context)
         val lockedCache = (statsCache - walkedCache).coerceAtLeast(0L)
-        // RAM tahmini skora girmez: trim sonrası süreç ölünce tahmin geri gelir,
-        // skor %100 iken yeniden açılışta tekrar düşer.
 
         val cats = listOf(
             JunkCategory("cache", "Önbellek dosyaları", walkedCache, cacheFiles.size),
@@ -79,50 +97,106 @@ object JunkScanHelper {
         )
     }
 
-    /** Tüm kategorileri temizle (Optimizasyon tek dokunuş). */
+    /** Tek dokunuş Optimizasyon: kalıcı silme (çöp yok) + sistem önbelleği denemesi. */
     fun cleanAll(context: Context): CleanResult =
-        cleanSelected(context, setOf("cache", "unused", "apk", "residue", "tmp"))
+        cleanSelected(
+            context,
+            setOf("cache", "unused", "apk", "residue", "tmp"),
+            recordAs = "Optimizasyon",
+            useTrash = false,
+            reclaimSystemCache = true
+        )
 
+    /**
+     * @param useTrash true ise APK/indirme/artık çöpe alınır (alan hemen açılmaz).
+     *                 cache/tmp her zaman kalıcı silinir.
+     * @param reclaimSystemCache StorageStats / freeStorage ile OEM benzeri deneme.
+     */
     fun cleanSelected(
         context: Context,
         categoryIds: Set<String>,
-        recordAs: String? = "Optimizasyon"
+        recordAs: String? = "Optimizasyon",
+        useTrash: Boolean = true,
+        reclaimSystemCache: Boolean = categoryIds.contains("cache")
     ): CleanResult {
         if (categoryIds.isEmpty()) return CleanResult(0, 0, 0)
-        val beforeBytes = scanInternal(context).cleanableBytes
-        val trash = RecycleBinRepository(context)
+
+        val freeBefore = StorageFreeSpace.snapshot()
+        val lockedBefore = SystemCacheReclaimer.queryCacheBytes(context)
+        val trash = if (useTrash) RecycleBinRepository(context) else null
+
         var deleted = 0
-        var saved = 0L
+        var hardSaved = 0L
+        var trashedBytes = 0L
         var cats = 0
 
-        fun purgeFile(file: File, category: String): Boolean {
-            val size = if (file.isFile) file.length() else 0L
-            val existed = file.exists()
-            val ok = FilePurger.remove(context, file, trash, category)
-            if (ok && existed && !file.exists()) {
+        fun fileSize(file: File): Long = when {
+            file.isFile -> file.length()
+            file.isDirectory -> FilePurger.dirSizePublic(file)
+            else -> 0L
+        }
+
+        /** Kalıcı silme — yalnızca kaynak yoksa say. */
+        fun purgeHard(file: File, category: String): Boolean {
+            if (!file.exists()) return false
+            if (!FilePurger.canRemove(context, file)) {
+                SystemFileGuard.recordSkipped()
+                return false
+            }
+            val size = fileSize(file)
+            val ok = FilePurger.remove(context, file, trash = null, category = category)
+            if (ok && !file.exists() && size > 0L) {
                 deleted++
-                saved += size
+                hardSaved += size
                 return true
             }
+            if (file.exists()) SystemFileGuard.recordSkipped()
+            return false
+        }
+
+        /** Çöp: orijinal yok ama alan hemen açılmaz. */
+        fun purgeTrash(file: File, category: String): Boolean {
+            if (trash == null) return purgeHard(file, category)
+            if (!file.exists()) return false
+            if (!FilePurger.canRemove(context, file)) {
+                SystemFileGuard.recordSkipped()
+                return false
+            }
+            val size = fileSize(file)
+            val ok = FilePurger.remove(context, file, trash, category)
+            if (ok && !file.exists() && size > 0L) {
+                deleted++
+                trashedBytes += size
+                return true
+            }
+            if (file.exists()) SystemFileGuard.recordSkipped()
             return false
         }
 
         if ("cache" in categoryIds) {
             cats++
-            FilePurger.wipeOwnCaches(context)
-            cacheEntries(context).forEach { purgeFile(it.file, "Önbellek") }
-            thumbnailFiles(context).forEach { purgeFile(it, "Küçük resim") }
-            extraCacheFiles(context).forEach { purgeFile(it, "Uygulama önbelleği") }
+            // Kendi + erişilebilir önbellek: her zaman kalıcı
+            FilePurger.wipeOwnCaches(context).also {
+                deleted += it.filesDeleted
+                hardSaved += it.spaceSaved
+            }
+            cacheEntries(context).forEach { purgeHard(it.file, "Önbellek") }
+            thumbnailFiles(context).forEach { purgeHard(it, "Küçük resim") }
+            extraCacheFiles(context).forEach { purgeHard(it, "Uygulama önbelleği") }
         }
 
         if ("unused" in categoryIds) {
             cats++
-            unusedDownloadFiles(context, 7).forEach { purgeFile(it, "Eski indirme") }
+            unusedDownloadFiles(context, 7).forEach { f ->
+                if (useTrash) purgeTrash(f, "Eski indirme") else purgeHard(f, "Eski indirme")
+            }
         }
 
         if ("apk" in categoryIds) {
             cats++
-            apkItems(0).forEach { purgeFile(it.file, "APK") }
+            apkItems(0).forEach { item ->
+                if (useTrash) purgeTrash(item.file, "APK") else purgeHard(item.file, "APK")
+            }
         }
 
         if ("residue" in categoryIds) {
@@ -130,14 +204,19 @@ object JunkScanHelper {
             val finder = CorpseFinder(context)
             corpseItems(context).forEach { corpse ->
                 val target = File(corpse.path)
-                val (s, c) = finder.deleteCorpse(corpse)
-                if (!target.exists() && (c > 0 || s > 0)) {
-                    saved += s
-                    deleted += c
-                } else if (purgeFile(target, "Artık")) {
-                    // purgeFile saydı
-                } else if (target.exists()) {
-                    SystemFileGuard.recordSkipped()
+                if (!target.exists()) return@forEach
+                if (useTrash) {
+                    if (!purgeTrash(target, "Artık") && target.exists()) {
+                        SystemFileGuard.recordSkipped()
+                    }
+                } else {
+                    val (s, c) = finder.deleteCorpse(corpse)
+                    if (!target.exists() && (c > 0 || s > 0)) {
+                        hardSaved += s
+                        deleted += c.coerceAtLeast(1)
+                    } else if (!purgeHard(target, "Artık") && target.exists()) {
+                        SystemFileGuard.recordSkipped()
+                    }
                 }
             }
         }
@@ -145,24 +224,63 @@ object JunkScanHelper {
         if ("tmp" in categoryIds) {
             cats++
             systemItems(4000).forEach { item ->
-                purgeFile(item.file, item.reason)
+                purgeHard(item.file, item.reason)
             }
         }
 
-        val afterBytes = scanInternal(context).cleanableBytes
-        val verified = (beforeBytes - afterBytes).coerceAtLeast(0L)
-        if (verified > 0L && recordAs != null) {
-            CleaningRecorder.record(context, recordAs, verified, deleted.coerceAtLeast(1))
+        if (reclaimSystemCache && "cache" in categoryIds) {
+            val sys = SystemCacheReclaimer.reclaim(context)
+            // Dış önbellek silmeleri hardSaved’a eklenmiş olabilir; yalnızca ek paket dokunuşu say
+            if (sys.packagesTouched > 0) deleted += sys.packagesTouched
+            // reclaim içindeki dosya silmeleri — yalnızca henüz sayılmayan artış
+            if (sys.bytesFreed > hardSaved) {
+                hardSaved = sys.bytesFreed
+            }
+        }
+
+        // StatFs doğrulaması (kısa gecikme — IO iş parçacığında)
+        Thread.sleep(120)
+        val freeAfter = StorageFreeSpace.snapshot()
+        val freeGained = StorageFreeSpace.gained(freeBefore, freeAfter)
+        val lockedAfter = SystemCacheReclaimer.queryCacheBytes(context)
+        val lockedDrop = (lockedBefore - lockedAfter).coerceAtLeast(0L)
+
+        // Alternatif uygulamalar boş alan / sistem önbelleğine bakar.
+        // Öncelik: ölçülen boş alan artışı; yoksa doğrulanmış kalıcı silme; sonra kilitli önbellek düşüşü.
+        // Tarama farkı (beforeScan-afterScan) ASLA kullanılmaz — sahte başarı üretir.
+        val spaceSaved = when {
+            freeGained > 0L -> freeGained
+            hardSaved > 0L -> hardSaved
+            lockedDrop > 0L -> lockedDrop
+            else -> 0L
+        }
+
+        if (spaceSaved > 0L && recordAs != null) {
+            CleaningRecorder.record(
+                context,
+                recordAs,
+                spaceSaved,
+                deleted.coerceAtLeast(1)
+            )
+            SystemFileGuard.consumeSkippedCount()
+        } else if (trashedBytes > 0L && recordAs != null) {
+            // Çöp taşıması istatistiğe “alan kazancı” olarak yazılmaz
             SystemFileGuard.consumeSkippedCount()
         }
-        return CleanResult(deleted, verified, cats)
+
+        return CleanResult(
+            filesDeleted = deleted,
+            spaceSaved = spaceSaved,
+            categoriesCleaned = cats,
+            movedToTrashBytes = trashedBytes,
+            freeSpaceGained = freeGained,
+            lockedRemaining = lockedAfter
+        )
     }
 
     /**
-     * Ana skor (Xiaomi Güvenlik tarzı): yalnızca tek dokunuşla temizlenebilen junk düşürür.
-     * Optimizasyon junk’ı temizleyince skor %100 olur.
-     * Kullanılmayan uygulama / dolu disk skor düşürmez — bunlar ana sayfada “öneri”dir.
-     * [storageUsagePercent] / [unusedApps] geriye uyumluluk için tutulur, skora etki etmez.
+     * Ana skor: yalnızca tek dokunuşla temizlenebilen junk.
+     * Sistem kilitli önbellek skora girmez — ayrı gösterilir.
      */
     @Suppress("UNUSED_PARAMETER")
     fun optimizationScore(
@@ -171,7 +289,6 @@ object JunkScanHelper {
         unusedApps: Int = 0
     ): Int {
         val junkMb = junkBytes / (1024.0 * 1024.0)
-        // Xiaomi: ~2.8 GB junk → ~%85
         val penalty = when {
             junkMb <= 1.0 -> 0
             junkMb < 50 -> 5

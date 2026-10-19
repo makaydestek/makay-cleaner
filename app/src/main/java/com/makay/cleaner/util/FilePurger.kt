@@ -173,10 +173,15 @@ object FilePurger {
             normalized.contains("/Android/obb/", ignoreCase = true)
     }
 
+    fun dirSizePublic(dir: File): Long = dirSize(dir)
+
     private fun dirSize(dir: File): Long {
         if (!dir.exists()) return 0L
         var size = 0L
-        dir.walkTopDown().forEach { if (it.isFile) size += it.length() }
+        try {
+            dir.walkTopDown().forEach { if (it.isFile) size += it.length() }
+        } catch (_: Exception) {
+        }
         return size
     }
 }

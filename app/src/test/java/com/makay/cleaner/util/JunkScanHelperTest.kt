@@ -35,4 +35,19 @@ class JunkScanHelperTest {
         assertEquals(0L, report.cleanableBytes)
         assertEquals(0L, report.lockedBytes)
     }
+
+    @Test
+    fun cleanResultDefaultsDoNotInflateSavings() {
+        val empty = JunkScanHelper.CleanResult(0, 0, 0)
+        assertEquals(0L, empty.spaceSaved)
+        assertEquals(0L, empty.movedToTrashBytes)
+        assertEquals(0L, empty.freeSpaceGained)
+    }
+
+    @Test
+    fun safeCategoriesAreCacheAndTmpOnly() {
+        assertTrue(JunkScanHelper.isSafeCategory("cache"))
+        assertTrue(JunkScanHelper.isSafeCategory("tmp"))
+        assertTrue("apk" in JunkScanHelper.REVIEW_CATEGORY_IDS)
+    }
 }

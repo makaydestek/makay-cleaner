@@ -36,7 +36,9 @@ class CleaningWorker(
             val result = JunkScanHelper.cleanSelected(
                 applicationContext,
                 ids,
-                recordAs = "Otomatik Temizlik"
+                recordAs = "Otomatik Temizlik",
+                useTrash = false,
+                reclaimSystemCache = "cache" in ids
             )
             val after = JunkScanHelper.scan(applicationContext)
             val score = JunkScanHelper.optimizationScore(after.cleanableBytes)

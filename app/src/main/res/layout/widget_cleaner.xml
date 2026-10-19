@@ -15,7 +15,18 @@
         android:textStyle="bold"
         android:textColor="#FFFFFF"
         android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="12dp" />
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:id="@+id/tv_health_score"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Skor —"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="8dp" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -114,7 +125,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Temizle"
+            android:text="Optimize"
             android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="#1E88E5"

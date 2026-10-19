@@ -40,7 +40,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "urgent_storage",
-                    title = "🚨 Acil: Depolama Alanı Dolmak Üzere!",
+                    title = "Acil: Depolama dolmak üzere",
                     description = "Depolama alanınızın %${storageInfo.usagePercent.toInt()}’i dolu. Hemen temizlik yapın.",
                     priority = Priority.URGENT,
                     category = Category.STORAGE,
@@ -51,7 +51,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "high_storage",
-                    title = "⚠️ Depolama Alanı Azalıyor",
+                    title = "Depolama alanı azalıyor",
                     description = "Depolama %${storageInfo.usagePercent.toInt()} dolu. Gereksiz dosyaları temizleyebilirsiniz.",
                     priority = Priority.HIGH,
                     category = Category.STORAGE,
@@ -71,7 +71,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "cleaning_reminder",
-                    title = "🧹 Temizlik Zamanı Geldi",
+                    title = "Temizlik zamanı geldi",
                     description = if (daysSinceLastClean >= 999) {
                         "Henüz temizlik kaydı yok. Hızlı temizlik ile yer açabilirsiniz."
                     } else {
@@ -87,7 +87,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "cache_cleanup",
-                    title = "🗑️ Önbellek Temizliği",
+                    title = "Önbellek temizliği",
                     description = "${formatBytes(cacheSize)} önbellek bulundu. Temizleyerek yer açabilirsiniz.",
                     priority = Priority.MEDIUM,
                     category = Category.CACHE,
@@ -100,7 +100,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "large_files",
-                    title = "📁 Büyük Dosyalar",
+                    title = "Büyük dosyalar",
                     description = "$largeFiles adet büyük dosya tespit edildi. Gereksiz olanları silebilirsiniz.",
                     priority = Priority.MEDIUM,
                     category = Category.LARGE_FILES
@@ -113,7 +113,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "social_media",
-                    title = "💬 Sosyal Medya Temizliği",
+                    title = "Sosyal medya temizliği",
                     description = "${formatBytes(socialMediaSize)} sosyal medya dosyası var (eşik: ${socialPrefs.getAutoCleanThresholdMb()} MB). Eski medyayı temizleyin.",
                     priority = Priority.LOW,
                     category = Category.SOCIAL_MEDIA,
@@ -126,7 +126,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "unused_apps",
-                    title = "📱 Kullanılmayan Uygulamalar",
+                    title = "Kullanılmayan uygulamalar",
                     description = "$unusedApps uygulama uzun süredir kullanılmıyor olabilir. Gözden geçirin.",
                     priority = Priority.LOW,
                     category = Category.UNUSED_APPS
@@ -139,7 +139,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "routine_scan",
-                    title = "🔍 Hızlı Kontrol Önerisi",
+                    title = "Hızlı kontrol önerisi",
                     description = "Depolama ve önbelleği tarayarak gereksiz dosyaları bulabilirsiniz.",
                     priority = Priority.LOW,
                     category = Category.STORAGE
@@ -148,7 +148,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "cache_tip",
-                    title = "💡 Önbellek İpucu",
+                    title = "Önbellek ipucu",
                     description = "Uygulama önbelleğini düzenli temizlemek cihazı hızlandırabilir.",
                     priority = Priority.LOW,
                     category = Category.CACHE
