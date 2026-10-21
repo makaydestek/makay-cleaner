@@ -20,11 +20,14 @@ class AutoCleanRepository(private val context: Context) {
         const val KEY_CAT_CACHE = "cat_cache"
         const val KEY_CAT_APK = "cat_apk"
         const val KEY_CAT_TMP = "cat_tmp"
+        /** true = APK/indirme/artık çöpe; false = kalıcı sil (cache/tmp her zaman kalıcı). */
+        const val KEY_USE_TRASH = "auto_clean_use_trash"
     }
 
     data class CategoryFlags(
         val cache: Boolean = true,
-        val oldApk: Boolean = true,
+        /** Varsayılan kapalı — otomatik kalıcı APK silmeyi önler. */
+        val oldApk: Boolean = false,
         val tempJunk: Boolean = false
     )
 
@@ -33,7 +36,8 @@ class AutoCleanRepository(private val context: Context) {
         intervalHours: Long,
         wifiOnly: Boolean = getWifiOnly(),
         chargingOnly: Boolean = getChargingOnly(),
-        categories: CategoryFlags = getCategories()
+        categories: CategoryFlags = getCategories(),
+        useTrash: Boolean = getUseTrash()
     ) {
         prefs.edit()
             .putBoolean(KEY_ENABLED, enabled)
@@ -43,6 +47,7 @@ class AutoCleanRepository(private val context: Context) {
             .putBoolean(KEY_CAT_CACHE, categories.cache)
             .putBoolean(KEY_CAT_APK, categories.oldApk)
             .putBoolean(KEY_CAT_TMP, categories.tempJunk)
+            .putBoolean(KEY_USE_TRASH, useTrash)
             .apply()
 
         if (enabled) {
@@ -63,14 +68,18 @@ class AutoCleanRepository(private val context: Context) {
 
     fun getCategories(): CategoryFlags = CategoryFlags(
         cache = prefs.getBoolean(KEY_CAT_CACHE, true),
-        oldApk = prefs.getBoolean(KEY_CAT_APK, true),
+        oldApk = prefs.getBoolean(KEY_CAT_APK, false),
         tempJunk = prefs.getBoolean(KEY_CAT_TMP, false)
     )
+
+    /** APK/indirme için çöp kutusu (önerilen: açık). */
+    fun getUseTrash(): Boolean = prefs.getBoolean(KEY_USE_TRASH, true)
 
     private fun scheduleAutoClean(intervalHours: Long, wifiOnly: Boolean, chargingOnly: Boolean) {
         val constraints = Constraints.Builder()
             .setRequiresBatteryNotLow(true)
-            .setRequiresStorageNotLow(true)
+            // Dolu diskte temizlik çalışsın (aksi halde tam ihtiyaç anında atlanır).
+            .setRequiresStorageNotLow(false)
             .apply {
                 if (wifiOnly) setRequiredNetworkType(NetworkType.UNMETERED)
                 if (chargingOnly) setRequiresCharging(true)
@@ -82,6 +91,7 @@ class AutoCleanRepository(private val context: Context) {
             .putBoolean(CleaningWorker.KEY_DO_CACHE, cats.cache)
             .putBoolean(CleaningWorker.KEY_DO_APK, cats.oldApk)
             .putBoolean(CleaningWorker.KEY_DO_TMP, cats.tempJunk)
+            .putBoolean(CleaningWorker.KEY_USE_TRASH, getUseTrash())
             .build()
 
         val request = PeriodicWorkRequestBuilder<CleaningWorker>(
@@ -114,6 +124,7 @@ class AutoCleanRepository(private val context: Context) {
             .putBoolean(CleaningWorker.KEY_DO_CACHE, cats.cache)
             .putBoolean(CleaningWorker.KEY_DO_APK, cats.oldApk)
             .putBoolean(CleaningWorker.KEY_DO_TMP, cats.tempJunk)
+            .putBoolean(CleaningWorker.KEY_USE_TRASH, getUseTrash())
             .build()
         val request = OneTimeWorkRequestBuilder<CleaningWorker>()
             .setInputData(input)

@@ -307,6 +307,20 @@ fun SettingsScreen(
                         SettingsToggleRow("Önbellek", uiState.catCache) { viewModel.setCategoryCache(it) }
                         SettingsToggleRow("Eski APK", uiState.catApk) { viewModel.setCategoryApk(it) }
                         SettingsToggleRow("Geçici / junk", uiState.catTmp) { viewModel.setCategoryTmp(it) }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        SettingsToggleRow(
+                            "APK / indirme için çöp kutusu",
+                            uiState.useTrash
+                        ) { viewModel.setUseTrash(it) }
+                        Text(
+                            text = if (uiState.useTrash)
+                                "Önerilen: APK ve indirmeler çöpe alınır; önbellek kalıcı silinir."
+                            else
+                                "Kapalı: seçili kategoriler kalıcı silinir (geri alınamaz).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
                 }
             }

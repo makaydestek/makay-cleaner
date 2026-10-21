@@ -27,9 +27,11 @@ import com.makay.cleaner.util.SystemFileGuard
 import com.makay.cleaner.util.PermissionHelper
 import com.makay.cleaner.util.rememberStoragePermissionState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Duplicate Photos Fixer Pro tarzı: aynı/benzer fotoğraf grupları,
@@ -51,20 +53,36 @@ fun DuplicatePhotosScreen(
     var selectedPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirmDelete by remember { mutableStateOf(false) }
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
+    var cancelledEarly by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val widthClass = rememberWidthClass()
     val hasStoragePermission = rememberStoragePermissionState()
+    val cancelFlag = remember { AtomicBoolean(false) }
+    var scanJob by remember { mutableStateOf<Job?>(null) }
 
     fun runScan() {
         if (!hasStoragePermission) return
-        scope.launch {
+        scanJob?.cancel()
+        cancelFlag.set(false)
+        cancelledEarly = false
+        scanJob = scope.launch {
             loading = true
             progressText = "Aynı fotoğraflar aranıyor…"
             SystemFileGuard.consumeSkippedCount()
-            exactGroups = withContext(Dispatchers.IO) { scanner.scanExact() }
+            exactGroups = withContext(Dispatchers.IO) {
+                scanner.scanExact(cancelled = cancelFlag)
+            }
+            if (cancelFlag.get()) {
+                cancelledEarly = true
+                loading = false
+                return@launch
+            }
             progressText = "Benzer fotoğraflar aranıyor…"
-            similarGroups = withContext(Dispatchers.IO) { scanner.scanSimilar() }
+            similarGroups = withContext(Dispatchers.IO) {
+                scanner.scanSimilar(cancelled = cancelFlag)
+            }
+            cancelledEarly = cancelFlag.get()
             // Varsayılan: her grupta en yeni hariç hepsi seçili
             val defaults = mutableSetOf<String>()
             (exactGroups + similarGroups).forEach { g ->
@@ -72,6 +90,20 @@ fun DuplicatePhotosScreen(
             }
             selectedPaths = defaults
             loading = false
+        }
+    }
+
+    fun cancelScan() {
+        cancelFlag.set(true)
+        scanJob?.cancel()
+        loading = false
+        cancelledEarly = true
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            cancelFlag.set(true)
+            scanJob?.cancel()
         }
     }
 
@@ -110,14 +142,19 @@ fun DuplicatePhotosScreen(
                     }
                 },
                 actions = {
-                    TextButton(
-                        onClick = {
-                            if (hasStoragePermission) runScan()
-                            else PermissionHelper.requestStoragePermission(context)
-                        },
-                        enabled = !loading
-                    ) {
-                        Text("Yenile")
+                    if (loading) {
+                        TextButton(onClick = { cancelScan() }) {
+                            Text("İptal")
+                        }
+                    } else {
+                        TextButton(
+                            onClick = {
+                                if (hasStoragePermission) runScan()
+                                else PermissionHelper.requestStoragePermission(context)
+                            }
+                        ) {
+                            Text("Yenile")
+                        }
                     }
                 }
             )
@@ -203,8 +240,13 @@ fun DuplicatePhotosScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            if (tabIndex == 0) "Aynı (birebir) fotoğraf bulunamadı"
-                            else "Benzer fotoğraf grubu bulunamadı"
+                            text = when {
+                                cancelledEarly -> "Tarama iptal edildi veya zaman aşımına uğradı"
+                                tabIndex == 0 -> "Aynı (birebir) fotoğraf bulunamadı"
+                                else -> "Benzer fotoğraf grubu bulunamadı"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     else -> LazyColumn(

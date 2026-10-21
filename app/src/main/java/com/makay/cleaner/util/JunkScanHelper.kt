@@ -51,29 +51,45 @@ object JunkScanHelper {
         val movedToTrashBytes: Long = 0L,
         /** StatFs ile ölçülen boş alan artışı. */
         val freeSpaceGained: Long = 0L,
-        val lockedRemaining: Long = 0L
+        val lockedRemaining: Long = 0L,
+        /** Silinemeyen / hata veren öğe sayısı. */
+        val failedCount: Int = 0,
+        /** SystemFileGuard ile atlanan korumalı öğe. */
+        val skippedProtected: Int = 0
     )
 
-    fun scan(context: Context): JunkReport = scanInternal(context)
+    /** Varsayılan tarama zaman aşımı (ms). */
+    const val DEFAULT_SCAN_TIMEOUT_MS = 90_000L
+
+    fun scan(context: Context, timeoutMs: Long = DEFAULT_SCAN_TIMEOUT_MS): JunkReport =
+        scanInternal(context, deadlineMs = System.currentTimeMillis() + timeoutMs)
 
     /** Ayrıntılı temizleyici ile aynı kapsam (Xiaomi tarzı tam tarama). */
-    fun deepScan(context: Context): JunkReport = scanInternal(context)
+    fun deepScan(context: Context, timeoutMs: Long = DEFAULT_SCAN_TIMEOUT_MS): JunkReport =
+        scanInternal(context, deadlineMs = System.currentTimeMillis() + timeoutMs)
 
-    private fun scanInternal(context: Context): JunkReport {
+    private fun scanInternal(context: Context, deadlineMs: Long): JunkReport {
+        fun timedOut(): Boolean = System.currentTimeMillis() > deadlineMs
+        if (timedOut()) {
+            return JunkReport(categories = emptyList(), totalBytes = 0L)
+        }
         val cache = cacheEntries(context)
+        if (timedOut()) {
+            return JunkReport(categories = emptyList(), totalBytes = 0L)
+        }
         val thumbs = thumbnailFiles(context)
         val extra = extraCacheFiles(context)
         val seen = mutableSetOf<String>()
         fun File.takeUnique(): Boolean = seen.add(absolutePath)
 
         val cacheFiles = (cache.map { it.file } + thumbs + extra).filter { it.takeUnique() }
-        val system = systemItems(4000)
+        val system = if (timedOut()) emptyList() else systemItems(4000)
             .filter { FilePurger.canRemove(context, it.file) && it.file.takeUnique() }
-        val corpses = corpseItems(context)
+        val corpses = if (timedOut()) emptyList() else corpseItems(context)
             .filter { FilePurger.canRemove(context, File(it.path)) && File(it.path).takeUnique() }
-        val apks = apkItems(0)
+        val apks = if (timedOut()) emptyList() else apkItems(0)
             .filter { FilePurger.canRemove(context, it.file) && it.file.takeUnique() }
-        val unused = unusedDownloadFiles(context, 7).filter {
+        val unused = if (timedOut()) emptyList() else unusedDownloadFiles(context, 7).filter {
             FilePurger.canRemove(context, it) && it.takeUnique()
         }
 
@@ -129,6 +145,9 @@ object JunkScanHelper {
         var hardSaved = 0L
         var trashedBytes = 0L
         var cats = 0
+        var failed = 0
+        val deadlineMs = System.currentTimeMillis() + DEFAULT_SCAN_TIMEOUT_MS
+        fun timedOut(): Boolean = System.currentTimeMillis() > deadlineMs
 
         fun fileSize(file: File): Long = when {
             file.isFile -> file.length()
@@ -138,6 +157,7 @@ object JunkScanHelper {
 
         /** Kalıcı silme — yalnızca kaynak yoksa say. */
         fun purgeHard(file: File, category: String): Boolean {
+            if (timedOut()) return false
             if (!file.exists()) return false
             if (!FilePurger.canRemove(context, file)) {
                 SystemFileGuard.recordSkipped()
@@ -150,13 +170,14 @@ object JunkScanHelper {
                 hardSaved += size
                 return true
             }
-            if (file.exists()) SystemFileGuard.recordSkipped()
+            failed++
             return false
         }
 
         /** Çöp: orijinal yok ama alan hemen açılmaz. */
         fun purgeTrash(file: File, category: String): Boolean {
             if (trash == null) return purgeHard(file, category)
+            if (timedOut()) return false
             if (!file.exists()) return false
             if (!FilePurger.canRemove(context, file)) {
                 SystemFileGuard.recordSkipped()
@@ -169,7 +190,7 @@ object JunkScanHelper {
                 trashedBytes += size
                 return true
             }
-            if (file.exists()) SystemFileGuard.recordSkipped()
+            failed++
             return false
         }
 
@@ -206,16 +227,14 @@ object JunkScanHelper {
                 val target = File(corpse.path)
                 if (!target.exists()) return@forEach
                 if (useTrash) {
-                    if (!purgeTrash(target, "Artık") && target.exists()) {
-                        SystemFileGuard.recordSkipped()
-                    }
+                    purgeTrash(target, "Artık")
                 } else {
                     val (s, c) = finder.deleteCorpse(corpse)
                     if (!target.exists() && (c > 0 || s > 0)) {
                         hardSaved += s
                         deleted += c.coerceAtLeast(1)
-                    } else if (!purgeHard(target, "Artık") && target.exists()) {
-                        SystemFileGuard.recordSkipped()
+                    } else {
+                        purgeHard(target, "Artık")
                     }
                 }
             }
@@ -255,6 +274,7 @@ object JunkScanHelper {
             else -> 0L
         }
 
+        val skipped = SystemFileGuard.consumeSkippedCount()
         if (spaceSaved > 0L && recordAs != null) {
             CleaningRecorder.record(
                 context,
@@ -262,10 +282,6 @@ object JunkScanHelper {
                 spaceSaved,
                 deleted.coerceAtLeast(1)
             )
-            SystemFileGuard.consumeSkippedCount()
-        } else if (trashedBytes > 0L && recordAs != null) {
-            // Çöp taşıması istatistiğe “alan kazancı” olarak yazılmaz
-            SystemFileGuard.consumeSkippedCount()
         }
 
         return CleanResult(
@@ -274,7 +290,9 @@ object JunkScanHelper {
             categoriesCleaned = cats,
             movedToTrashBytes = trashedBytes,
             freeSpaceGained = freeGained,
-            lockedRemaining = lockedAfter
+            lockedRemaining = lockedAfter,
+            failedCount = failed,
+            skippedProtected = skipped
         )
     }
 

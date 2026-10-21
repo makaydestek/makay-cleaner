@@ -68,17 +68,28 @@ class AppLockManager(context: Context) {
         secureStorage.remove(KEY_PIN_HASH)
         secureStorage.remove(KEY_PIN_SALT)
         secureStorage.saveBoolean(KEY_PIN_ENABLED, false)
+        secureStorage.saveBoolean(KEY_BIOMETRIC_ENABLED, false)
     }
 
     fun isPinEnabled(): Boolean = secureStorage.getBoolean(KEY_PIN_ENABLED, false)
 
-    fun setBiometricEnabled(enabled: Boolean) {
+    /**
+     * Biyometrik yalnızca PIN açıkken etkinleştirilebilir (biyometrik-only kilit yasak).
+     * @return true ise yeni durum kaydedildi
+     */
+    fun setBiometricEnabled(enabled: Boolean): Boolean {
+        if (enabled && !isPinEnabled()) return false
         secureStorage.saveBoolean(KEY_BIOMETRIC_ENABLED, enabled)
+        return true
     }
 
-    fun isBiometricEnabled(): Boolean = secureStorage.getBoolean(KEY_BIOMETRIC_ENABLED, false)
+    fun isBiometricEnabled(): Boolean =
+        isPinEnabled() && secureStorage.getBoolean(KEY_BIOMETRIC_ENABLED, false)
 
-    fun isAnyLockEnabled(): Boolean = isPinEnabled() || isBiometricEnabled()
+    fun isAnyLockEnabled(): Boolean = isPinEnabled()
+
+    /** Şifreli depo kullanılamıyorsa true — UI uyarı göstermeli. */
+    fun isStorageDegraded(): Boolean = !secureStorage.isEncryptionAvailable
 
     fun markUnlocked() {
         secureStorage.saveString(KEY_LAST_UNLOCK, System.currentTimeMillis().toString())

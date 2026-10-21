@@ -20,8 +20,10 @@ data class SettingsUiState(
     val wifiOnly: Boolean = false,
     val chargingOnly: Boolean = false,
     val catCache: Boolean = true,
-    val catApk: Boolean = true,
+    val catApk: Boolean = false,
     val catTmp: Boolean = false,
+    /** APK/indirme/artık için çöp kutusu (önerilen). */
+    val useTrash: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
     val lastManualCleanMessage: String? = null
@@ -59,6 +61,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             catCache = cats.cache,
             catApk = cats.oldApk,
             catTmp = cats.tempJunk,
+            useTrash = autoCleanRepository.getUseTrash(),
             appVersion = versionName
         )
     }
@@ -115,6 +118,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         return true
     }
 
+    fun setUseTrash(enabled: Boolean) {
+        persistAuto(useTrash = enabled)
+    }
+
     private fun persistAuto(
         enabled: Boolean = _uiState.value.autoCleanEnabled,
         intervalHours: Long = _uiState.value.autoCleanIntervalHours,
@@ -122,14 +129,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         chargingOnly: Boolean = _uiState.value.chargingOnly,
         catCache: Boolean = _uiState.value.catCache,
         catApk: Boolean = _uiState.value.catApk,
-        catTmp: Boolean = _uiState.value.catTmp
+        catTmp: Boolean = _uiState.value.catTmp,
+        useTrash: Boolean = _uiState.value.useTrash
     ) {
         autoCleanRepository.saveSettings(
             enabled,
             intervalHours,
             wifiOnly,
             chargingOnly,
-            AutoCleanRepository.CategoryFlags(catCache, catApk, catTmp)
+            AutoCleanRepository.CategoryFlags(catCache, catApk, catTmp),
+            useTrash = useTrash
         )
         _uiState.value = _uiState.value.copy(
             autoCleanEnabled = enabled,
@@ -138,7 +147,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             chargingOnly = chargingOnly,
             catCache = catCache,
             catApk = catApk,
-            catTmp = catTmp
+            catTmp = catTmp,
+            useTrash = useTrash
         )
     }
 

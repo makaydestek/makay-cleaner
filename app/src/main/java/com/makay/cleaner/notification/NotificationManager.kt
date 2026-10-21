@@ -21,6 +21,7 @@ class NotificationManager(private val context: Context) {
         const val NOTIFICATION_ID_REMINDER = 1001
         const val NOTIFICATION_ID_COMPLETE = 1002
         const val NOTIFICATION_ID_WARNING = 1003
+        const val NOTIFICATION_ID_FAILED = 1004
 
         const val EXTRA_DEEP_LINK = "deep_link"
         const val DEEP_HOME = "home"
@@ -113,23 +114,66 @@ class NotificationManager(private val context: Context) {
         notificationManager.notify(NOTIFICATION_ID_REMINDER, notification)
     }
 
-    fun sendCleaningComplete(spaceSaved: Long, deepLink: String = DEEP_STATS) {
+    fun sendCleaningComplete(
+        spaceSaved: Long,
+        deepLink: String = DEEP_STATS,
+        filesDeleted: Int = 0,
+        failedCount: Int = 0,
+        skippedCount: Int = 0,
+        trashedBytes: Long = 0L
+    ) {
         if (PlatformManager.isTvMode(context)) return
         val pendingIntent = createPendingIntent(deepLink, NOTIFICATION_ID_COMPLETE)
-        val savedText = when {
-            spaceSaved < 1024 * 1024 -> "${spaceSaved / 1024} KB"
-            spaceSaved < 1024 * 1024 * 1024 -> "%.1f MB".format(spaceSaved / (1024.0 * 1024.0))
-            else -> "%.2f GB".format(spaceSaved / (1024.0 * 1024.0 * 1024.0))
+        val savedText = formatBytes(spaceSaved)
+        val extras = buildList {
+            if (filesDeleted > 0) add("$filesDeleted dosya")
+            if (trashedBytes > 0L) add("${formatBytes(trashedBytes)} çöpe")
+            if (failedCount > 0) add("$failedCount başarısız")
+            if (skippedCount > 0) add("$skippedCount korumalı atlandı")
+        }
+        val detail = when {
+            extras.isEmpty() -> "$savedText alan kazandırıldı."
+            spaceSaved > 0L || trashedBytes > 0L ->
+                "$savedText · ${extras.joinToString(" · ")}"
+            else -> extras.joinToString(" · ")
+        }
+        val title = when {
+            failedCount > 0 && (filesDeleted > 0 || spaceSaved > 0L || trashedBytes > 0L) ->
+                "Temizlik kısmen tamamlandı"
+            failedCount > 0 -> "Temizlik sorunlu bitti"
+            else -> "Temizlik tamamlandı"
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_CLEANING_COMPLETE)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle("✅ Temizlik Tamamlandı!")
-            .setContentText("$savedText alan kazandırıldı.")
+            .setContentTitle(title)
+            .setContentText(detail)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
         notificationManager.notify(NOTIFICATION_ID_COMPLETE, notification)
+    }
+
+    fun sendCleaningFailed(message: String) {
+        if (PlatformManager.isTvMode(context)) return
+        val pendingIntent = createPendingIntent(DEEP_STATS, NOTIFICATION_ID_FAILED)
+        val notification = NotificationCompat.Builder(context, CHANNEL_CLEANING_COMPLETE)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("Otomatik temizlik durdu")
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        notificationManager.notify(NOTIFICATION_ID_FAILED, notification)
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+        else -> "%.2f GB".format(bytes / (1024.0 * 1024.0 * 1024.0))
     }
 
     fun sendStorageWarning(usagePercent: Int = 90, deepLink: String = DEEP_CACHE) {

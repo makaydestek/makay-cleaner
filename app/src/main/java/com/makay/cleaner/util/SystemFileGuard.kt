@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * İşletim sistemi ve sistem uygulamalarına ait yolları / paketleri korur.
@@ -11,20 +12,15 @@ import java.io.File
  */
 object SystemFileGuard {
 
-    @Volatile
-    private var skippedCount: Int = 0
+    private val skippedCount = AtomicInteger(0)
 
     fun recordSkipped() {
-        skippedCount++
+        skippedCount.incrementAndGet()
     }
 
-    fun consumeSkippedCount(): Int {
-        val n = skippedCount
-        skippedCount = 0
-        return n
-    }
+    fun consumeSkippedCount(): Int = skippedCount.getAndSet(0)
 
-    fun peekSkippedCount(): Int = skippedCount
+    fun peekSkippedCount(): Int = skippedCount.get()
 
     private val PROTECTED_PATH_PREFIXES = listOf(
         "/system",

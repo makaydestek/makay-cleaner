@@ -10,9 +10,11 @@ import com.makay.cleaner.util.SystemFileGuard
 import java.io.File
 import java.io.FileInputStream
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Duplicate Photos Fixer tarzı: aynı ve benzer fotoğraf grupları.
+ * Zaman aşımı, iptal ve düşük bellek durumunda erken çıkar.
  */
 class DuplicatePhotoScanner(private val context: Context) {
 
@@ -37,13 +39,33 @@ class DuplicatePhotoScanner(private val context: Context) {
 
     enum class GroupType { EXACT, SIMILAR }
 
-    fun scanExact(limit: Int = 2500): List<PhotoGroup> {
-        val photos = loadPhotos(limit)
+    companion object {
+        const val DEFAULT_EXACT_LIMIT = 2500
+        const val DEFAULT_SIMILAR_LIMIT = 800
+        const val DEFAULT_TIMEOUT_MS = 60_000L
+        /** Benzer tarama için üst bellek eşiği (yaklaşık). */
+        const val MIN_FREE_HEAP_BYTES = 24L * 1024L * 1024L
+        const val MAX_SIMILAR_DECODE_BYTES = 8L * 1024L * 1024L
+    }
+
+    fun scanExact(
+        limit: Int = DEFAULT_EXACT_LIMIT,
+        timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+        cancelled: AtomicBoolean? = null
+    ): List<PhotoGroup> {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        fun stop(): Boolean =
+            cancelled?.get() == true || System.currentTimeMillis() > deadline || lowMemory()
+
+        val photos = loadPhotos(limit, cancelled, deadline)
+        if (stop()) return emptyList()
         val bySize = photos.groupBy { it.sizeBytes }.filter { it.value.size > 1 }
         val groups = mutableListOf<PhotoGroup>()
         bySize.values.forEach { sameSize ->
+            if (stop()) return@forEach
             val byHash = LinkedHashMap<String, MutableList<PhotoItem>>()
             sameSize.forEach { photo ->
+                if (stop()) return@forEach
                 val hash = md5Partial(File(photo.path)) ?: return@forEach
                 byHash.getOrPut(hash) { mutableListOf() }.add(photo)
             }
@@ -64,20 +86,33 @@ class DuplicatePhotoScanner(private val context: Context) {
         return groups.sortedByDescending { it.wasteBytes }
     }
 
-    fun scanSimilar(limit: Int = 1200): List<PhotoGroup> {
-        val photos = loadPhotos(limit)
+    fun scanSimilar(
+        limit: Int = DEFAULT_SIMILAR_LIMIT,
+        timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+        cancelled: AtomicBoolean? = null
+    ): List<PhotoGroup> {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        fun stop(): Boolean =
+            cancelled?.get() == true || System.currentTimeMillis() > deadline || lowMemory()
+
+        val photos = loadPhotos(limit, cancelled, deadline)
+        if (stop()) return emptyList()
         val entries = mutableListOf<Pair<String, PhotoItem>>()
         photos.forEach { photo ->
+            if (stop()) return@forEach
+            if (photo.sizeBytes > MAX_SIMILAR_DECODE_BYTES) return@forEach
             val hash = differenceHash(photo.path) ?: return@forEach
             entries.add(hash to photo)
         }
         val used = BooleanArray(entries.size)
         val groups = mutableListOf<PhotoGroup>()
         for (i in entries.indices) {
+            if (stop()) break
             if (used[i]) continue
             val merged = mutableListOf(entries[i].second)
             used[i] = true
             for (j in i + 1 until entries.size) {
+                if (stop()) break
                 if (used[j]) continue
                 if (hamming(entries[i].first, entries[j].first) <= 6) {
                     merged.add(entries[j].second)
@@ -99,7 +134,17 @@ class DuplicatePhotoScanner(private val context: Context) {
         return groups.sortedByDescending { it.wasteBytes }
     }
 
-    private fun loadPhotos(limit: Int): List<PhotoItem> {
+    private fun lowMemory(): Boolean {
+        val rt = Runtime.getRuntime()
+        val free = rt.maxMemory() - (rt.totalMemory() - rt.freeMemory())
+        return free < MIN_FREE_HEAP_BYTES
+    }
+
+    private fun loadPhotos(
+        limit: Int,
+        cancelled: AtomicBoolean?,
+        deadlineMs: Long
+    ): List<PhotoItem> {
         val out = mutableListOf<PhotoItem>()
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
@@ -121,6 +166,7 @@ class DuplicatePhotoScanner(private val context: Context) {
             val sizeI = c.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
             val dateI = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
             while (c.moveToNext() && out.size < limit) {
+                if (cancelled?.get() == true || System.currentTimeMillis() > deadlineMs) break
                 val path = c.getString(dataI) ?: continue
                 if (!SystemFileGuard.canDelete(path)) {
                     SystemFileGuard.recordSkipped()

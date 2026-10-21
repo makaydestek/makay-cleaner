@@ -45,6 +45,14 @@ fun PlatformSelectScreen(
                 color = Color(0xFFAEAEB2),
                 fontSize = 15.sp
             )
+            if (PlatformManager.suggestTv(context)) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Bu cihazda TV / Leanback algılandı — TV sürümü önerilir.",
+                    color = Color(0xFF8BC34A),
+                    fontSize = 13.sp
+                )
+            }
             Spacer(Modifier.height(36.dp))
 
             val (mobileSrc, mobileFocused) = rememberTvInteraction()

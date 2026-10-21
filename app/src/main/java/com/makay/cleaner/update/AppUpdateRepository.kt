@@ -81,7 +81,9 @@ class AppUpdateRepository(context: Context) {
             ApkIntegrityVerifier.Result.Ok -> Unit
         }
 
-        val expectedSha = resolveExpectedSha256(release, apkName)
+        val expectedSha = normalizeUpdateSha(resolveExpectedSha256(release, apkName))
+        // SHA yoksa güncellemeyi hiç sunma (indir/kur diyaloğu açılmaz).
+        if (expectedSha == null) return null
 
         return AvailableUpdate(
             tag = tag,
@@ -299,6 +301,10 @@ class AppUpdateRepository(context: Context) {
 
         fun normalizeVersion(raw: String): String =
             raw.trim().removePrefix("v").removePrefix("V").trim()
+
+        /** Geçerli 64 hex SHA-256; aksi halde null (güncelleme sunulmaz). */
+        fun normalizeUpdateSha(raw: String?): String? =
+            raw?.trim()?.lowercase()?.takeIf { it.matches(Regex("[0-9a-f]{64}")) }
 
         fun compareVersions(a: String, b: String): Int {
             val pa = normalizeVersion(a).split('.', '-', '_').mapNotNull { it.toIntOrNull() }

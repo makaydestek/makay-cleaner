@@ -49,8 +49,9 @@ fun AppLockScreen(
         )
     }
 
+    // Biyometrik-only kilit yok: PIN zorunlu. İsteğe bağlı biyometrik hızlandırıcı.
     LaunchedEffect(biometricEnabled, pinEnabled) {
-        if (biometricEnabled && !pinEnabled) {
+        if (biometricEnabled && pinEnabled) {
             startBiometric()
         }
     }
@@ -81,6 +82,14 @@ fun AppLockScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            if (appLockManager.isStorageDegraded()) {
+                Text(
+                    text = "Uyarı: şifreli depo kullanılamıyor; kilit güvenilirliği düşebilir.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
 
             if (pinEnabled) {
                 OutlinedTextField(

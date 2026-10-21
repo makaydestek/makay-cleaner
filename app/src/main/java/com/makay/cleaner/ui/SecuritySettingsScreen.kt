@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import com.makay.cleaner.security.AppLockManager
 import com.makay.cleaner.security.BiometricManager
+import com.makay.cleaner.util.PlatformManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,16 +28,21 @@ fun SecuritySettingsScreen(
     val context = LocalContext.current
     val appLockManager = remember { AppLockManager(application) }
     val biometricManager = remember { BiometricManager(application) }
+    val isTv = PlatformManager.rememberIsTvMode()
     
     var isPinEnabled by remember { mutableStateOf(appLockManager.isPinEnabled()) }
     var isBiometricEnabled by remember { mutableStateOf(appLockManager.isBiometricEnabled()) }
-    var isBiometricAvailable by remember { mutableStateOf(biometricManager.isBiometricAvailable()) }
+    var isBiometricAvailable by remember {
+        mutableStateOf(!isTv && biometricManager.isBiometricAvailable())
+    }
+    val storageDegraded = remember { appLockManager.isStorageDegraded() }
     
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showRemovePinDialog by remember { mutableStateOf(false) }
     var newPin by remember { mutableStateOf("") }
     var confirmPin by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
+    var biometricHint by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -73,6 +79,30 @@ fun SecuritySettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            if (storageDegraded) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "Şifreli depo kullanılamıyor",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            "Cihaz Keystore açılamadı. PIN ayarları yedek depoda tutuluyor; kilidi güvenilir saymayın.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
 
@@ -113,6 +143,7 @@ fun SecuritySettingsScreen(
                             } else {
                                 appLockManager.removePin()
                                 isPinEnabled = false
+                                isBiometricEnabled = false
                             }
                         },
                         modifier = Modifier.tvSkipChildFocus()
@@ -120,55 +151,83 @@ fun SecuritySettingsScreen(
                 }
             }
 
-            // Biyometrik Kilidi
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors = if (!isBiometricAvailable) CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ) else CardDefaults.cardColors()
-            ) {
-                TvFocusRow(
-                    onClick = {
-                        if (isBiometricAvailable) {
-                            appLockManager.setBiometricEnabled(!isBiometricEnabled)
-                            isBiometricEnabled = !isBiometricEnabled
-                        }
-                    },
-                    modifier = Modifier.padding(8.dp)
-                ) { focused ->
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Biyometrik Kilidi",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = when {
-                                !isBiometricAvailable -> "Cihazda biyometrik yok"
-                                isBiometricEnabled -> "Aktif"
-                                else -> "Kapalı"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when {
-                                !isBiometricAvailable -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            // Biyometrik: TV'de gizle; PIN zorunlu
+            if (!isTv) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = if (!isBiometricAvailable || !isPinEnabled) CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ) else CardDefaults.cardColors()
+                ) {
+                    TvFocusRow(
+                        onClick = {
+                            if (!isPinEnabled) {
+                                biometricHint = "Önce PIN kilidini açın"
+                                return@TvFocusRow
                             }
-                        )
-                    }
-                    Switch(
-                        checked = isBiometricEnabled,
-                        onCheckedChange = { enabled ->
                             if (isBiometricAvailable) {
-                                appLockManager.setBiometricEnabled(enabled)
-                                isBiometricEnabled = enabled
+                                val next = !isBiometricEnabled
+                                if (appLockManager.setBiometricEnabled(next)) {
+                                    isBiometricEnabled = next
+                                    biometricHint = null
+                                } else {
+                                    biometricHint = "Biyometrik için PIN gerekli"
+                                }
                             }
                         },
-                        enabled = isBiometricAvailable,
-                        modifier = Modifier.tvSkipChildFocus()
-                    )
+                        modifier = Modifier.padding(8.dp)
+                    ) { focused ->
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Biyometrik Kilidi",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = when {
+                                    !isPinEnabled -> "Önce PIN gerekli"
+                                    !isBiometricAvailable -> "Cihazda biyometrik yok"
+                                    isBiometricEnabled -> "Aktif"
+                                    else -> "Kapalı"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = when {
+                                    !isPinEnabled || !isBiometricAvailable ->
+                                        MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                            biometricHint?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isBiometricEnabled,
+                            onCheckedChange = { enabled ->
+                                if (!isPinEnabled) {
+                                    biometricHint = "Önce PIN kilidini açın"
+                                    return@Switch
+                                }
+                                if (isBiometricAvailable) {
+                                    if (appLockManager.setBiometricEnabled(enabled)) {
+                                        isBiometricEnabled = enabled
+                                        biometricHint = null
+                                    } else {
+                                        biometricHint = "Biyometrik için PIN gerekli"
+                                    }
+                                }
+                            },
+                            enabled = isBiometricAvailable && isPinEnabled,
+                            modifier = Modifier.tvSkipChildFocus()
+                        )
+                    }
                 }
             }
 
