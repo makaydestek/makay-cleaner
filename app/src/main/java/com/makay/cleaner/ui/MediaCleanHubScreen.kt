@@ -12,7 +12,7 @@ import com.makay.cleaner.util.ProManager
 import android.app.Application
 
 /**
- * P0: Yinelenen foto / benzer / dosya / medya araçlarını tek hub altında toplar.
+ * Medya temizliği hub: yinelenen foto tek ekranda; diğer medya araçları burada.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,11 +23,27 @@ fun MediaCleanHubScreen(
 ) {
     val showProBadge = ProManager.isProUiVisible() && !ProManager.isPro(application)
     val items = listOf(
-        HubItem("dup_photos", "Yinelenen fotoğraflar", "Aynı ve benzer fotoğraf grupları — seçerek çöp kutusuna", false),
+        HubItem(
+            "file_analysis",
+            "Dosya analizi",
+            "Tür kırılımı, klasör boyutları, büyük/son dosyalar, boş klasörler",
+            false
+        ),
+        HubItem(
+            "dup_photos",
+            "Yinelenen fotoğraflar",
+            "Seçim asistanı, yan yana karşılaştırma, format/koruma, kilitle",
+            false
+        ),
+        HubItem(
+            "dup_videos",
+            "Yinelenen videolar",
+            "Aynı video kopyaları — hash tarama, kilitle, çöp kutusu",
+            false
+        ),
         HubItem("media_hub", "Medya kategorileri", "Ekran görüntüsü, kamera, düşük boyut, Google Photos yerel", false),
         HubItem("video", "Video araçları", "Büyük video analizi — arşiv / taşı (yeniden kodlama yok)", false),
-        HubItem("similar", "Benzer fotoğraflar (gelişmiş)", "dHash ile ek benzerlik taraması", false),
-        HubItem("duplicates", "Yinelenen dosyalar", "Tüm depolamada hash ile kopya dosya", false),
+        HubItem("duplicates", "Yinelenen dosyalar", "Türe göre tarama: foto / video / ses / belge / APK", false),
         HubItem("compress", "JPEG sıkıştırma", "Fotoğrafları kalite düşürerek küçült", false)
     )
 
@@ -52,7 +68,7 @@ fun MediaCleanHubScreen(
         ) {
             item {
                 Text(
-                    "Foto, video ve kopya medya araçları tek yerde. Sistem dosyalarına dokunulmaz.",
+                    "Foto ve video araçları tek yerde. Yinelenen fotoğraflar aynı ekranda taranır; sistem dosyalarına dokunulmaz.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

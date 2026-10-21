@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">Makay Cleaner</string>
     <string name="storage_analysis">Depolama Analizi</string>
+    <string name="file_analysis">Dosya analizi</string>
     <string name="settings">Ayarlar</string>
     <string name="permission_required">Depolama İzni Gerekli</string>
     <string name="permission_body">Makay Cleaner gereksiz dosyaları tarayıp temizlemek için depolama erişimine ihtiyaç duyar. Dosyalarınız cihazda kalır; sistem dosyaları silinmez.</string>

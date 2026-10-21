@@ -22,7 +22,10 @@ private data class ProBenefit(val title: String, val detail: String)
 private val proBenefits = listOf(
     ProBenefit("Wi-Fi / şarj zamanlaması", "Otomatik temizlik yalnızca Wi-Fi veya şarjdayken."),
     ProBenefit("Otomatik junk", "Arka planda önbellek ve geçici dosyalar."),
-    ProBenefit("Benzer fotoğraflar", "Benzer kareleri siz seçerek çöp kutusuna alırsınız."),
+    ProBenefit("Yinelenen foto gelişmiş", "Benzerlik ayarı, klasör kapsamı ve en iyiyi tut."),
+    ProBenefit("Dosya analizi", "Tür, klasör, büyük dosya ve boş klasör özeti."),
+    ProBenefit("Seçim asistanı", "Çözünürlük/boyut/tarih önceliğiyle akıllı işaretleme."),
+    ProBenefit("Yinelenen video", "Aynı video kopyalarını bulup güvenle temizleyin."),
     ProBenefit("JPEG sıkıştırma", "Seçtiğiniz fotoğrafların boyutu düşer."),
     ProBenefit("Yinelenen dosyalar", "Kopyaları listeler; silmeyi siz seçersiniz.")
 )

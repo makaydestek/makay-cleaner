@@ -42,7 +42,6 @@ sealed class AppScreen {
     data object SystemCleaner : AppScreen()
     data object CorpseFinder : AppScreen()
     data object MediaHub : AppScreen()
-    data object SimilarPhotos : AppScreen()
     data object MediaCompress : AppScreen()
     data object AppControl : AppScreen()
     data object Pro : AppScreen()
@@ -57,6 +56,8 @@ sealed class AppScreen {
     data object BatteryInfo : AppScreen()
     data object DataUsage : AppScreen()
     data object ManageApps : AppScreen()
+    data object FileAnalysis : AppScreen()
+    data object DuplicateVideos : AppScreen()
 }
 
 @Composable
@@ -99,6 +100,7 @@ fun MainAppContent() {
     var permissionsReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
     var appControlReturn by remember { mutableStateOf<AppScreen>(AppScreen.Toolbox) }
     var hubReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
+    var fileAnalysisReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
     val context = LocalContext.current
     val app = context.applicationContext as android.app.Application
     val appLockManager = remember { AppLockManager(app) }
@@ -185,9 +187,11 @@ fun MainAppContent() {
             AppScreen.BatteryInfo, AppScreen.DataUsage, AppScreen.ManageApps -> hubReturn
             AppScreen.AppControl -> appControlReturn
             AppScreen.Uninstall -> uninstallReturn
-            AppScreen.VideoTools, AppScreen.MediaHub, AppScreen.SimilarPhotos, AppScreen.MediaCompress,
-            AppScreen.Duplicates -> mediaHubReturn
+            AppScreen.VideoTools, AppScreen.MediaHub, AppScreen.MediaCompress,
+            AppScreen.Duplicates, AppScreen.DuplicateVideos -> mediaHubReturn
             AppScreen.DuplicatePhotos -> dupPhotosReturn
+            AppScreen.FileAnalysis -> fileAnalysisReturn
+            AppScreen.DuplicateVideos -> mediaHubReturn
             AppScreen.Permissions -> permissionsReturn
             else -> AppScreen.Storage
         }
@@ -260,6 +264,10 @@ fun MainAppContent() {
                 onNavigateToManageApps = {
                     hubReturn = AppScreen.Storage
                     currentScreen = AppScreen.ManageApps
+                },
+                onNavigateToFileAnalysis = {
+                    fileAnalysisReturn = AppScreen.Storage
+                    currentScreen = AppScreen.FileAnalysis
                 }
             )
         }
@@ -359,6 +367,10 @@ fun MainAppContent() {
                             dupPhotosReturn = AppScreen.Toolbox
                             AppScreen.DuplicatePhotos
                         }
+                        "file_analysis" -> {
+                            fileAnalysisReturn = AppScreen.Toolbox
+                            AppScreen.FileAnalysis
+                        }
                         "data_usage" -> AppScreen.DataUsage
                         "battery" -> AppScreen.BatteryInfo
                         "security_scan" -> AppScreen.SecurityScan
@@ -382,15 +394,20 @@ fun MainAppContent() {
                 onOpen = { id ->
                     mediaHubReturn = AppScreen.MediaCleanHub
                     currentScreen = when (id) {
-                        "dup_photos" -> {
+                        "dup_photos", "similar" -> {
+                            // "similar" eski kısayollar tek yinelenen-foto ekranına yönlendirilir
                             dupPhotosReturn = AppScreen.MediaCleanHub
                             AppScreen.DuplicatePhotos
                         }
                         "media_hub" -> AppScreen.MediaHub
                         "video" -> AppScreen.VideoTools
-                        "similar" -> AppScreen.SimilarPhotos
                         "duplicates" -> AppScreen.Duplicates
+                        "dup_videos" -> AppScreen.DuplicateVideos
                         "compress" -> AppScreen.MediaCompress
+                        "file_analysis" -> {
+                            fileAnalysisReturn = AppScreen.MediaCleanHub
+                            AppScreen.FileAnalysis
+                        }
                         else -> AppScreen.MediaCleanHub
                     }
                 }
@@ -424,13 +441,6 @@ fun MainAppContent() {
         AppScreen.MediaHub -> {
             MediaHubScreen(application = app, onNavigateBack = { currentScreen = mediaHubReturn })
         }
-        AppScreen.SimilarPhotos -> {
-            SimilarPhotosScreen(
-                application = app,
-                onNavigateBack = { currentScreen = mediaHubReturn },
-                onRequirePro = { currentScreen = AppScreen.Pro }
-            )
-        }
         AppScreen.MediaCompress -> {
             MediaCompressScreen(
                 application = app,
@@ -451,6 +461,32 @@ fun MainAppContent() {
             DuplicatePhotosScreen(
                 application = app,
                 onNavigateBack = { currentScreen = dupPhotosReturn }
+            )
+        }
+        AppScreen.FileAnalysis -> {
+            FileAnalysisScreen(
+                application = app,
+                onNavigateBack = { currentScreen = fileAnalysisReturn },
+                onOpenLargeFiles = { currentScreen = AppScreen.LargeFiles },
+                onOpenDuplicatePhotos = {
+                    dupPhotosReturn = AppScreen.FileAnalysis
+                    currentScreen = AppScreen.DuplicatePhotos
+                },
+                onOpenDuplicates = {
+                    mediaHubReturn = AppScreen.FileAnalysis
+                    currentScreen = AppScreen.Duplicates
+                },
+                onOpenMediaClean = {
+                    mediaCleanReturn = AppScreen.FileAnalysis
+                    currentScreen = AppScreen.MediaCleanHub
+                },
+                onOpenApk = { currentScreen = AppScreen.ApkRemnants }
+            )
+        }
+        AppScreen.DuplicateVideos -> {
+            DuplicateVideosScreen(
+                application = app,
+                onNavigateBack = { currentScreen = mediaHubReturn }
             )
         }
         AppScreen.Pro -> {

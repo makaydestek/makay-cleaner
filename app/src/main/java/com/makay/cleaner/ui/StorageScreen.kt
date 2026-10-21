@@ -94,7 +94,8 @@ fun StorageScreen(
     onNavigateToBattery: () -> Unit = {},
     onNavigateToDataUsage: () -> Unit = {},
     onNavigateToPrivacy: () -> Unit = {},
-    onNavigateToManageApps: () -> Unit = {}
+    onNavigateToManageApps: () -> Unit = {},
+    onNavigateToFileAnalysis: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -371,7 +372,8 @@ fun StorageScreen(
                             "docs" -> onNavigateToLargeFiles()
                             else -> onNavigateToCleanerHub()
                         }
-                    }
+                    },
+                    onOpenDetailedAnalysis = onNavigateToFileAnalysis
                 )
             }
 
@@ -403,6 +405,7 @@ fun StorageScreen(
                 expanded = expandedCategory == "clean",
                 onToggle = { expandedCategory = if (expandedCategory == "clean") null else "clean" },
                 actions = listOf(
+                    "Dosya analizi" to onNavigateToFileAnalysis,
                     "Ayrıntılı temizleyici" to onNavigateToCleanerHub,
                     "Önbellek" to onNavigateToCache,
                     "Büyük dosya" to onNavigateToLargeFiles,
@@ -582,7 +585,8 @@ private fun HomeStorageCompact(
     catTotal: Long,
     isLoading: Boolean,
     hasPermission: Boolean,
-    onCategoryClick: (String) -> Unit
+    onCategoryClick: (String) -> Unit,
+    onOpenDetailedAnalysis: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -627,6 +631,12 @@ private fun HomeStorageCompact(
                                     Text(cat.name, color = homeTextSecondary(), fontSize = 12.sp, maxLines = 1)
                                     Text(cat.sizeFormatted, color = homeTextPrimary(), fontSize = 12.sp)
                                 }
+                            }
+                            TextButton(
+                                onClick = onOpenDetailedAnalysis,
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("Detaylı dosya analizi →", fontSize = 12.sp)
                             }
                         }
                     }

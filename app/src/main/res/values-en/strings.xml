@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">Makay Cleaner</string>
     <string name="storage_analysis">Storage Analysis</string>
+    <string name="file_analysis">File analysis</string>
     <string name="settings">Settings</string>
     <string name="permission_required">Storage Permission Required</string>
     <string name="permission_body">Makay Cleaner needs storage access to scan and clean junk. Your files stay on device; system files are never deleted.</string>

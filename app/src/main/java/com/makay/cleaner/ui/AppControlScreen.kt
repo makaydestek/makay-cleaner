@@ -181,6 +181,7 @@ fun ToolboxScreen(
                 Tool("apk", null, "📦", "APK sil", Color(0xFFFFCC00)),
                 Tool("corpse", null, "🧩", "Artık dosya", Color(0xFF3F8CFF)),
                 Tool("dup_photos", null, "🖼️", "Fotoğrafları sil", Color(0xFFFF6B35)),
+                Tool("file_analysis", null, "📊", "Dosya analizi", Color(0xFF64D2FF)),
                 Tool("system_cleaner", null, "🧹", "Sistem junk", Color(0xFFBF5AF2))
             )
         ),

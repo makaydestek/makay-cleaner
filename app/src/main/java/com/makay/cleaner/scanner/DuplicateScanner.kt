@@ -9,6 +9,10 @@ import java.security.MessageDigest
 
 class DuplicateScanner(private val context: Context) {
 
+    enum class FileTypeFilter {
+        ALL, IMAGES, VIDEOS, AUDIO, DOCS, APK
+    }
+
     data class DuplicateGroup(
         val hash: String,
         val sizeBytes: Long,
@@ -18,7 +22,8 @@ class DuplicateScanner(private val context: Context) {
     fun scan(
         roots: List<File> = defaultRoots(),
         minSizeBytes: Long = 50 * 1024L,
-        maxFiles: Int = 4000
+        maxFiles: Int = 4000,
+        typeFilter: FileTypeFilter = FileTypeFilter.ALL
     ): List<DuplicateGroup> {
         val bySize = LinkedHashMap<Long, MutableList<File>>()
         var scanned = 0
@@ -27,6 +32,7 @@ class DuplicateScanner(private val context: Context) {
             walk(root) { file ->
                 if (scanned >= maxFiles) return@walk
                 if (!file.isFile || file.length() < minSizeBytes) return@walk
+                if (!matchesType(file, typeFilter)) return@walk
                 if (!SystemFileGuard.canDelete(file)) {
                     SystemFileGuard.recordSkipped()
                     return@walk
@@ -50,6 +56,23 @@ class DuplicateScanner(private val context: Context) {
             }
         }
         return groups.sortedByDescending { it.sizeBytes * (it.files.size - 1) }
+    }
+
+    private fun matchesType(file: File, filter: FileTypeFilter): Boolean {
+        if (filter == FileTypeFilter.ALL) return true
+        val ext = file.extension.lowercase()
+        return when (filter) {
+            FileTypeFilter.IMAGES -> ext in setOf(
+                "jpg", "jpeg", "png", "webp", "heic", "heif", "gif", "bmp", "dng", "raw", "tif", "tiff"
+            )
+            FileTypeFilter.VIDEOS -> ext in setOf("mp4", "mkv", "avi", "mov", "webm", "3gp", "m4v")
+            FileTypeFilter.AUDIO -> ext in setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "wma")
+            FileTypeFilter.DOCS -> ext in setOf(
+                "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf"
+            )
+            FileTypeFilter.APK -> ext == "apk"
+            FileTypeFilter.ALL -> true
+        }
     }
 
     private fun defaultRoots(): List<File> {
