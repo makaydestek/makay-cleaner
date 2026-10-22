@@ -297,9 +297,12 @@ object JunkScanHelper {
     }
 
     /**
-     * Temizlik skoru: junk + kullanılmayan uygulama + depolama doluluk.
-     * Sistem kilitli önbellek skora girmez.
+     * Temizlik skoru: yalnızca silinebilir junk.
+     * Hariç tutulanlar, kilitli sistem önbelleği, kullanılmayan uygulamalar
+     * ve depolama doluluğu skora girmez — bunlar ayrı ekranlarda gösterilir.
+     * Silinebilir junk ≤ 1 MB ise skor %100’dür.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun optimizationScore(
         junkBytes: Long,
         storageUsagePercent: Float = 0f,
@@ -315,20 +318,7 @@ object JunkScanHelper {
             junkMb < 4096 -> 15
             else -> 20
         }
-        val unusedPenalty = when {
-            unusedApps <= 0 -> 0
-            unusedApps < 3 -> 2
-            unusedApps < 8 -> 5
-            unusedApps < 15 -> 8
-            else -> 12
-        }
-        val storagePenalty = when {
-            storageUsagePercent < 70f -> 0
-            storageUsagePercent < 85f -> 3
-            storageUsagePercent < 95f -> 6
-            else -> 10
-        }
-        return (100 - junkPenalty - unusedPenalty - storagePenalty).coerceIn(35, 100)
+        return (100 - junkPenalty).coerceIn(35, 100)
     }
 
     private fun cacheEntries(context: Context): List<AppCacheRepository.CacheFileEntry> = try {

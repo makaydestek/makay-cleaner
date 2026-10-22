@@ -20,18 +20,19 @@ class JunkScanHelperTest {
     }
 
     @Test
-    fun unusedAppsLowerScore() {
+    fun unusedAppsDoNotLowerScore() {
         val junk = 100L * 1024 * 1024
         val base = JunkScanHelper.optimizationScore(junk, unusedApps = 0)
         val withUnused = JunkScanHelper.optimizationScore(junk, unusedApps = 12)
-        assertTrue(withUnused < base)
+        assertEquals(base, withUnused)
     }
 
     @Test
-    fun highStorageUsageLowersScore() {
+    fun highStorageUsageDoesNotLowerScore() {
         val base = JunkScanHelper.optimizationScore(0L, storageUsagePercent = 50f)
         val full = JunkScanHelper.optimizationScore(0L, storageUsagePercent = 96f)
-        assertTrue(full < base)
+        assertEquals(100, base)
+        assertEquals(100, full)
     }
 
     @Test

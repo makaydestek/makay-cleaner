@@ -33,6 +33,7 @@ fun SettingsScreen(
     onNavigateToSecurity: () -> Unit = {},
     onNavigateToPro: () -> Unit = {},
     onNavigateToRecycleBin: () -> Unit = {},
+    onNavigateToExclusions: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory(application))
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -343,6 +344,16 @@ fun SettingsScreen(
                 idle = MaterialTheme.colorScheme.primary
             ) {
                 Text("🗑️ Çöp kutusu", style = MaterialTheme.typography.titleMedium)
+            }
+
+            TvActionButton(
+                onClick = onNavigateToExclusions,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                idle = MaterialTheme.colorScheme.primary
+            ) {
+                Text("🚫 Hariç tutulanlar", style = MaterialTheme.typography.titleMedium)
             }
 
             if (ProManager.isProUiVisible()) {

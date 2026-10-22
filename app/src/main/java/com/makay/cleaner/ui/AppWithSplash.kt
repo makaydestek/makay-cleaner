@@ -38,6 +38,7 @@ sealed class AppScreen {
     data object Suggestions : AppScreen()
     data object Toolbox : AppScreen()
     data object RecycleBin : AppScreen()
+    data object Exclusions : AppScreen()
     data object Duplicates : AppScreen()
     data object SystemCleaner : AppScreen()
     data object CorpseFinder : AppScreen()
@@ -91,6 +92,7 @@ fun AppWithSplash() {
 fun MainAppContent() {
     var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
     var recycleReturn by remember { mutableStateOf<AppScreen>(AppScreen.Toolbox) }
+    var exclusionsReturn by remember { mutableStateOf<AppScreen>(AppScreen.Settings) }
     var dupPhotosReturn by remember { mutableStateOf<AppScreen>(AppScreen.Toolbox) }
     var mediaHubReturn by remember { mutableStateOf<AppScreen>(AppScreen.MediaCleanHub) }
     var mediaCleanReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
@@ -180,6 +182,7 @@ fun MainAppContent() {
             AppScreen.Notifications, AppScreen.Pro -> AppScreen.Settings
             AppScreen.Security -> securityReturn
             AppScreen.RecycleBin -> recycleReturn
+            AppScreen.Exclusions -> exclusionsReturn
             AppScreen.SystemCleaner, AppScreen.CorpseFinder, AppScreen.ApkRemnants -> AppScreen.Toolbox
             AppScreen.MediaCleanHub -> mediaCleanReturn
             AppScreen.CleanerHub -> cleanerReturn
@@ -224,6 +227,10 @@ fun MainAppContent() {
                 onNavigateToRecycleBin = {
                     recycleReturn = AppScreen.Storage
                     currentScreen = AppScreen.RecycleBin
+                },
+                onNavigateToExclusions = {
+                    exclusionsReturn = AppScreen.Storage
+                    currentScreen = AppScreen.Exclusions
                 },
                 onNavigateToDuplicatePhotos = {
                     dupPhotosReturn = AppScreen.Storage
@@ -299,6 +306,10 @@ fun MainAppContent() {
                 onNavigateToRecycleBin = {
                     recycleReturn = AppScreen.Settings
                     currentScreen = AppScreen.RecycleBin
+                },
+                onNavigateToExclusions = {
+                    exclusionsReturn = AppScreen.Settings
+                    currentScreen = AppScreen.Exclusions
                 }
             )
         }
@@ -423,6 +434,12 @@ fun MainAppContent() {
             RecycleBinScreen(
                 application = app,
                 onNavigateBack = { currentScreen = recycleReturn }
+            )
+        }
+        AppScreen.Exclusions -> {
+            ExclusionsScreen(
+                application = app,
+                onNavigateBack = { currentScreen = exclusionsReturn }
             )
         }
         AppScreen.Duplicates -> {

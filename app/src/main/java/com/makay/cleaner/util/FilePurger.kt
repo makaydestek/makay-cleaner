@@ -21,6 +21,9 @@ object FilePurger {
     fun canRemove(context: Context, file: File): Boolean {
         if (!file.exists()) return false
         if (!SystemFileGuard.canDelete(file)) return false
+        if (com.makay.cleaner.data.CleanExclusionsRepository(context).isUserExcluded(file.absolutePath)) {
+            return false
+        }
         if (isOwnAppFile(context, file)) return true
         if (isOtherAppSandboxPath(file.absolutePath)) {
             // Android 13+: Android/data / obb üçüncü parti uygulamaya kapalı
@@ -35,9 +38,14 @@ object FilePurger {
     }
 
     /** İzin kontrolü olmadan silmeyi dene (Android/data listelenebiliyorsa). */
-    fun tryDelete(file: File): Boolean {
+    fun tryDelete(file: File, context: Context? = null): Boolean {
         if (!file.exists()) return true
         if (!SystemFileGuard.canDelete(file)) return false
+        if (context != null &&
+            com.makay.cleaner.data.CleanExclusionsRepository(context).isUserExcluded(file.absolutePath)
+        ) {
+            return false
+        }
         runCatching {
             file.setWritable(true)
             file.setReadable(true)

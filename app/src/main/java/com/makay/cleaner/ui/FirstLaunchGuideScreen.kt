@@ -48,10 +48,10 @@ fun FirstLaunchGuideScreen(
             "3/4"
         ),
         Triple(
-            LanguageManager.t("Xiaomi farkı", "Xiaomi difference", context),
+            LanguageManager.t("Hariç tutulanlar", "Exclusions", context),
             LanguageManager.t(
-                "Xiaomi sistem önbelleğini de sayar. Makay sideload olduğu için o kilitli kısmı dosya dosya silemez.",
-                "Xiaomi also counts system cache. As a sideload app Makay cannot delete that locked part file by file.",
+                "Sistem klasörleri Hariç tutulanlar’da listelenir; skor bunları saymaz. İsterseniz kendi yollarınızı da ekleyebilirsiniz. Silinebilir junk yoksa skor %100’dür.",
+                "System folders are listed under Exclusions; the score ignores them. You can add your own paths. With no removable junk the score is 100%.",
                 context
             ),
             "4/4"

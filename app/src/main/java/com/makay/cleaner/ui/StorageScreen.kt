@@ -85,6 +85,7 @@ fun StorageScreen(
     onNavigateToSuggestions: () -> Unit = {},
     onNavigateToToolbox: () -> Unit = {},
     onNavigateToRecycleBin: () -> Unit = {},
+    onNavigateToExclusions: () -> Unit = {},
     onNavigateToDuplicatePhotos: () -> Unit = {},
     onNavigateToMediaClean: () -> Unit = {},
     onNavigateToPermissions: () -> Unit = {},
@@ -140,13 +141,14 @@ fun StorageScreen(
     }
 
     val usagePercent = uiState.storageInfo?.usagePercent ?: 0f
-    val healthScore = JunkScanHelper.optimizationScore(junkBytes, usagePercent, unusedApps)
+    val healthScore = JunkScanHelper.optimizationScore(junkBytes)
     val statusSubtitle = when {
         optimizing -> "Optimizasyon çalışıyor"
         !scanned || uiState.isLoading -> "Cihaz durumu kontrol ediliyor"
         !hasPermission -> "Devam etmek için depolama izni gerekli"
         healthScore >= 100 && junkBytes <= 0L -> "Cihaz temiz görünüyor"
         junkBytes > 0L -> "${formatBytes(junkBytes)} silinebilir alan"
+        lockedBytes > 0L -> "Silinemeyenler hariç tutulanlarda"
         else -> "Hızlı optimizasyon önerilir"
     }
 
@@ -279,9 +281,27 @@ fun StorageScreen(
             }
             if (showWhy && (junkBytes > 0L || lockedBytes > 0L)) {
                 HomeWhyRow(
-                    label = if (junkBytes > 0L) "Kalan ${formatBytes(junkBytes)}" else "Silinemeyen önbellek",
+                    label = if (junkBytes > 0L) "Kalan ${formatBytes(junkBytes)}" else "Hariç tutulanlar",
                     onWhy = { whyDialog = true }
                 )
+                Spacer(Modifier.height(10.dp))
+            }
+            if (hasPermission && scanned) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = homeCard()),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, homeOutline().copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    CompactStatusRow(
+                        title = if (lockedBytes > 0L)
+                            "Hariç tutulanlar · ~${formatBytes(lockedBytes)} kilitli"
+                        else
+                            "Hariç tutulanlar",
+                        action = "Görüntüle",
+                        onClick = onNavigateToExclusions
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
             }
             if (whyDialog) {
@@ -306,14 +326,20 @@ fun StorageScreen(
                             }
                             if (lockedBytes > 0L) {
                                 Text(
-                                    "Sistem sayacı yaklaşık ${formatBytes(lockedBytes)} ek önbellek gösterir. Bu bir dosya listesi değil. Xiaomi ve Samsung bunu sistem uygulaması oldukları için silebilir; sideload uygulama silemez. Skor bu alanı saymaz.",
+                                    "Sistem sayacı yaklaşık ${formatBytes(lockedBytes)} ek önbellek gösterir. Bu alanlar Hariç tutulanlar listesinde. Skor bunları saymaz — silinebilir junk yoksa skor %100’dür.",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = { whyDialog = false }) { Text("Tamam") }
+                        TextButton(onClick = {
+                            whyDialog = false
+                            onNavigateToExclusions()
+                        }) { Text("Hariç tutulanlar") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { whyDialog = false }) { Text("Kapat") }
                     }
                 )
             }
@@ -409,7 +435,8 @@ fun StorageScreen(
                     "Ayrıntılı temizleyici" to onNavigateToCleanerHub,
                     "Önbellek" to onNavigateToCache,
                     "Büyük dosya" to onNavigateToLargeFiles,
-                    "Çöp kutusu" to onNavigateToRecycleBin
+                    "Çöp kutusu" to onNavigateToRecycleBin,
+                    "Hariç tutulanlar" to onNavigateToExclusions
                 )
             )
             Spacer(Modifier.height(10.dp))
