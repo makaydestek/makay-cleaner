@@ -68,7 +68,8 @@ fun ConfirmDeleteDialog(
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = if (moveToTrash)
-                        "Dosyalar 48 saat çöp kutusunda tutulur; geri yükleyebilirsiniz."
+                        "Dosyalar orijinal konumdan kaldırılıp 48 saat uygulama çöp kutusunda tutulur. " +
+                            "Galeri / F Dosya Yöneticisi bir süre eski indeksi gösterebilir; kısa süre sonra yenilenir."
                     else
                         "Bu işlem geri alınamaz.",
                     style = MaterialTheme.typography.bodySmall,

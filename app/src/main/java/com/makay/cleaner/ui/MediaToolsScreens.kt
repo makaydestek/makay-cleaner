@@ -139,11 +139,23 @@ fun MediaHubScreen(
                             }
                         }
                     }
-                    CleaningRecorder.record(application, target.title, saved, deleted)
-                    CleanResultTracker.record(target.title, deleted, saved)
-                    summary = CleanResultTracker.last
+                    if (deleted > 0) {
+                        CleaningRecorder.record(application, target.title, saved, deleted)
+                        CleanResultTracker.record(target.title, deleted, saved)
+                        summary = CleanResultTracker.last
+                    }
                     buckets = withContext(Dispatchers.IO) { repo.scanBuckets() }
-                    Toast.makeText(context, "$deleted dosya taşındı", Toast.LENGTH_SHORT).show()
+                    val expected = target.fileCount
+                    val failed = (expected - deleted).coerceAtLeast(0)
+                    Toast.makeText(
+                        context,
+                        when {
+                            deleted == 0 -> "Hiçbir dosya taşınamadı (izin / sistem koruması)"
+                            failed > 0 -> "$deleted taşındı, $failed taşınamadı"
+                            else -> "$deleted dosya çöp kutusuna taşındı"
+                        },
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             },
             onDismiss = { pendingBucket = null },

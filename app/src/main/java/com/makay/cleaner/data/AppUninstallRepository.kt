@@ -205,13 +205,22 @@ class AppUninstallRepository(private val context: Context) {
      * Kaldırılan uygulamanın harici kalıntı dosyalarını temizler.
      * @return silinen bayt miktarı
      */
+    /**
+     * @return Triple(spaceSaved, filesDeleted, inaccessibleRoots)
+     * Android 11+ çoğu cihazda Android/data|obb|media üçüncü partiye kapalıdır.
+     */
     fun cleanLeftoverFiles(packageName: String): Pair<Long, Int> {
-        // Sistem uygulamaları için kalıntı temizliği yapılmaz
+        val (saved, count, _) = cleanLeftoverFilesDetailed(packageName)
+        return saved to count
+    }
+
+    fun cleanLeftoverFilesDetailed(packageName: String): Triple<Long, Int, List<String>> {
         if (!SystemFileGuard.canCleanPackageCache(context, packageName)) {
-            return 0L to 0
+            return Triple(0L, 0, emptyList())
         }
         var spaceSaved = 0L
         var filesDeleted = 0
+        val inaccessible = mutableListOf<String>()
         val external = Environment.getExternalStorageDirectory()
         val leftoverRoots = listOf(
             File(external, "Android/data/$packageName"),
@@ -223,12 +232,32 @@ class AppUninstallRepository(private val context: Context) {
 
         leftoverRoots.forEach { root ->
             if (SystemFileGuard.isProtectedPath(root.absolutePath)) return@forEach
+            if (!root.exists()) return@forEach
+            // Klasör var ama listelenemiyor → OS sandbox
+            if (root.isDirectory && root.listFiles() == null) {
+                inaccessible += root.name
+                return@forEach
+            }
+            if (com.makay.cleaner.util.FilePurger.isOtherAppSandboxPath(root.absolutePath) &&
+                android.os.Build.VERSION.SDK_INT >= 33
+            ) {
+                // API 33+: data/obb neredeyse her zaman erişilemez
+                if (root.absolutePath.contains("/Android/data/", ignoreCase = true) ||
+                    root.absolutePath.contains("/Android/obb/", ignoreCase = true)
+                ) {
+                    inaccessible += root.name
+                    return@forEach
+                }
+            }
             val (saved, count) = deleteRecursivelyCounted(root)
             spaceSaved += saved
             filesDeleted += count
+            if (root.exists() && count == 0 && saved == 0L) {
+                inaccessible += root.name
+            }
         }
 
-        return spaceSaved to filesDeleted
+        return Triple(spaceSaved, filesDeleted, inaccessible.distinct())
     }
 
     /**
@@ -255,13 +284,18 @@ class AppUninstallRepository(private val context: Context) {
             if (stillInstalled) {
                 true
             } else {
-                val result = cleanLeftoverFiles(packageName)
-                totalSaved += result.first
-                totalCount += result.second
-                if (result.first > 0 || result.second > 0) {
-                    CleaningRecorder.record(context, "Uygulama Kalıntıları", result.first, result.second)
+                val (saved, count, inaccessible) = cleanLeftoverFilesDetailed(packageName)
+                totalSaved += saved
+                totalCount += count
+                if (saved > 0 || count > 0) {
+                    CleaningRecorder.record(context, "Uygulama Kalıntıları", saved, count)
                 }
-                cleaned += packageName
+                // Erişilemeyen kökleri not et (Toast için paket adına eklenir)
+                if (inaccessible.isNotEmpty()) {
+                    cleaned += "$packageName (erişilemeyen: ${inaccessible.joinToString(",")})"
+                } else {
+                    cleaned += packageName
+                }
                 false
             }
         }

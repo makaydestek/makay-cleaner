@@ -445,12 +445,20 @@ fun SecurityScanScreen(
                         hasStorage
                     )
                 )
-                1 -> checks = checks + CheckItem(
-                    "privacy",
-                    "Gizlilik & kilit",
-                    "Uygulama kilidi / gizlilik ayarları",
-                    true
-                )
+                1 -> {
+                    val lockOn = try {
+                        com.makay.cleaner.security.AppLockManager(application).isAnyLockEnabled()
+                    } catch (_: Exception) {
+                        false
+                    }
+                    checks = checks + CheckItem(
+                        "privacy",
+                        "Gizlilik & kilit",
+                        if (lockOn) "Uygulama kilidi açık"
+                        else "Uygulama kilidi kapalı · Ayarlardan açın",
+                        lockOn
+                    )
+                }
                 2 -> {
                     junk = withContext(Dispatchers.IO) { JunkScanHelper.scan(application) }
                     val bytes = junk!!.totalBytes
@@ -740,6 +748,16 @@ fun PrivacyHubScreen(
     onOpenAppLock: () -> Unit,
     onOpenPermissions: () -> Unit
 ) {
+    val context = LocalContext.current
+    val lockOn = remember {
+        com.makay.cleaner.security.AppLockManager(context).isAnyLockEnabled()
+    }
+    fun permStatus(permission: String): String {
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, permission
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        return if (granted) "İzin verildi" else "İzin yok / istenmedi"
+    }
     Scaffold(
         containerColor = Color.Black,
         topBar = {
@@ -770,17 +788,23 @@ fun PrivacyHubScreen(
                 Column(Modifier.padding(16.dp)) {
                     Text("Hassas işlemler", fontWeight = FontWeight.Bold, color = Color.White)
                     Text(
-                        "Konum, kişi, mikrofon ve telefon izinleri — sistem ayarlarında bu uygulama için ince ayar",
+                        "Anlık izin durumu (sistemle tutarlı). Değiştirmek için satıra dokunun.",
                         color = Color(0xFF8E8E93),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    PrivacyRow("📍", "Konum", "Sistem konum izinleri") {
+                    PrivacyRow("📍", "Konum", permStatus(android.Manifest.permission.ACCESS_FINE_LOCATION)) {
                         openAppSettings(it)
                     }
-                    PrivacyRow("👤", "Kişiler", "Kişi erişimi") { openAppSettings(it) }
-                    PrivacyRow("📞", "Arama kayıtları", "Telefon izinleri") { openAppSettings(it) }
-                    PrivacyRow("🎤", "Mikrofon", "Mikrofon erişimi") { openAppSettings(it) }
+                    PrivacyRow("👤", "Kişiler", permStatus(android.Manifest.permission.READ_CONTACTS)) {
+                        openAppSettings(it)
+                    }
+                    PrivacyRow("📞", "Telefon", permStatus(android.Manifest.permission.READ_PHONE_STATE)) {
+                        openAppSettings(it)
+                    }
+                    PrivacyRow("🎤", "Mikrofon", permStatus(android.Manifest.permission.RECORD_AUDIO)) {
+                        openAppSettings(it)
+                    }
                     TextButton(
                         onClick = onOpenPermissions,
                         modifier = Modifier.fillMaxWidth()
@@ -789,11 +813,15 @@ fun PrivacyHubScreen(
                     }
                 }
             }
-            PrivacyLinkCard("Uygulama kilidi", "PIN / biyometrik kilit", onOpenAppLock)
+            PrivacyLinkCard(
+                "Uygulama kilidi",
+                if (lockOn) "Açık — PIN / biyometrik" else "Kapalı — dokunarak ayarlayın",
+                onOpenAppLock
+            )
             PrivacyLinkCard("Özel izinler", "Makay Cleaner depolama ve medya izinleri", onOpenPermissions)
             PrivacyLinkCard(
                 "Gizlilik",
-                "Reklam yok — veriler cihazınızda kalır",
+                "Tarama ve temizlik cihazda kalır; buluta yüklenmez",
                 onOpenPermissions
             )
         }

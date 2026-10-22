@@ -38,32 +38,18 @@ private val HubCard = Color(0xFF1C1C1E)
 @Composable
 fun BatteryInfoScreen(onNavigateBack: () -> Unit) {
     val context = LocalContext.current
-    val battery = remember {
-        val intent = context.registerReceiver(
-            null,
-            android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        )
-        val levelRaw = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = (intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100).coerceAtLeast(1)
-        val pct = if (levelRaw >= 0) {
-            ((levelRaw * 100f) / scale).roundToInt().coerceIn(0, 100)
-        } else {
-            (context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager)
-                .getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).coerceIn(0, 100)
+    var battery by remember { mutableStateOf(readBatteryUi(context)) }
+    DisposableEffect(Unit) {
+        val filter = android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: Intent?) {
+                battery = readBatteryUi(context)
+            }
         }
-        val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-        val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
-        val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-            status == BatteryManager.BATTERY_STATUS_FULL ||
-            plugged != 0
-        BatteryUi(
-            percent = pct,
-            charging = charging,
-            health = intent?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1) ?: -1,
-            tempTenths = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1,
-            voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1,
-            plugged = plugged
-        )
+        context.registerReceiver(receiver, filter)
+        onDispose {
+            runCatching { context.unregisterReceiver(receiver) }
+        }
     }
     val fill = battery.percent / 100f
     val statusText = when {
@@ -77,13 +63,15 @@ fun BatteryInfoScreen(onNavigateBack: () -> Unit) {
         BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Kablosuz"
         else -> "—"
     }
+    // EXTRA_HEALTH kapasite sağlığı (%) değildir — anlık durum kodudur
     val healthText = when (battery.health) {
-        BatteryManager.BATTERY_HEALTH_GOOD -> "İyi"
+        BatteryManager.BATTERY_HEALTH_GOOD -> "Normal"
         BatteryManager.BATTERY_HEALTH_OVERHEAT -> "Aşırı sıcak"
-        BatteryManager.BATTERY_HEALTH_DEAD -> "Ölü"
+        BatteryManager.BATTERY_HEALTH_DEAD -> "Arızalı"
         BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> "Aşırı voltaj"
-        BatteryManager.BATTERY_HEALTH_COLD -> "Soğuk"
-        else -> "Bilinmiyor"
+        BatteryManager.BATTERY_HEALTH_COLD -> "Çok soğuk"
+        BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE -> "Belirsiz hata"
+        else -> "Bildirilmedi"
     }
 
     Scaffold(
@@ -143,7 +131,7 @@ fun BatteryInfoScreen(onNavigateBack: () -> Unit) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     FactRow("Durum", statusText)
                     FactRow("Bağlantı", plugText)
-                    FactRow("Sağlık", healthText)
+                    FactRow("Pil durumu (sistem kodu)", healthText)
                     if (battery.tempTenths > 0) {
                         FactRow("Sıcaklık", String.format("%.1f °C", battery.tempTenths / 10f))
                     }
@@ -176,7 +164,8 @@ fun BatteryInfoScreen(onNavigateBack: () -> Unit) {
                 }
             }
             Text(
-                "Kalan süre tahmini gösterilmez. Ayrıntılı grafik için sistem Pil ekranını kullanın.",
+                "“Pil durumu” kapasite aşınması (%) değildir; Android’in anlık durum kodudur. " +
+                    "Kalan süre tahmini gösterilmez. Ayrıntılı grafik için sistem Pil ekranını kullanın.",
                 color = Color(0xFF8E8E93),
                 fontSize = 12.sp
             )
@@ -184,16 +173,52 @@ fun BatteryInfoScreen(onNavigateBack: () -> Unit) {
     }
 }
 
+private fun readBatteryUi(context: Context): BatteryUi {
+    val intent = context.registerReceiver(
+        null,
+        android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+    )
+    val levelRaw = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    val scale = (intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100).coerceAtLeast(1)
+    val pct = if (levelRaw >= 0) {
+        ((levelRaw * 100f) / scale).roundToInt().coerceIn(0, 100)
+    } else {
+        (context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager)
+            .getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).coerceIn(0, 100)
+    }
+    val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+    val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+    val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+        status == BatteryManager.BATTERY_STATUS_FULL ||
+        plugged != 0
+    return BatteryUi(
+        percent = pct,
+        charging = charging,
+        health = intent?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1) ?: -1,
+        tempTenths = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1,
+        voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1,
+        plugged = plugged
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DataUsageScreen(onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     fun rx(v: Long) = if (v < 0) 0L else v
-    val mobileRx = remember { rx(TrafficStats.getMobileRxBytes()) }
-    val mobileTx = remember { rx(TrafficStats.getMobileTxBytes()) }
+    // TrafficStats: cihaz açılışından beri — faturalama dönemi değil
+    var tick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(5_000)
+            tick++
+        }
+    }
+    val mobileRx = remember(tick) { rx(TrafficStats.getMobileRxBytes()) }
+    val mobileTx = remember(tick) { rx(TrafficStats.getMobileTxBytes()) }
     val totalMobile = mobileRx + mobileTx
-    val totalRx = remember { rx(TrafficStats.getTotalRxBytes()) }
-    val totalTx = remember { rx(TrafficStats.getTotalTxBytes()) }
+    val totalRx = remember(tick) { rx(TrafficStats.getTotalRxBytes()) }
+    val totalTx = remember(tick) { rx(TrafficStats.getTotalTxBytes()) }
     val wifiRx = (totalRx - mobileRx).coerceAtLeast(0)
     val wifiTx = (totalTx - mobileTx).coerceAtLeast(0)
 
@@ -264,9 +289,15 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
                 Column {
                     Text(formatBytes(totalMobile), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Mobil veri (cihaz açılışından / sayaç sıfırından beri)",
+                        "Mobil veri — cihaz açılışından beri (TrafficStats)",
                         color = Color.White.copy(0.85f),
                         fontSize = 13.sp
+                    )
+                    Text(
+                        "Sistem Ayarları’ndaki aylık faturalama dönemiyle aynı değildir",
+                        color = Color.White.copy(0.65f),
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth()) {
@@ -330,10 +361,16 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
                         fontSize = 13.sp
                     )
                     Text(
-                        "Wi‑Fi (yaklaşık): ↓ ${formatBytes(wifiRx)} · ↑ ${formatBytes(wifiTx)}",
+                        "Wi‑Fi (yaklaşık = toplam − mobil): ↓ ${formatBytes(wifiRx)} · ↑ ${formatBytes(wifiTx)}",
                         color = Color(0xFF8E8E93),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 6.dp)
+                    )
+                    Text(
+                        "Aylık kota / operatör dönemi için sistem Veri kullanımı ekranına bakın. Sayaç yeniden başlatmada sıfırlanır.",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                     Text(
                         "Operatör tarife limiti okunamaz. Dönemsel kullanım için sistem Veri kullanımı ekranını açın.",

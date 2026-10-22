@@ -102,7 +102,9 @@ fun AppUninstallScreen(
 
                 item {
                     Text(
-                        text = "Kaldırılan uygulamaların Android/data, obb ve media klasörlerindeki kalıntı dosyaları otomatik temizlenir.",
+                        text = "Kaldırma sonrası erişilebilen kalıntılar (Download/<paket> vb.) temizlenir. " +
+                            "Android 11+ çoğu cihazda Android/data|obb klasörleri üçüncü parti uygulamaya kapalıdır; " +
+                            "bu klasörler F Dosya Yöneticisi’nde kalabilir — sistem Dosyalar / üretici aracı gerekir.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

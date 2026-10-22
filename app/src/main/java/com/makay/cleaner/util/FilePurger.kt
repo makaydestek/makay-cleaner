@@ -110,12 +110,27 @@ object FilePurger {
         category: String
     ): Boolean {
         if (!file.isFile) return false
-        if (trash != null) return trash.moveToTrash(file, category) && !file.exists()
-        runCatching { if (file.delete() && !file.exists()) return true }
+        val path = file.absolutePath
+        if (trash != null) {
+            val ok = trash.moveToTrash(file, category) && !file.exists()
+            // moveToTrash içinde MediaStoreSync var; yine de doğrula
+            if (ok) MediaStoreSync.notifyRemoved(context, path)
+            return ok
+        }
+        runCatching { if (file.delete() && !file.exists()) {
+            MediaStoreSync.notifyRemoved(context, path)
+            return true
+        } }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             runCatching { java.nio.file.Files.deleteIfExists(file.toPath()) }
         }
-        return (!file.exists()) || (deleteViaMediaStore(context, file) && !file.exists())
+        if (!file.exists()) {
+            MediaStoreSync.notifyRemoved(context, path)
+            return true
+        }
+        val viaStore = deleteViaMediaStore(context, file) && !file.exists()
+        if (viaStore) MediaStoreSync.notifyRemoved(context, path)
+        return viaStore
     }
 
     private fun removeDirectory(

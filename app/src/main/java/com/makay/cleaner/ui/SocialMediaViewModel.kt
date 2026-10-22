@@ -98,12 +98,14 @@ class SocialMediaViewModel(application: Application) : AndroidViewModel(applicat
             val trash = com.makay.cleaner.data.RecycleBinRepository(getApplication())
             com.makay.cleaner.util.SystemFileGuard.consumeSkippedCount()
 
+            val deletedIds = mutableSetOf<Long>()
             withContext(Dispatchers.IO) {
                 filesToDelete.forEach { file ->
                     val size = file.sizeBytes
                     if (trash.movePathToTrash(file.filePath, "Sosyal medya")) {
                         deletedCount++
                         saved += size
+                        deletedIds.add(file.id)
                     }
                 }
             }
@@ -113,12 +115,14 @@ class SocialMediaViewModel(application: Application) : AndroidViewModel(applicat
                 com.makay.cleaner.util.CleanResultTracker.record("Sosyal Medya", deletedCount, saved)
             }
 
-            val remainingFiles = _uiState.value.allFiles.filterNot { it.id in selectedIds }
+            // Yalnızca gerçekten taşınanlar listeden çıkar (iyimser UI yok)
+            val remainingFiles = _uiState.value.allFiles.filterNot { it.id in deletedIds }
             val filteredRemaining = remainingFiles.filter { file ->
                 (_uiState.value.selectedApp == null || file.app == _uiState.value.selectedApp) &&
                     (_uiState.value.selectedCategory == null || file.category == _uiState.value.selectedCategory)
             }
             val totalSize = remainingFiles.sumOf { it.sizeBytes }
+            val failed = selectedIds.size - deletedIds.size
 
             _uiState.value = _uiState.value.copy(
                 allFiles = remainingFiles,
@@ -126,7 +130,14 @@ class SocialMediaViewModel(application: Application) : AndroidViewModel(applicat
                 totalSize = totalSize,
                 totalSizeFormatted = formatBytes(totalSize),
                 selectedFiles = emptySet(),
-                message = "$deletedCount dosya çöp kutusuna taşındı (${formatBytes(saved)})"
+                message = when {
+                    deletedCount == 0 && failed > 0 ->
+                        "Hiçbir dosya taşınamadı (izin veya sistem koruması)"
+                    failed > 0 ->
+                        "$deletedCount taşındı, $failed taşınamadı (${formatBytes(saved)})"
+                    else ->
+                        "$deletedCount dosya çöp kutusuna taşındı (${formatBytes(saved)})"
+                }
             )
         }
     }

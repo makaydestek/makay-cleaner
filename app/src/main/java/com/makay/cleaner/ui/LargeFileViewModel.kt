@@ -131,6 +131,7 @@ class LargeFileViewModel(application: Application) : AndroidViewModel(applicatio
             val filesToDelete = _uiState.value.files.filter { it.id in selectedIds }
             var deletedCount = 0
             var saved = 0L
+            val deletedIds = mutableSetOf<Long>()
             val trash = com.makay.cleaner.data.RecycleBinRepository(getApplication())
             com.makay.cleaner.util.SystemFileGuard.consumeSkippedCount()
 
@@ -151,6 +152,7 @@ class LargeFileViewModel(application: Application) : AndroidViewModel(applicatio
                     if (ok) {
                         deletedCount++
                         saved += size
+                        deletedIds.add(file.id)
                     }
                 }
             }
@@ -160,23 +162,14 @@ class LargeFileViewModel(application: Application) : AndroidViewModel(applicatio
                 com.makay.cleaner.util.CleanResultTracker.record("Büyük Dosya", deletedCount, saved)
             }
 
+            val allRemaining = _uiState.value.files.filter { it.id !in deletedIds }
             val remainingFiles = applyFilters(
-                _uiState.value.files.filter { file ->
-                    if (file.id in selectedIds) {
-                        if (file.filePath.startsWith("content://")) false
-                        else java.io.File(file.filePath).exists()
-                    } else true
-                },
+                allRemaining,
                 _uiState.value.categoryFilter,
                 _uiState.value.maxAgeDays
             )
-            val allRemaining = _uiState.value.files.filter { file ->
-                if (file.id in selectedIds) {
-                    if (file.filePath.startsWith("content://")) false
-                    else java.io.File(file.filePath).exists()
-                } else true
-            }
             val totalSize = remainingFiles.sumOf { it.sizeBytes }
+            val failed = selectedIds.size - deletedIds.size
 
             _uiState.value = _uiState.value.copy(
                 files = allRemaining,
@@ -184,7 +177,14 @@ class LargeFileViewModel(application: Application) : AndroidViewModel(applicatio
                 totalSize = totalSize,
                 totalSizeFormatted = formatBytes(totalSize),
                 selectedFiles = emptySet(),
-                message = "$deletedCount dosya çöp kutusuna taşındı (${formatBytes(saved)})"
+                message = when {
+                    deletedCount == 0 && failed > 0 ->
+                        "Hiçbir dosya taşınamadı (izin veya sistem koruması)"
+                    failed > 0 ->
+                        "$deletedCount taşındı, $failed taşınamadı (${formatBytes(saved)})"
+                    else ->
+                        "$deletedCount dosya çöp kutusuna taşındı (${formatBytes(saved)})"
+                }
             )
         }
     }

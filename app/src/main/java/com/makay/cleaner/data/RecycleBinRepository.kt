@@ -8,6 +8,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.makay.cleaner.util.MediaStoreSync
 import com.makay.cleaner.util.SystemFileGuard
 import java.io.File
 import java.io.FileOutputStream
@@ -79,6 +80,8 @@ class RecycleBinRepository(private val context: Context) {
                 return false
             }
             if (!dest.exists()) return false
+            // F Manager / Galeri hayalet kaydı bırakmasın
+            MediaStoreSync.notifyRemoved(context, original)
             addIndex(
                 TrashItem(
                     id = id,
