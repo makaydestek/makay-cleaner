@@ -98,5 +98,15 @@
                 android:resource="@xml/widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".worker.GoodNightReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.makay.cleaner.GOOD_NIGHT_REMIND" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 </manifest>

@@ -59,6 +59,13 @@ sealed class AppScreen {
     data object ManageApps : AppScreen()
     data object FileAnalysis : AppScreen()
     data object DuplicateVideos : AppScreen()
+    data object PermissionMap : AppScreen()
+    data object ResourceUsage : AppScreen()
+    data object SoftHibernate : AppScreen()
+    data object BlurPhotos : AppScreen()
+    data object AppProfiles : AppScreen()
+    data object GoodNight : AppScreen()
+    data object BrowserCache : AppScreen()
 }
 
 @Composable
@@ -102,6 +109,7 @@ fun MainAppContent() {
     var permissionsReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
     var appControlReturn by remember { mutableStateOf<AppScreen>(AppScreen.Toolbox) }
     var hubReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
+    var toolsReturn by remember { mutableStateOf<AppScreen>(AppScreen.Toolbox) }
     var fileAnalysisReturn by remember { mutableStateOf<AppScreen>(AppScreen.Storage) }
     val context = LocalContext.current
     val app = context.applicationContext as android.app.Application
@@ -133,6 +141,22 @@ fun MainAppContent() {
             com.makay.cleaner.notification.NotificationManager.DEEP_DUP_PHOTOS -> {
                 dupPhotosReturn = AppScreen.Storage
                 AppScreen.DuplicatePhotos
+            }
+            com.makay.cleaner.notification.NotificationManager.DEEP_GOOD_NIGHT -> {
+                toolsReturn = AppScreen.Storage
+                AppScreen.GoodNight
+            }
+            com.makay.cleaner.notification.NotificationManager.DEEP_LIGHT_CLEAN -> {
+                val result = QuickCleanHelper.cleanAppCaches(context)
+                Toast.makeText(
+                    context,
+                    if (result.filesDeleted > 0)
+                        "Önbellek temizlendi: ${formatBytes(result.spaceSaved)}"
+                    else
+                        "Önbellek zaten temiz",
+                    Toast.LENGTH_SHORT
+                ).show()
+                AppScreen.Storage
             }
             else -> AppScreen.Storage
         }
@@ -188,13 +212,14 @@ fun MainAppContent() {
             AppScreen.CleanerHub -> cleanerReturn
             AppScreen.SecurityScan, AppScreen.PrivacyHub,
             AppScreen.BatteryInfo, AppScreen.DataUsage, AppScreen.ManageApps -> hubReturn
+            AppScreen.PermissionMap, AppScreen.ResourceUsage, AppScreen.SoftHibernate,
+            AppScreen.AppProfiles, AppScreen.GoodNight, AppScreen.BrowserCache -> toolsReturn
             AppScreen.AppControl -> appControlReturn
             AppScreen.Uninstall -> uninstallReturn
             AppScreen.VideoTools, AppScreen.MediaHub, AppScreen.MediaCompress,
-            AppScreen.Duplicates, AppScreen.DuplicateVideos -> mediaHubReturn
+            AppScreen.Duplicates, AppScreen.DuplicateVideos, AppScreen.BlurPhotos -> mediaHubReturn
             AppScreen.DuplicatePhotos -> dupPhotosReturn
             AppScreen.FileAnalysis -> fileAnalysisReturn
-            AppScreen.DuplicateVideos -> mediaHubReturn
             AppScreen.Permissions -> permissionsReturn
             else -> AppScreen.Storage
         }
@@ -275,6 +300,21 @@ fun MainAppContent() {
                 onNavigateToFileAnalysis = {
                     fileAnalysisReturn = AppScreen.Storage
                     currentScreen = AppScreen.FileAnalysis
+                },
+                onLightClean = {
+                    resumeScope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            QuickCleanHelper.cleanAppCaches(context)
+                        }
+                        Toast.makeText(
+                            context,
+                            if (result.filesDeleted > 0)
+                                "Önbellek temizlendi: ${formatBytes(result.spaceSaved)}"
+                            else
+                                "Önbellek zaten temiz",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             )
         }
@@ -329,18 +369,32 @@ fun MainAppContent() {
                 onSuggestionClick = { suggestion ->
                     SmartSuggestions(app).saveUserPreference(suggestion.category, 1)
                     when (suggestion.id) {
-                        "cleaning_reminder", "urgent_storage", "high_storage" -> {
-                            val result = QuickCleanHelper.cleanAppCaches(context)
-                            Toast.makeText(
-                                context,
-                                if (result.filesDeleted > 0)
-                                    "Temizlik tamamlandı: ${formatBytes(result.spaceSaved)}"
-                                else
-                                    "Önbellek zaten temiz",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            currentScreen = AppScreen.Cache
+                        "cleaning_reminder", "urgent_storage", "high_storage",
+                        "cache_cleanup", "cache_tip" -> {
+                            resumeScope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    QuickCleanHelper.cleanAppCaches(context)
+                                }
+                                Toast.makeText(
+                                    context,
+                                    if (result.filesDeleted > 0)
+                                        "Önbellek temizlendi: ${formatBytes(result.spaceSaved)}"
+                                    else
+                                        "Önbellek zaten temiz",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         }
+                        "wa_dup_videos" -> {
+                            mediaHubReturn = AppScreen.Suggestions
+                            currentScreen = AppScreen.DuplicateVideos
+                        }
+                        "large_files" -> currentScreen = AppScreen.LargeFiles
+                        "unused_apps" -> {
+                            appControlReturn = AppScreen.Suggestions
+                            currentScreen = AppScreen.AppControl
+                        }
+                        "social_media" -> currentScreen = AppScreen.SocialMedia
                         else -> currentScreen = when (suggestion.category) {
                             SmartSuggestions.Category.CACHE -> AppScreen.Cache
                             SmartSuggestions.Category.LARGE_FILES -> AppScreen.LargeFiles
@@ -349,6 +403,10 @@ fun MainAppContent() {
                                 AppScreen.AppControl
                             }
                             SmartSuggestions.Category.SOCIAL_MEDIA -> AppScreen.SocialMedia
+                            SmartSuggestions.Category.DUPLICATE_MEDIA -> {
+                                mediaHubReturn = AppScreen.Suggestions
+                                AppScreen.DuplicateVideos
+                            }
                             SmartSuggestions.Category.STORAGE -> AppScreen.Cache
                         }
                     }
@@ -392,6 +450,26 @@ fun MainAppContent() {
                         "manage_apps" -> AppScreen.ManageApps
                         "privacy" -> AppScreen.PrivacyHub
                         "permissions" -> AppScreen.Permissions
+                        "permission_map" -> {
+                            toolsReturn = AppScreen.Toolbox
+                            AppScreen.PermissionMap
+                        }
+                        "browser_cache" -> {
+                            toolsReturn = AppScreen.Toolbox
+                            AppScreen.BrowserCache
+                        }
+                        "resource_usage" -> {
+                            toolsReturn = AppScreen.Toolbox
+                            AppScreen.ResourceUsage
+                        }
+                        "profiles" -> {
+                            toolsReturn = AppScreen.Toolbox
+                            AppScreen.AppProfiles
+                        }
+                        "good_night" -> {
+                            toolsReturn = AppScreen.Toolbox
+                            AppScreen.GoodNight
+                        }
                         "app_lock" -> AppScreen.Security
                         else -> AppScreen.Toolbox
                     }
@@ -415,6 +493,7 @@ fun MainAppContent() {
                         "duplicates" -> AppScreen.Duplicates
                         "dup_videos" -> AppScreen.DuplicateVideos
                         "compress" -> AppScreen.MediaCompress
+                        "blur" -> AppScreen.BlurPhotos
                         "file_analysis" -> {
                             fileAnalysisReturn = AppScreen.MediaCleanHub
                             AppScreen.FileAnalysis
@@ -554,11 +633,66 @@ fun MainAppContent() {
                 onOpenPermissions = {
                     permissionsReturn = AppScreen.PrivacyHub
                     currentScreen = AppScreen.Permissions
+                },
+                onOpenPermissionMap = {
+                    toolsReturn = AppScreen.PrivacyHub
+                    currentScreen = AppScreen.PermissionMap
+                },
+                onOpenBrowserCache = {
+                    toolsReturn = AppScreen.PrivacyHub
+                    currentScreen = AppScreen.BrowserCache
+                },
+                onClearClipboard = {
+                    Toast.makeText(context, clearClipboardNow(context), Toast.LENGTH_SHORT).show()
                 }
             )
         }
         AppScreen.BatteryInfo -> {
-            BatteryInfoScreen(onNavigateBack = { currentScreen = hubReturn })
+            BatteryInfoScreen(
+                onNavigateBack = { currentScreen = hubReturn },
+                onOpenResourceUsage = {
+                    toolsReturn = AppScreen.BatteryInfo
+                    currentScreen = AppScreen.ResourceUsage
+                },
+                onOpenSoftHibernate = {
+                    toolsReturn = AppScreen.BatteryInfo
+                    currentScreen = AppScreen.SoftHibernate
+                },
+                onOpenGoodNight = {
+                    toolsReturn = AppScreen.BatteryInfo
+                    currentScreen = AppScreen.GoodNight
+                }
+            )
+        }
+        AppScreen.PermissionMap -> {
+            PermissionMapScreen(onNavigateBack = { currentScreen = toolsReturn })
+        }
+        AppScreen.ResourceUsage -> {
+            ResourceUsageScreen(
+                onNavigateBack = { currentScreen = toolsReturn },
+                onOpenSoftHibernate = {
+                    toolsReturn = AppScreen.ResourceUsage
+                    currentScreen = AppScreen.SoftHibernate
+                }
+            )
+        }
+        AppScreen.SoftHibernate -> {
+            SoftHibernateScreen(onNavigateBack = { currentScreen = toolsReturn })
+        }
+        AppScreen.BlurPhotos -> {
+            BlurPhotosScreen(
+                application = app,
+                onNavigateBack = { currentScreen = mediaHubReturn }
+            )
+        }
+        AppScreen.AppProfiles -> {
+            AppProfilesScreen(onNavigateBack = { currentScreen = toolsReturn })
+        }
+        AppScreen.GoodNight -> {
+            GoodNightScreen(onNavigateBack = { currentScreen = toolsReturn })
+        }
+        AppScreen.BrowserCache -> {
+            BrowserCacheScreen(onNavigateBack = { currentScreen = toolsReturn })
         }
         AppScreen.DataUsage -> {
             DataUsageScreen(onNavigateBack = { currentScreen = hubReturn })
@@ -578,6 +712,10 @@ fun MainAppContent() {
                 onOpenUninstall = {
                     uninstallReturn = AppScreen.ManageApps
                     currentScreen = AppScreen.Uninstall
+                },
+                onOpenProfiles = {
+                    toolsReturn = AppScreen.ManageApps
+                    currentScreen = AppScreen.AppProfiles
                 }
             )
         }

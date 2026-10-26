@@ -23,7 +23,7 @@ class SmartSuggestions(private val context: Context) {
     )
 
     enum class Priority { LOW, MEDIUM, HIGH, URGENT }
-    enum class Category { STORAGE, CACHE, LARGE_FILES, UNUSED_APPS, SOCIAL_MEDIA }
+    enum class Category { STORAGE, CACHE, LARGE_FILES, UNUSED_APPS, SOCIAL_MEDIA, DUPLICATE_MEDIA }
 
     fun generateSuggestions(): List<Suggestion> {
         val suggestions = mutableListOf<Suggestion>()
@@ -40,8 +40,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "urgent_storage",
-                    title = "🚨 Acil: Depolama Alanı Dolmak Üzere!",
-                    description = "Depolama alanınızın %${storageInfo.usagePercent.toInt()}’i dolu. Hemen temizlik yapın.",
+                    title = "Acil: Depolama dolmak üzere",
+                    description = "Depolama alanınızın %${storageInfo.usagePercent.toInt()}’i dolu. Önce hafif önbellek temizliği deneyin.",
                     priority = Priority.URGENT,
                     category = Category.STORAGE,
                     estimatedSpaceSavings = storageInfo.usedBytes / 10
@@ -51,7 +51,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "high_storage",
-                    title = "⚠️ Depolama Alanı Azalıyor",
+                    title = "Depolama alanı azalıyor",
                     description = "Depolama %${storageInfo.usagePercent.toInt()} dolu. Gereksiz dosyaları temizleyebilirsiniz.",
                     priority = Priority.HIGH,
                     category = Category.STORAGE,
@@ -71,9 +71,9 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "cleaning_reminder",
-                    title = "🧹 Temizlik Zamanı Geldi",
+                    title = "Temizlik zamanı",
                     description = if (daysSinceLastClean >= 999) {
-                        "Henüz temizlik kaydı yok. Hızlı temizlik ile yer açabilirsiniz."
+                        "Henüz temizlik kaydı yok. Sadece önbellek temizliği ile yer açabilirsiniz."
                     } else {
                         "Son temizliğin üzerinden $daysSinceLastClean gün geçti."
                     },
@@ -87,8 +87,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "cache_cleanup",
-                    title = "🗑️ Önbellek Temizliği",
-                    description = "${formatBytes(cacheSize)} önbellek bulundu. Temizleyerek yer açabilirsiniz.",
+                    title = "Önbellek temizliği",
+                    description = "${formatBytes(cacheSize)} önbellek bulundu. Tek dokunuşla hafif temizlik yapın.",
                     priority = Priority.MEDIUM,
                     category = Category.CACHE,
                     estimatedSpaceSavings = cacheSize
@@ -100,8 +100,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "large_files",
-                    title = "📁 Büyük Dosyalar",
-                    description = "$largeFiles adet büyük dosya tespit edildi. Gereksiz olanları silebilirsiniz.",
+                    title = "Büyük dosyalar",
+                    description = "$largeFiles adet büyük dosya tespit edildi. Listeyi açıp gereksizleri seçin.",
                     priority = Priority.MEDIUM,
                     category = Category.LARGE_FILES
                 )
@@ -113,11 +113,23 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "social_media",
-                    title = "💬 Sosyal Medya Temizliği",
-                    description = "${formatBytes(socialMediaSize)} sosyal medya dosyası var (eşik: ${socialPrefs.getAutoCleanThresholdMb()} MB). Eski medyayı temizleyin.",
+                    title = "Sosyal medya temizliği",
+                    description = "${formatBytes(socialMediaSize)} sosyal medya dosyası var (eşik: ${socialPrefs.getAutoCleanThresholdMb()} MB).",
                     priority = Priority.LOW,
                     category = Category.SOCIAL_MEDIA,
                     estimatedSpaceSavings = socialMediaSize / 2
+                )
+            )
+        }
+
+        if (hasWhatsAppMediaFolder()) {
+            suggestions.add(
+                Suggestion(
+                    id = "wa_dup_videos",
+                    title = "WhatsApp mükerrer videolar",
+                    description = "Aynı videoların kopyalarını tarayıp yer açabilirsiniz.",
+                    priority = Priority.MEDIUM,
+                    category = Category.DUPLICATE_MEDIA
                 )
             )
         }
@@ -126,8 +138,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "unused_apps",
-                    title = "📱 Kullanılmayan Uygulamalar",
-                    description = "$unusedApps uygulama uzun süredir kullanılmıyor olabilir. Gözden geçirin.",
+                    title = "Kullanılmayan uygulamalar",
+                    description = "$unusedApps uygulama uzun süredir kullanılmıyor olabilir. Toplu kaldırmayı inceleyin.",
                     priority = Priority.LOW,
                     category = Category.UNUSED_APPS
                 )
@@ -139,7 +151,7 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "routine_scan",
-                    title = "🔍 Hızlı Kontrol Önerisi",
+                    title = "Hızlı kontrol",
                     description = "Depolama ve önbelleği tarayarak gereksiz dosyaları bulabilirsiniz.",
                     priority = Priority.LOW,
                     category = Category.STORAGE
@@ -148,8 +160,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "cache_tip",
-                    title = "💡 Önbellek İpucu",
-                    description = "Uygulama önbelleğini düzenli temizlemek cihazı hızlandırabilir.",
+                    title = "Önbellek ipucu",
+                    description = "Uygulama önbelleğini düzenli temizlemek cihazı hafifletebilir.",
                     priority = Priority.LOW,
                     category = Category.CACHE
                 )
@@ -224,6 +236,19 @@ class SmartSuggestions(private val context: Context) {
             count
         } catch (_: Exception) {
             0
+        }
+    }
+
+    private fun hasWhatsAppMediaFolder(): Boolean {
+        return try {
+            val dirs = listOf(
+                File(Environment.getExternalStorageDirectory(), "WhatsApp/Media"),
+                File(Environment.getExternalStorageDirectory(), "Android/media/com.whatsapp/WhatsApp/Media"),
+                File(Environment.getExternalStorageDirectory(), "Android/media/com.whatsapp.w4b/WhatsApp Business/Media")
+            )
+            dirs.any { it.exists() && it.isDirectory }
+        } catch (_: Exception) {
+            false
         }
     }
 

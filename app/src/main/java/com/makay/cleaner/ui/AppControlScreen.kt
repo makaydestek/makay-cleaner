@@ -190,6 +190,9 @@ fun ToolboxScreen(
             listOf(
                 Tool("data_usage", R.drawable.ic_hub_data, "💧", "Veri kullanımı", Color(0xFF3F8CFF)),
                 Tool("battery", R.drawable.ic_hub_battery, "🔋", "Pil", Color(0xFF2EB050)),
+                Tool("resource_usage", null, "📊", "Kaynak tüketimi", Color(0xFFFF9F0A)),
+                Tool("profiles", null, "🏠", "Profiller", Color(0xFF64D2FF)),
+                Tool("good_night", null, "🌙", "İyi Geceler", Color(0xFFBF5AF2)),
                 Tool("security_scan", R.drawable.ic_hub_security, "🛡", "Güvenlik tarama", Color(0xFF30D158)),
                 Tool("app_control", null, "📱", "Uygulama kontrol", Color(0xFFFFCC00)),
                 Tool("manage_apps", R.drawable.ic_hub_apps, "▦", "Uygulamaları yönet", Color(0xFF8E8E93)),
@@ -200,6 +203,8 @@ fun ToolboxScreen(
             "Gizlilik koruması",
             listOf(
                 Tool("privacy", R.drawable.ic_hub_privacy, "🔒", "Gizlilik", Color(0xFF3F8CFF)),
+                Tool("permission_map", null, "🗺", "İzin haritası", Color(0xFFFF6B35)),
+                Tool("browser_cache", null, "🌐", "Tarayıcı", Color(0xFF3F8CFF)),
                 Tool("permissions", null, "👁", "İzinler", Color(0xFFBF5AF2)),
                 Tool("app_lock", null, "🔑", "Uygulama kilidi", Color(0xFF2EB050))
             )

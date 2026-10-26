@@ -36,7 +36,12 @@ private val HubCard = Color(0xFF1C1C1E)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BatteryInfoScreen(onNavigateBack: () -> Unit) {
+fun BatteryInfoScreen(
+    onNavigateBack: () -> Unit,
+    onOpenResourceUsage: () -> Unit = {},
+    onOpenSoftHibernate: () -> Unit = {},
+    onOpenGoodNight: () -> Unit = {}
+) {
     val context = LocalContext.current
     var battery by remember { mutableStateOf(readBatteryUi(context)) }
     DisposableEffect(Unit) {
@@ -154,6 +159,9 @@ fun BatteryInfoScreen(onNavigateBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
+                    NavRow("Kaynak tüketimi", "Ön plan kullanım listesi") { onOpenResourceUsage() }
+                    NavRow("Kış uykusu önerileri", "Sistem pil ayarına yönlendir") { onOpenSoftHibernate() }
+                    NavRow("İyi Geceler", "Hatırlatma — otomatik Wi‑Fi kapatma yok") { onOpenGoodNight() }
                     NavRow("Pil kullanımı", "Sistem özeti") { openSystemBattery(context) }
                     NavRow("Pil tasarrufu", null) {
                         startSettings(context, Settings.ACTION_BATTERY_SAVER_SETTINGS) {

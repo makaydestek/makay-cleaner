@@ -44,7 +44,8 @@ fun MediaCleanHubScreen(
         HubItem("media_hub", "Medya kategorileri", "Ekran görüntüsü, kamera, düşük boyut, Google Photos yerel", false),
         HubItem("video", "Video araçları", "Büyük video analizi — arşiv / taşı (yeniden kodlama yok)", false),
         HubItem("duplicates", "Yinelenen dosyalar", "Türe göre tarama: foto / video / ses / belge / APK", false),
-        HubItem("compress", "JPEG sıkıştırma", "Fotoğrafları kalite düşürerek küçült", false)
+        HubItem("blur", "Bulanık foto adayları", "Keskinlik skoru düşük görselleri incele / çöpe at", false),
+        HubItem("compress", "JPEG sıkıştırma", "Fotoğrafları kalite düşürerek küçült (önizleme)", showProBadge)
     )
 
     Scaffold(

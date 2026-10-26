@@ -746,7 +746,10 @@ fun SecurityScanScreen(
 fun PrivacyHubScreen(
     onNavigateBack: () -> Unit,
     onOpenAppLock: () -> Unit,
-    onOpenPermissions: () -> Unit
+    onOpenPermissions: () -> Unit,
+    onOpenPermissionMap: () -> Unit = {},
+    onOpenBrowserCache: () -> Unit = {},
+    onClearClipboard: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val lockOn = remember {
@@ -819,6 +822,21 @@ fun PrivacyHubScreen(
                 onOpenAppLock
             )
             PrivacyLinkCard("Özel izinler", "Makay Cleaner depolama ve medya izinleri", onOpenPermissions)
+            PrivacyLinkCard(
+                "İzin haritası",
+                "Hangi uygulamanın kamera, konum vb. izni var",
+                onOpenPermissionMap
+            )
+            PrivacyLinkCard(
+                "Panoyu temizle",
+                "Kopyalanmış metni hemen sil",
+                onClearClipboard
+            )
+            PrivacyLinkCard(
+                "Tarayıcı artıkları",
+                "Yarım indirmeler + sistem önbellek ayarı",
+                onOpenBrowserCache
+            )
             PrivacyLinkCard(
                 "Gizlilik",
                 "Tarama ve temizlik cihazda kalır; buluta yüklenmez",
@@ -1227,7 +1245,8 @@ fun ManageAppsScreen(
     onNavigateBack: () -> Unit,
     onOpenAppLock: () -> Unit,
     onOpenAppControl: () -> Unit,
-    onOpenUninstall: () -> Unit
+    onOpenUninstall: () -> Unit,
+    onOpenProfiles: () -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
     var apps by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
@@ -1310,6 +1329,7 @@ fun ManageAppsScreen(
                     QuickTool("🛡", "Uygulama kilidi", Color(0xFF2EB050), onOpenAppLock)
                     QuickTool("⏱", "Kullanılmayan", Color(0xFFFFCC00), onOpenAppControl)
                     QuickTool("🗑", "Kaldır", Color(0xFF3F8CFF), onOpenUninstall)
+                    QuickTool("🏠", "Profiller", Color(0xFF64D2FF), onOpenProfiles)
                 }
             }
             Spacer(Modifier.height(10.dp))

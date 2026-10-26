@@ -96,7 +96,8 @@ fun StorageScreen(
     onNavigateToDataUsage: () -> Unit = {},
     onNavigateToPrivacy: () -> Unit = {},
     onNavigateToManageApps: () -> Unit = {},
-    onNavigateToFileAnalysis: () -> Unit = {}
+    onNavigateToFileAnalysis: () -> Unit = {},
+    onLightClean: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -251,6 +252,26 @@ fun StorageScreen(
                     if (hasPermission) confirmOptimization = true else runOptimization()
                 }
             )
+
+            if (onLightClean != null) {
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = {
+                        if (!hasPermission) onNavigateToPermissions()
+                        else onLightClean()
+                    },
+                    enabled = !optimizing,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, homeOutline().copy(alpha = 0.45f))
+                ) {
+                    Text(
+                        "Sadece önbellek temizle",
+                        color = homeTextPrimary(),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
 
             Spacer(Modifier.height(14.dp))
 

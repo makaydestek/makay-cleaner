@@ -218,14 +218,37 @@ fun MediaCompressScreen(
             )
         }
     ) { padding ->
+        var previewCount by remember { mutableIntStateOf(0) }
+        var previewBytes by remember { mutableLongStateOf(0L) }
+        LaunchedEffect(Unit) {
+            val paths = withContext(Dispatchers.IO) { hub.pathsForBucket("camera").take(30) }
+            previewCount = paths.size
+            previewBytes = withContext(Dispatchers.IO) {
+                paths.sumOf { java.io.File(it).length() }
+            }
+        }
+        val qualityHint = when {
+            quality >= 80 -> "Yüksek kalite · az kazanç"
+            quality >= 60 -> "Dengeli"
+            else -> "Daha küçük dosya · görünür kayıp olabilir"
+        }
         Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            Text("Kamera fotoğraflarını JPEG olarak sıkıştırır (orijinal silinmez).")
+            Text("Kamera fotoğraflarını JPEG olarak sıkıştırır (orijinal silinmez; *_compressed.jpg).")
+            Spacer(Modifier.height(12.dp))
+            Text(
+                if (previewCount > 0)
+                    "Önizleme: $previewCount foto · ${formatBytes(previewBytes)}"
+                else
+                    "Kamera klasöründe sıkıştırılacak foto yok",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(16.dp))
-            Text("Kalite: ${quality.toInt()}")
+            Text("Kalite: ${quality.toInt()} — $qualityHint")
             Slider(value = quality, onValueChange = { quality = it }, valueRange = 40f..90f)
             Spacer(Modifier.height(16.dp))
             Button(
-                enabled = !busy,
+                enabled = !busy && previewCount > 0,
                 onClick = {
                     scope.launch {
                         busy = true

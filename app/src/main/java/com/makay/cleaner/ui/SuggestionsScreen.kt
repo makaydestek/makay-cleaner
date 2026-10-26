@@ -39,7 +39,7 @@ fun SuggestionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("💡 Akıllı Öneriler", fontWeight = FontWeight.Bold) },
+                title = { Text("Akıllı öneriler", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)

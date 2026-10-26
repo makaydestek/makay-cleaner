@@ -33,6 +33,9 @@ class NotificationManager(private val context: Context) {
         const val DEEP_LARGE = "large"
         const val DEEP_MEDIA = "media"
         const val DEEP_DUP_PHOTOS = "dup_photos"
+        const val DEEP_GOOD_NIGHT = "good_night"
+        const val DEEP_LIGHT_CLEAN = "light_clean"
+        const val NOTIFICATION_ID_GOOD_NIGHT = 1005
     }
 
     private val notificationManager: NotificationManager =
@@ -188,6 +191,36 @@ class NotificationManager(private val context: Context) {
             .setAutoCancel(true)
             .build()
         notificationManager.notify(NOTIFICATION_ID_WARNING, notification)
+    }
+
+    /** İyi Geceler: Wi‑Fi ayarına tek dokunuş (otomatik kapatma yok). */
+    fun sendGoodNightReminder() {
+        if (PlatformManager.isTvMode(context)) return
+        val wifiIntent = Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        val wifiPi = try {
+            PendingIntent.getActivity(
+                context,
+                NOTIFICATION_ID_GOOD_NIGHT,
+                wifiIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } catch (_: Exception) {
+            createPendingIntent(DEEP_GOOD_NIGHT, NOTIFICATION_ID_GOOD_NIGHT)
+        }
+        val openApp = createPendingIntent(DEEP_GOOD_NIGHT, NOTIFICATION_ID_GOOD_NIGHT + 1)
+        val notification = NotificationCompat.Builder(context, CHANNEL_CLEANING_REMINDER)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("İyi Geceler")
+            .setContentText("Wi‑Fi veya veri bağlantısını kapatmak için dokunun.")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(wifiPi)
+            .addAction(0, "Wi‑Fi ayarı", wifiPi)
+            .addAction(0, "Makay", openApp)
+            .setAutoCancel(true)
+            .build()
+        notificationManager.notify(NOTIFICATION_ID_GOOD_NIGHT, notification)
     }
 
     fun cancelAllNotifications() {
