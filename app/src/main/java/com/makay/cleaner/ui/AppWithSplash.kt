@@ -63,6 +63,7 @@ sealed class AppScreen {
     data object ResourceUsage : AppScreen()
     data object SoftHibernate : AppScreen()
     data object BlurPhotos : AppScreen()
+    data object PersonMismatch : AppScreen()
     data object AppProfiles : AppScreen()
     data object GoodNight : AppScreen()
     data object BrowserCache : AppScreen()
@@ -217,7 +218,8 @@ fun MainAppContent() {
             AppScreen.AppControl -> appControlReturn
             AppScreen.Uninstall -> uninstallReturn
             AppScreen.VideoTools, AppScreen.MediaHub, AppScreen.MediaCompress,
-            AppScreen.Duplicates, AppScreen.DuplicateVideos, AppScreen.BlurPhotos -> mediaHubReturn
+            AppScreen.Duplicates, AppScreen.DuplicateVideos, AppScreen.BlurPhotos,
+            AppScreen.PersonMismatch -> mediaHubReturn
             AppScreen.DuplicatePhotos -> dupPhotosReturn
             AppScreen.FileAnalysis -> fileAnalysisReturn
             AppScreen.Permissions -> permissionsReturn
@@ -260,6 +262,10 @@ fun MainAppContent() {
                 onNavigateToDuplicatePhotos = {
                     dupPhotosReturn = AppScreen.Storage
                     currentScreen = AppScreen.DuplicatePhotos
+                },
+                onNavigateToPersonMismatch = {
+                    mediaHubReturn = AppScreen.Storage
+                    currentScreen = AppScreen.PersonMismatch
                 },
                 onNavigateToMediaClean = {
                     mediaCleanReturn = AppScreen.Storage
@@ -494,6 +500,7 @@ fun MainAppContent() {
                         "dup_videos" -> AppScreen.DuplicateVideos
                         "compress" -> AppScreen.MediaCompress
                         "blur" -> AppScreen.BlurPhotos
+                        "person_mismatch" -> AppScreen.PersonMismatch
                         "file_analysis" -> {
                             fileAnalysisReturn = AppScreen.MediaCleanHub
                             AppScreen.FileAnalysis
@@ -681,6 +688,12 @@ fun MainAppContent() {
         }
         AppScreen.BlurPhotos -> {
             BlurPhotosScreen(
+                application = app,
+                onNavigateBack = { currentScreen = mediaHubReturn }
+            )
+        }
+        AppScreen.PersonMismatch -> {
+            PersonMismatchScreen(
                 application = app,
                 onNavigateBack = { currentScreen = mediaHubReturn }
             )

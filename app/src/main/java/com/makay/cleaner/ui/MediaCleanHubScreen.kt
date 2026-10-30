@@ -45,6 +45,12 @@ fun MediaCleanHubScreen(
         HubItem("video", "Video araçları", "Büyük video analizi — arşiv / taşı (yeniden kodlama yok)", false),
         HubItem("duplicates", "Yinelenen dosyalar", "Türe göre tarama: foto / video / ses / belge / APK", false),
         HubItem("blur", "Bulanık foto adayları", "Keskinlik skoru düşük görselleri incele / çöpe at", false),
+        HubItem(
+            "person_mismatch",
+            "Klasörde farklı kişi",
+            "Örnek yüz seç → klasör tara → Sil / Taşı / Kopyala",
+            false
+        ),
         HubItem("compress", "JPEG sıkıştırma", "Fotoğrafları kalite düşürerek küçült (önizleme)", showProBadge)
     )
 

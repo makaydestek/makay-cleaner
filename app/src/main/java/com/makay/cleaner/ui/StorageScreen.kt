@@ -87,6 +87,7 @@ fun StorageScreen(
     onNavigateToRecycleBin: () -> Unit = {},
     onNavigateToExclusions: () -> Unit = {},
     onNavigateToDuplicatePhotos: () -> Unit = {},
+    onNavigateToPersonMismatch: () -> Unit = {},
     onNavigateToMediaClean: () -> Unit = {},
     onNavigateToPermissions: () -> Unit = {},
     onNavigateToAppControl: () -> Unit = {},
@@ -472,6 +473,7 @@ fun StorageScreen(
                     "Medya temizliği" to onNavigateToMediaClean,
                     "Sosyal medya" to onNavigateToSocialMedia,
                     "Yinelenen foto" to onNavigateToDuplicatePhotos,
+                    "Farklı kişi" to onNavigateToPersonMismatch,
                     "Araç kutusu" to onNavigateToToolbox
                 )
             )
