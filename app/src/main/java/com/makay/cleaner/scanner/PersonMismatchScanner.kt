@@ -3,13 +3,11 @@ package com.makay.cleaner.scanner
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.Paint
-import android.graphics.Rect
+import android.graphics.Matrix
+import android.graphics.PointF
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.exifinterface.media.ExifInterface
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
@@ -20,11 +18,11 @@ import com.google.mlkit.vision.face.FaceLandmark
 import com.makay.cleaner.util.SystemFileGuard
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.sqrt
+import kotlin.math.abs
 
 /**
- * Klasördeki fotoğrafları referans “asıl kişi” yüz(ler)iyle karşılaştırır.
- * Eşleşmeyen (veya hiç eşleşen yüzü olmayan) adayları listeler.
+ * Klasördeki fotoğrafları referans “asıl kişi” ile MobileFaceNet embedding’leriyle karşılaştırır.
+ * ML Kit: yüz tespiti + landmark; TFLite MobileFaceNet: kimlik vektörü.
  */
 class PersonMismatchScanner(private val context: Context) {
 
@@ -55,10 +53,13 @@ class PersonMismatchScanner(private val context: Context) {
             FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-                .setMinFaceSize(0.12f)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+                .setMinFaceSize(0.08f)
                 .build()
         )
     }
+
+    private val embedder: FaceNetEmbedder by lazy { FaceNetEmbedder(context.applicationContext) }
 
     fun listBuckets(): List<BucketInfo> {
         val counts = LinkedHashMap<String, Int>()
@@ -95,12 +96,14 @@ class PersonMismatchScanner(private val context: Context) {
                 }
                 try {
                     val faces = detectFaces(bmp)
-                    if (faces.isEmpty()) {
+                    val usable = faces.filter { isUsableIdentityFace(it) }
+                    if (usable.isEmpty()) {
                         skipped++
                     } else {
-                        // En büyük yüz = asıl kişi varsayımı
-                        val primary = faces.maxBy { it.boundingBox.width() * it.boundingBox.height() }
-                        embeddings += faceEmbedding(bmp, primary)
+                        val primary = usable.maxBy {
+                            it.boundingBox.width() * it.boundingBox.height()
+                        }
+                        embeddings += embedFace(bmp, primary)
                     }
                 } finally {
                     if (!bmp.isRecycled) bmp.recycle()
@@ -120,26 +123,32 @@ class PersonMismatchScanner(private val context: Context) {
         progress: ProgressListener? = null
     ): List<MismatchCandidate> {
         if (references.isEmpty()) return emptyList()
+        progress?.onProgress("Klasör listeleniyor…", 0, 1)
         val photos = loadBucketPhotos(bucketName)
         if (photos.isEmpty()) return emptyList()
 
         val out = mutableListOf<MismatchCandidate>()
         photos.forEachIndexed { index, photo ->
             if (cancelled?.get() == true) return out
-            progress?.onProgress("Yüzler karşılaştırılıyor…", index + 1, photos.size)
+            progress?.onProgress("YZ yüz analizi…", index + 1, photos.size)
+            // Büyük klasörlerde bellek baskısını azalt
+            if (index % 40 == 0) {
+                System.gc()
+            }
             try {
                 val bmp = decodeBitmap(photo.uri, photo.path) ?: return@forEachIndexed
                 try {
                     val faces = detectFaces(bmp)
-                    if (faces.isEmpty()) {
-                        // Yüz yok → farklı kişi sayılmaz (manzara vb.)
+                    val identityFaces = faces.filter { isUsableIdentityFace(it) }
+                    if (identityFaces.isEmpty()) {
+                        // Profil / arkası dönük / yüz yok → aday değil
                         return@forEachIndexed
                     }
-                    var best = 0f
-                    for (face in faces) {
-                        val emb = faceEmbedding(bmp, face)
+                    var best = -1f
+                    for (face in identityFaces) {
+                        val emb = embedFace(bmp, face)
                         for (ref in references) {
-                            best = maxOf(best, cosineSimilarity(emb, ref))
+                            best = maxOf(best, FaceNetEmbedder.cosineSimilarity(emb, ref))
                         }
                     }
                     if (best < matchThreshold) {
@@ -148,12 +157,11 @@ class PersonMismatchScanner(private val context: Context) {
                             uri = photo.uri,
                             displayName = photo.displayName,
                             sizeBytes = photo.sizeBytes,
-                            bestSimilarity = best,
-                            faceCount = faces.size,
-                            reason = if (best <= 0.01f) {
-                                "Yüz var, asıl kişiyle eşleşme yok"
-                            } else {
-                                "Benzerlik düşük (%${(best * 100).toInt()})"
+                            bestSimilarity = best.coerceAtLeast(0f),
+                            faceCount = identityFaces.size,
+                            reason = when {
+                                best < 0f -> "Yüz bulundu, kimlik eşleşmedi"
+                                else -> "YZ benzerlik %${(best * 100).toInt()} (eşik %${(matchThreshold * 100).toInt()})"
                             }
                         )
                     }
@@ -169,6 +177,7 @@ class PersonMismatchScanner(private val context: Context) {
 
     fun close() {
         runCatching { detector.close() }
+        runCatching { embedder.close() }
     }
 
     private data class PhotoRow(
@@ -212,10 +221,27 @@ class PersonMismatchScanner(private val context: Context) {
                     displayName = c.getString(nameI) ?: "foto_$id",
                     sizeBytes = c.getLong(sizeI)
                 )
-                if (out.size >= MAX_SCAN) break
             }
         }
         return out
+    }
+
+    /**
+     * Kimlik karşılaştırması için yeterince cepheden / görünür yüz.
+     * Aşırı profil ve çok küçük yüzler atlanır (yanlış negatif/pozitif azaltır).
+     */
+    private fun isUsableIdentityFace(face: Face): Boolean {
+        val box = face.boundingBox
+        if (box.width() < 48 || box.height() < 48) return false
+        if (abs(face.headEulerAngleY) > 42f) return false
+        if (abs(face.headEulerAngleZ) > 35f) return false
+        return true
+    }
+
+    private fun embedFace(bitmap: Bitmap, face: Face): FloatArray {
+        val left = face.getLandmark(FaceLandmark.LEFT_EYE)?.position?.let { PointF(it.x, it.y) }
+        val right = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position?.let { PointF(it.x, it.y) }
+        return embedder.embed(bitmap, face.boundingBox, left, right)
     }
 
     private fun detectFaces(bitmap: Bitmap): List<Face> {
@@ -242,7 +268,7 @@ class PersonMismatchScanner(private val context: Context) {
                 inSampleSize = sample
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
-            when {
+            val raw = when {
                 !path.isNullOrBlank() && File(path).isFile ->
                     BitmapFactory.decodeFile(path, opts)
                 uri != null ->
@@ -250,158 +276,48 @@ class PersonMismatchScanner(private val context: Context) {
                         BitmapFactory.decodeStream(it, null, opts)
                     }
                 else -> null
+            } ?: return null
+
+            val rotation = readExifRotation(path, uri)
+            if (rotation == 0) raw
+            else {
+                val m = Matrix().apply { postRotate(rotation.toFloat()) }
+                val rotated = Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, m, true)
+                if (rotated !== raw) raw.recycle()
+                rotated
             }
         } catch (_: Exception) {
             null
         }
     }
 
-    /**
-     * Landmark oranları + hizalanmış yüz kırpımının düşük çözünürlük gri vektörü.
-     * Tam FaceNet değil; belirgin farklı kişilerde yüksek isabet hedeflenir.
-     */
-    private fun faceEmbedding(bitmap: Bitmap, face: Face): FloatArray {
-        val landmarkParts = listOf(
-            landmarkNorm(face, FaceLandmark.LEFT_EYE, bitmap),
-            landmarkNorm(face, FaceLandmark.RIGHT_EYE, bitmap),
-            landmarkNorm(face, FaceLandmark.NOSE_BASE, bitmap),
-            landmarkNorm(face, FaceLandmark.MOUTH_LEFT, bitmap),
-            landmarkNorm(face, FaceLandmark.MOUTH_RIGHT, bitmap),
-            landmarkNorm(face, FaceLandmark.LEFT_CHEEK, bitmap),
-            landmarkNorm(face, FaceLandmark.RIGHT_CHEEK, bitmap)
-        )
-        val ratios = landmarkRatios(face)
-        val crop = faceCropGray(bitmap, face.boundingBox)
-        val combined = FloatArray(
-            landmarkParts.sumOf { it.size } + ratios.size + crop.size
-        )
-        var i = 0
-        for (part in landmarkParts) {
-            for (v in part) combined[i++] = v
+    private fun readExifRotation(path: String?, uri: Uri?): Int {
+        return try {
+            val exif = when {
+                !path.isNullOrBlank() && File(path).isFile ->
+                    ExifInterface(path)
+                uri != null ->
+                    context.contentResolver.openInputStream(uri)?.use { ExifInterface(it) }
+                else -> null
+            } ?: return 0
+            when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+        } catch (_: Exception) {
+            0
         }
-        for (v in ratios) combined[i++] = v
-        for (v in crop) combined[i++] = v
-        return normalize(combined)
-    }
-
-    private fun landmarkNorm(face: Face, type: Int, bitmap: Bitmap): FloatArray {
-        val lm = face.getLandmark(type)?.position
-        val box = face.boundingBox
-        if (lm == null || box.width() <= 0 || box.height() <= 0) {
-            return floatArrayOf(0.5f, 0.5f)
-        }
-        val x = ((lm.x - box.left) / box.width().toFloat()).coerceIn(0f, 1f)
-        val y = ((lm.y - box.top) / box.height().toFloat()).coerceIn(0f, 1f)
-        // bitmap boyutuna göre hafif ağırlık (farklı kırpımlarda kararlılık)
-        val aspect = bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1).toFloat()
-        return floatArrayOf(x, y * (0.85f + 0.15f * aspect.coerceIn(0.5f, 1.5f)))
-    }
-
-    private fun landmarkRatios(face: Face): FloatArray {
-        fun pt(type: Int) = face.getLandmark(type)?.position
-        val le = pt(FaceLandmark.LEFT_EYE)
-        val re = pt(FaceLandmark.RIGHT_EYE)
-        val nose = pt(FaceLandmark.NOSE_BASE)
-        val ml = pt(FaceLandmark.MOUTH_LEFT)
-        val mr = pt(FaceLandmark.MOUTH_RIGHT)
-        if (le == null || re == null) return FloatArray(6)
-        val iod = dist(le.x, le.y, re.x, re.y).coerceAtLeast(1f)
-        val mouthW = if (ml != null && mr != null) dist(ml.x, ml.y, mr.x, mr.y) / iod else 0f
-        val eyeMouth = if (ml != null && mr != null) {
-            val mx = (ml.x + mr.x) / 2f
-            val my = (ml.y + mr.y) / 2f
-            val ex = (le.x + re.x) / 2f
-            val ey = (le.y + re.y) / 2f
-            dist(ex, ey, mx, my) / iod
-        } else 0f
-        val noseEye = if (nose != null) {
-            val ex = (le.x + re.x) / 2f
-            val ey = (le.y + re.y) / 2f
-            dist(ex, ey, nose.x, nose.y) / iod
-        } else 0f
-        val noseMouth = if (nose != null && ml != null && mr != null) {
-            val mx = (ml.x + mr.x) / 2f
-            val my = (ml.y + mr.y) / 2f
-            dist(nose.x, nose.y, mx, my) / iod
-        } else 0f
-        return floatArrayOf(
-            mouthW,
-            eyeMouth,
-            noseEye,
-            noseMouth,
-            face.headEulerAngleY / 90f,
-            face.headEulerAngleZ / 90f
-        )
-    }
-
-    private fun faceCropGray(bitmap: Bitmap, box: Rect): FloatArray {
-        val padX = (box.width() * 0.12f).toInt()
-        val padY = (box.height() * 0.12f).toInt()
-        val left = (box.left - padX).coerceAtLeast(0)
-        val top = (box.top - padY).coerceAtLeast(0)
-        val right = (box.right + padX).coerceAtMost(bitmap.width)
-        val bottom = (box.bottom + padY).coerceAtMost(bitmap.height)
-        if (right <= left || bottom <= top) return FloatArray(CROP_SIDE * CROP_SIDE)
-
-        val cropped = Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
-        val scaled = Bitmap.createScaledBitmap(cropped, CROP_SIDE, CROP_SIDE, true)
-        if (cropped !== bitmap && cropped !== scaled) cropped.recycle()
-
-        val gray = Bitmap.createBitmap(CROP_SIDE, CROP_SIDE, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(gray)
-        val paint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
-            colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
-        }
-        canvas.drawBitmap(scaled, 0f, 0f, paint)
-        if (scaled !== gray) scaled.recycle()
-
-        val pixels = IntArray(CROP_SIDE * CROP_SIDE)
-        gray.getPixels(pixels, 0, CROP_SIDE, 0, 0, CROP_SIDE, CROP_SIDE)
-        gray.recycle()
-        val out = FloatArray(pixels.size)
-        for (i in pixels.indices) {
-            val p = pixels[i]
-            val r = (p shr 16) and 0xFF
-            val g = (p shr 8) and 0xFF
-            val b = p and 0xFF
-            out[i] = (0.299f * r + 0.587f * g + 0.114f * b) / 255f
-        }
-        return out
-    }
-
-    private fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
-        val n = minOf(a.size, b.size)
-        if (n == 0) return 0f
-        var dot = 0f
-        var na = 0f
-        var nb = 0f
-        for (i in 0 until n) {
-            dot += a[i] * b[i]
-            na += a[i] * a[i]
-            nb += b[i] * b[i]
-        }
-        val denom = sqrt(na) * sqrt(nb)
-        return if (denom < 1e-8f) 0f else (dot / denom).coerceIn(-1f, 1f)
-    }
-
-    private fun normalize(v: FloatArray): FloatArray {
-        var sumSq = 0f
-        for (x in v) sumSq += x * x
-        val norm = sqrt(sumSq)
-        if (norm < 1e-8f) return v
-        return FloatArray(v.size) { v[it] / norm }
-    }
-
-    private fun dist(x1: Float, y1: Float, x2: Float, y2: Float): Float {
-        val dx = x1 - x2
-        val dy = y1 - y2
-        return sqrt(dx * dx + dy * dy)
     }
 
     companion object {
-        const val DEFAULT_MATCH_THRESHOLD = 0.78f
-        private const val DECODE_MAX = 960
-        private const val CROP_SIDE = 24
-        private const val MAX_SCAN = 800
+        /**
+         * MobileFaceNet + L2 kosinüs: aynı kişi genelde ≥ 0.55–0.75.
+         * Varsayılan 0.52 — aynı kişiyi yanlış “farklı” işaretlemeyi azaltır.
+         * Kaydırıcıyla yükseltmek = daha katı (daha çok aday).
+         */
+        const val DEFAULT_MATCH_THRESHOLD = 0.52f
+        private const val DECODE_MAX = 1280
     }
 }

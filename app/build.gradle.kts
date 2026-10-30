@@ -117,6 +117,10 @@ android {
         }
     }
 
+    androidResources {
+        noCompress += "tflite"
+    }
+
     // ABI split kapali: tek sideload APK (tum mimariler)
     splits {
         abi {
@@ -240,6 +244,8 @@ dependencies {
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     // Bundled yüz tespiti (sideload / Play Services indirmesi gerekmez)
     implementation("com.google.mlkit:face-detection:16.1.7")
+    // MobileFaceNet yüz kimliği (assets/mobilefacenet.tflite)
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

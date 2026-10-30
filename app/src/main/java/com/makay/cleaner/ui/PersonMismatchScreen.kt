@@ -81,7 +81,7 @@ fun PersonMismatchScreen(
         ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         if (uris.isNotEmpty()) {
-            referenceUris = (referenceUris + uris).distinct().take(8)
+            referenceUris = (referenceUris + uris).distinct().take(12)
         }
     }
 
@@ -279,8 +279,8 @@ fun PersonMismatchScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    "Örnek fotoğraflarla asıl kişiyi belirleyin, klasörü tarayın. " +
-                        "Eşleşmeyen yüzler listelenir; Sil / Taşı / Kopyala ile işlem yapın.",
+                    "Örnek fotoğraflarla asıl kişiyi belirleyin; klasördeki tüm fotoğraflar " +
+                        "MobileFaceNet YZ modeli ile taranır. Eşleşmeyenler listelenir — Sil / Taşı / Kopyala.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -320,7 +320,7 @@ fun PersonMismatchScreen(
 
                 Text("2. Asıl kişi örnekleri", fontWeight = FontWeight.SemiBold)
                 Text(
-                    "1–8 net yüz fotoğrafı seçin (aynı kişi). Grup fotoğrafında en büyük yüz kullanılır.",
+                    "1–12 net, kameraya bakan yüz fotoğrafı seçin (aynı kişi). Daha fazla örnek = daha doğru YZ eşleşme.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -356,17 +356,18 @@ fun PersonMismatchScreen(
                     }
                 }
 
-                Text("3. Hassasiyet", fontWeight = FontWeight.SemiBold)
+                Text("3. Hassasiyet (YZ)", fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Eşik: %${(threshold * 100).toInt()} — düşük = daha çok aday, yüksek = daha az",
+                    "Eşik: %${(threshold * 100).toInt()} — düşük = aynı kişiyi daha iyi tutar; " +
+                        "yüksek = daha katı (daha çok aday). Öneri: %50–%58",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Slider(
                     value = threshold,
                     onValueChange = { threshold = it },
-                    valueRange = 0.65f..0.90f,
-                    steps = 24
+                    valueRange = 0.35f..0.75f,
+                    steps = 39
                 )
 
                 Button(
