@@ -41,7 +41,9 @@ class FaceNetEmbedder(context: Context) : AutoCloseable {
     }
 
     /**
-     * Göz landmark’ları varsa hizalayarak, yoksa bbox kırpımıyla embedding üretir.
+     * Kimlik embedding — bbox kırpımı birincil (stabil skor).
+     * Göz hizası yalnızca kırpım boş/başarısızsa yedek; agresif align tek başına
+     * kosinüs skorlarını düşürüp “doğruluk çok düşük” semptomuna yol açıyordu.
      */
     fun embed(
         fullImage: Bitmap,
@@ -49,15 +51,39 @@ class FaceNetEmbedder(context: Context) : AutoCloseable {
         leftEye: PointF?,
         rightEye: PointF?
     ): FloatArray {
-        val aligned = if (leftEye != null && rightEye != null) {
-            alignFace(fullImage, leftEye, rightEye, faceBox)
-        } else {
-            cropSquare(fullImage, faceBox)
-        }
-        return try {
-            runModel(aligned)
+        val cropped = cropSquare(fullImage, faceBox)
+        try {
+            if (!isMostlyEmpty(cropped)) {
+                return runModel(cropped)
+            }
         } finally {
-            if (!aligned.isRecycled && aligned !== fullImage) aligned.recycle()
+            // runModel kendi scaled kopyasını yönetir; cropped’ı her durumda serbest bırak
+            if (!cropped.isRecycled && cropped !== fullImage) cropped.recycle()
+        }
+        if (leftEye != null && rightEye != null) {
+            val aligned = alignFace(fullImage, leftEye, rightEye, faceBox)
+            return try {
+                runModel(aligned)
+            } finally {
+                if (!aligned.isRecycled && aligned !== fullImage) aligned.recycle()
+            }
+        }
+        // Son çare: boş kırpımı yine de modelle (nadir)
+        val fallback = cropSquare(fullImage, faceBox)
+        return try {
+            runModel(fallback)
+        } finally {
+            if (!fallback.isRecycled && fallback !== fullImage) fallback.recycle()
+        }
+    }
+
+    /** Yalnızca bbox kırpımı — referans çeşitliliği için ikinci vektör. */
+    fun embedCropOnly(fullImage: Bitmap, faceBox: Rect): FloatArray {
+        val cropped = cropSquare(fullImage, faceBox)
+        return try {
+            runModel(cropped)
+        } finally {
+            if (!cropped.isRecycled && cropped !== fullImage) cropped.recycle()
         }
     }
 
@@ -118,16 +144,16 @@ class FaceNetEmbedder(context: Context) : AutoCloseable {
         val eyesCenterY = (leftEye.y + rightEye.y) / 2f
         val eyeDist = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
 
-        // Tipik MobileFaceNet: gözler üst-orta; kırpım göz mesafesine göre
-        val desiredFaceSize = eyeDist * 3.2f
+        // MobileFaceNet tipik: göz mesafesi ~ yüz genişliğinin ~1/3’ü; biraz daha geniş kırp
+        val desiredFaceSize = eyeDist * 3.6f
         val scale = INPUT / desiredFaceSize
 
         val matrix = Matrix()
         matrix.postTranslate(-eyesCenterX, -eyesCenterY)
         matrix.postRotate(-angleDeg)
-        // Gözler çıktıda yaklaşık y=0.38
+        // Gözler çıktıda yaklaşık y=0.40 (daha az alın kesimi)
         matrix.postScale(scale, scale)
-        matrix.postTranslate(INPUT / 2f, INPUT * 0.38f)
+        matrix.postTranslate(INPUT / 2f, INPUT * 0.40f)
 
         val out = Bitmap.createBitmap(INPUT, INPUT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)

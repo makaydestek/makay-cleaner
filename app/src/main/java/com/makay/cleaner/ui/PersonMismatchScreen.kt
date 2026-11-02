@@ -359,14 +359,14 @@ fun PersonMismatchScreen(
                 Text("3. Hassasiyet (YZ)", fontWeight = FontWeight.SemiBold)
                 Text(
                     "Eşik: %${(threshold * 100).toInt()} — düşük = aynı kişiyi daha iyi tutar; " +
-                        "yüksek = daha katı (daha çok aday). Öneri: %50–%58",
+                        "yüksek = daha katı (daha çok aday). Öneri: %45–%55",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Slider(
                     value = threshold,
                     onValueChange = { threshold = it },
-                    valueRange = 0.35f..0.75f,
+                    valueRange = 0.30f..0.70f,
                     steps = 39
                 )
 

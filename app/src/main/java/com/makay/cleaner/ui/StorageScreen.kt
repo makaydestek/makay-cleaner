@@ -16,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -32,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.makay.cleaner.R
 import com.makay.cleaner.data.AnalyticsRepository
+import com.makay.cleaner.util.BatteryStatsHelper
 import com.makay.cleaner.util.JunkScanHelper
 import com.makay.cleaner.util.PermissionHelper
 import com.makay.cleaner.util.PlatformManager
@@ -114,11 +117,27 @@ fun StorageScreen(
     var whyDialog by remember { mutableStateOf(false) }
     var confirmOptimization by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val settingsFocus = remember { FocusRequester() }
+    var tvFocusEpoch by remember { mutableIntStateOf(0) }
+    var batteryPercent by remember {
+        mutableIntStateOf(BatteryStatsHelper.readPercent(context))
+    }
 
     LaunchedEffect(cleanMessage) {
         if (cleanMessage == null) return@LaunchedEffect
         delay(5_000)
         cleanMessage = null
+    }
+
+    DisposableEffect(Unit) {
+        val filter = android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                batteryPercent = BatteryStatsHelper.readPercent(context)
+            }
+        }
+        context.registerReceiver(receiver, filter)
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
     }
 
     // Açılışta junk + öneri listesi; skor yalnızca junk’a bağlı
@@ -187,13 +206,17 @@ fun StorageScreen(
             showWhy = junk > 0L
             val removed = result.spaceSaved
             cleanMessage = if (removed > 0L) "${formatBytes(removed)} silindi" else null
+            // TV: tarama bitince sayfa başı + Ayarlar odağında kal
+            tvFocusEpoch++
         }
     }
 
     val isTv = PlatformManager.rememberIsTvMode()
     val homeScroll = rememberScrollState()
-    LaunchedEffect(isTv) {
-        if (isTv) homeScroll.scrollTo(0)
+    LaunchedEffect(isTv, tvFocusEpoch) {
+        if (!isTv) return@LaunchedEffect
+        homeScroll.scrollTo(0)
+        requestTvFocusSafe(settingsFocus)
     }
     Column(
         modifier = Modifier
@@ -204,7 +227,7 @@ fun StorageScreen(
                 else Modifier.statusBarsPadding().padding(horizontal = 16.dp)
             )
     ) {
-        // Başlık + ayarlar kaydırılmaz — TV açılışında her zaman görünür
+        // Başlık + ayarlar kaydırılmaz — TV açılışında / tarama sonrası her zaman görünür
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -222,7 +245,7 @@ fun StorageScreen(
             TvIconButton(
                 onClick = onNavigateToSettings,
                 idleContent = homeTextPrimary(),
-                modifier = if (isTv) Modifier.tvRequestInitialFocus() else Modifier
+                modifier = if (isTv) Modifier.focusRequester(settingsFocus) else Modifier
             ) {
                 Icon(
                     imageVector = Icons.Default.Settings,
@@ -434,16 +457,7 @@ fun StorageScreen(
                 modifier = Modifier.padding(bottom = 10.dp)
             )
 
-            val batterySub = remember(context) {
-                try {
-                    val bm = context.getSystemService(android.content.Context.BATTERY_SERVICE)
-                        as android.os.BatteryManager
-                    val lvl = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
-                    "%$lvl şarj"
-                } catch (_: Exception) {
-                    "Pil özeti"
-                }
-            }
+            val batterySub = "%$batteryPercent şarj"
 
             HomeCategoryCard(
                 title = "Temizlik",
@@ -810,7 +824,8 @@ private fun HomeScoreHero(
     val textSecondary = homeTextSecondary()
     val track = if (homeIsLight()) Color(0xFFD8D8DC) else Color(0xFF3A3A3C)
     val isTv = PlatformManager.rememberIsTvMode()
-    val ring = if (isTv) 156.dp else 188.dp
+    // TV: 156dp + 40sp "100" kırpılıyordu — halkayı büyüt, tipografiyi sıkılaştır
+    val ring = if (isTv) 176.dp else 188.dp
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -822,7 +837,7 @@ private fun HomeScoreHero(
             contentAlignment = Alignment.Center
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val stroke = 12.dp.toPx()
+                val stroke = if (isTv) 10.dp.toPx() else 12.dp.toPx()
                 val pad = stroke / 2
                 drawArc(
                     color = track,
@@ -850,12 +865,16 @@ private fun HomeScoreHero(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = ring * 0.18f)
+                    .padding(horizontal = if (isTv) ring * 0.10f else ring * 0.18f)
             ) {
                 Text(
                     text = "$score",
                     color = textPrimary,
-                    fontSize = if (isTv) 40.sp else 46.sp,
+                    fontSize = if (isTv) {
+                        if (score >= 100) 34.sp else 36.sp
+                    } else {
+                        46.sp
+                    },
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-1).sp,
                     maxLines = 1
@@ -863,24 +882,25 @@ private fun HomeScoreHero(
                 Text(
                     text = if (score >= 100) "İyi durumda" else "Skor",
                     color = textSecondary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
+                    fontSize = if (isTv) 11.sp else 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
                 )
                 if (isLoading) {
                     LinearProgressIndicator(
-                        modifier = Modifier.width(64.dp).padding(top = 8.dp),
+                        modifier = Modifier.width(64.dp).padding(top = 6.dp),
                         color = accent,
                         trackColor = track
                     )
                 } else {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = subtitle,
                         color = textSecondary,
-                        fontSize = 12.sp,
-                        lineHeight = 15.sp,
+                        fontSize = if (isTv) 11.sp else 12.sp,
+                        lineHeight = if (isTv) 13.sp else 15.sp,
                         textAlign = TextAlign.Center,
-                        maxLines = 2,
+                        maxLines = if (isTv) 1 else 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }

@@ -124,9 +124,9 @@ class CleanerWidgetProvider : AppWidgetProvider() {
         val path = Environment.getDataDirectory()
         val stat = StatFs(path.path)
         val totalBytes = stat.totalBytes
-        val freeBytes = stat.freeBytes
-        val usedBytes = totalBytes - freeBytes
-        val usagePercent = (usedBytes.toFloat() / totalBytes.toFloat()) * 100
+        val freeBytes = stat.availableBytes
+        val usedBytes = (totalBytes - freeBytes).coerceAtLeast(0)
+        val usagePercent = if (totalBytes > 0) (usedBytes.toFloat() / totalBytes.toFloat()) * 100 else 0f
         return StorageData(
             usedFormatted = formatBytes(usedBytes),
             freeFormatted = formatBytes(freeBytes),

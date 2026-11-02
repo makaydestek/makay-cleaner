@@ -145,7 +145,7 @@ class FileAnalysisScanner(private val context: Context) {
         val path = Environment.getDataDirectory()
         val stat = StatFs(path.path)
         val total = stat.totalBytes
-        val free = stat.freeBytes
+        val free = stat.availableBytes
         val used = (total - free).coerceAtLeast(0)
         val pct = if (total > 0) used.toFloat() / total * 100f else 0f
         return StorageInfo(

@@ -27,8 +27,24 @@ class DuplicatePhotoPrefs(context: Context) {
 
     /** Benzer fotoğraf için max zaman farkı (saniye). 0 = kapalı */
     var timeIntervalSec: Int
-        get() = prefs.getInt(KEY_TIME, 30).coerceIn(0, 86_400)
+        get() {
+            migrateTimeDefaultIfNeeded()
+            return prefs.getInt(KEY_TIME, 0).coerceIn(0, 86_400)
+        }
         set(value) = prefs.edit().putInt(KEY_TIME, value.coerceIn(0, 86_400)).apply()
+
+    /**
+     * Eski varsayılan 30 sn benzer kopyaları (farklı gün / yeniden kayıt) gizliyordu.
+     * Bir kez: 30 sn varsayılanını kapat (0); kullanıcı bilerek başka değer seçtiyse koru.
+     */
+    private fun migrateTimeDefaultIfNeeded() {
+        if (prefs.getBoolean(KEY_TIME_FIXED, false)) return
+        val ed = prefs.edit().putBoolean(KEY_TIME_FIXED, true)
+        if (!prefs.contains(KEY_TIME) || prefs.getInt(KEY_TIME, 30) == 30) {
+            ed.putInt(KEY_TIME, 0)
+        }
+        ed.apply()
+    }
 
     /** GPS yarıçapı (metre). 0 = kapalı */
     var gpsRadiusMeters: Int
@@ -84,6 +100,7 @@ class DuplicatePhotoPrefs(context: Context) {
         private const val KEY_MEDIA_KIND = "media_kind"
         private const val KEY_MATCH = "matching_level"
         private const val KEY_TIME = "time_interval_sec"
+        private const val KEY_TIME_FIXED = "time_interval_default_fixed_v2"
         private const val KEY_GPS = "gps_radius_m"
         private const val KEY_ROTATE = "include_rotated"
         private const val KEY_BUCKET = "selected_bucket"

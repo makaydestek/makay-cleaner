@@ -88,7 +88,8 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
         val path = Environment.getDataDirectory()
         val stat = StatFs(path.path)
         val totalBytes = stat.totalBytes
-        val freeBytes = stat.freeBytes
+        // availableBytes: sistem/Xiaomi ile uyumlu kullanılabilir boş alan
+        val freeBytes = stat.availableBytes
         val usedBytes = (totalBytes - freeBytes).coerceAtLeast(0)
         val usagePercent =
             if (totalBytes > 0) (usedBytes.toFloat() / totalBytes.toFloat()) * 100f else 0f

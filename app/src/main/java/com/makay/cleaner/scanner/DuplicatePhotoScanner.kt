@@ -65,7 +65,7 @@ class DuplicatePhotoScanner(private val context: Context) {
         val mode: String = DuplicatePhotoPrefs.MODE_FULL,
         val bucketName: String? = null,
         val matchingLevel: Int = 1,
-        val timeIntervalSec: Int = 30,
+        val timeIntervalSec: Int = 0,
         val gpsRadiusMeters: Int = 0,
         val includeRotatedFlipped: Boolean = true,
         val excludedBuckets: Set<String> = emptySet(),
@@ -76,9 +76,9 @@ class DuplicatePhotoScanner(private val context: Context) {
     ) {
         val hammingThreshold: Int
             get() = when (matchingLevel.coerceIn(0, 2)) {
-                0 -> 10 // düşük eşik → daha geniş benzerlik
-                2 -> 3  // yüksek → neredeyse aynı
-                else -> 6
+                0 -> 12 // düşük eşik → daha geniş benzerlik (rakiplerle uyumlu)
+                2 -> 4  // yüksek → neredeyse aynı
+                else -> 7
             }
 
         companion object {
@@ -96,12 +96,8 @@ class DuplicatePhotoScanner(private val context: Context) {
                     excludedBuckets = prefs.excludedBuckets,
                     allowedFormats = prefs.allowedFormats.ifEmpty { DuplicatePhotoPrefs.DEFAULT_FORMATS },
                     exactLimit = if (quick) QUICK_EXACT_LIMIT else DEFAULT_EXACT_LIMIT,
-                    // Döndürme varyantları bellek maliyetli; limiti düşürerek kararlılık korunur
-                    similarLimit = when {
-                        quick -> QUICK_SIMILAR_LIMIT
-                        rotated -> DEFAULT_SIMILAR_LIMIT / 2
-                        else -> DEFAULT_SIMILAR_LIMIT
-                    },
+                    // Döndürme açıkken limiti yarıya indirmeyiz — boş sonuç üretir
+                    similarLimit = if (quick) QUICK_SIMILAR_LIMIT else DEFAULT_SIMILAR_LIMIT,
                     timeoutMs = if (quick) QUICK_TIMEOUT_MS else DEFAULT_TIMEOUT_MS
                 )
             }
@@ -116,13 +112,14 @@ class DuplicatePhotoScanner(private val context: Context) {
 
     companion object {
         const val DEFAULT_EXACT_LIMIT = 2500
-        const val DEFAULT_SIMILAR_LIMIT = 800
+        const val DEFAULT_SIMILAR_LIMIT = 1200
         const val QUICK_EXACT_LIMIT = 800
-        const val QUICK_SIMILAR_LIMIT = 300
-        const val DEFAULT_TIMEOUT_MS = 90_000L
-        const val QUICK_TIMEOUT_MS = 35_000L
-        const val MIN_FREE_HEAP_BYTES = 24L * 1024L * 1024L
-        const val MAX_SIMILAR_DECODE_BYTES = 8L * 1024L * 1024L
+        const val QUICK_SIMILAR_LIMIT = 400
+        const val DEFAULT_TIMEOUT_MS = 120_000L
+        const val QUICK_TIMEOUT_MS = 45_000L
+        const val MIN_FREE_HEAP_BYTES = 20L * 1024L * 1024L
+        /** Hash için downsample kullanıldığı için büyük dosyaları atlama */
+        const val MAX_SIMILAR_DECODE_BYTES = 40L * 1024L * 1024L
         private val CAMERA_BUCKETS = setOf("camera", "dcim", "100andro", "100media")
     }
 
@@ -173,7 +170,7 @@ class DuplicatePhotoScanner(private val context: Context) {
                 if (stop()) return@forEach
                 done++
                 if (done % 8 == 0) progress?.onProgress("Aynı fotoğraflar…", done, total)
-                val hash = md5Partial(File(photo.path)) ?: return@forEach
+                val hash = md5Partial(photo) ?: return@forEach
                 byHash.getOrPut(hash) { mutableListOf() }.add(photo)
             }
             byHash.forEach { (hash, list) ->
@@ -217,7 +214,7 @@ class DuplicatePhotoScanner(private val context: Context) {
             i++
             if (i % 5 == 0) progress?.onProgress("Benzerlik analizi…", i, photos.size)
             if (photo.sizeBytes > MAX_SIMILAR_DECODE_BYTES) return@forEach
-            val hashes = differenceHashes(photo.path, options.includeRotatedFlipped) ?: return@forEach
+            val hashes = differenceHashes(photo, options.includeRotatedFlipped) ?: return@forEach
             entries.add(hashes to photo)
         }
         if (entries.isEmpty()) return emptyList()
@@ -353,13 +350,23 @@ class DuplicatePhotoScanner(private val context: Context) {
                 if (scanned % 40 == 0) {
                     progress?.onProgress("Galeri okunuyor…", out.size, limit)
                 }
-                val path = c.getString(dataI) ?: continue
-                if (!SystemFileGuard.canDelete(path)) {
+                val path = c.getString(dataI).orEmpty()
+                val id = c.getLong(idI)
+                val uri = ContentUris.withAppendedId(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id
+                )
+                // Scoped storage: DATA yolu yok/erişilemez olabilir — URI ile devam et
+                if (path.isNotBlank() && !SystemFileGuard.canDelete(path)) {
                     SystemFileGuard.recordSkipped()
                     continue
                 }
-                if (!File(path).exists()) continue
-                val ext = File(path).extension.lowercase()
+                val displayName = c.getString(nameI)
+                    ?: path.substringAfterLast('/').ifBlank { "foto_$id" }
+                val ext = when {
+                    path.contains('.') -> File(path).extension.lowercase()
+                    displayName.contains('.') -> displayName.substringAfterLast('.').lowercase()
+                    else -> ""
+                }
                 if (ext.isNotEmpty() && options.allowedFormats.isNotEmpty() &&
                     ext !in options.allowedFormats
                 ) {
@@ -374,21 +381,20 @@ class DuplicatePhotoScanner(private val context: Context) {
                 }
                 val bucket = if (bucketI >= 0) c.getString(bucketI)?.trim().orEmpty() else ""
                 if (bucket.isNotEmpty() && bucket in options.excludedBuckets) continue
-                if (!matchesMode(options, bucket, path)) continue
+                if (!matchesMode(options, bucket, path.ifBlank { uri.toString() })) continue
 
-                val id = c.getLong(idI)
                 var w = if (wI >= 0) c.getInt(wI) else 0
                 var h = if (hI >= 0) c.getInt(hI) else 0
                 if (w <= 0 || h <= 0) {
                     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeFile(path, bounds)
+                    decodeBounds(path, uri, bounds)
                     w = bounds.outWidth.coerceAtLeast(0)
                     h = bounds.outHeight.coerceAtLeast(0)
                 }
                 val taken = if (takenI >= 0) c.getLong(takenI) else 0L
                 var lat: Double? = null
                 var lon: Double? = null
-                val meta = readLightMetadata(path, needGps)
+                val meta = readLightMetadata(path, uri, needGps)
                 if (needGps) {
                     lat = meta.latitude
                     lon = meta.longitude
@@ -396,11 +402,9 @@ class DuplicatePhotoScanner(private val context: Context) {
                 out.add(
                     PhotoItem(
                         id = id,
-                        path = path,
-                        uri = ContentUris.withAppendedId(
-                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id
-                        ),
-                        displayName = c.getString(nameI) ?: File(path).name,
+                        path = path.ifBlank { uri.toString() },
+                        uri = uri,
+                        displayName = displayName,
                         sizeBytes = c.getLong(sizeI),
                         dateAdded = c.getLong(dateI) * 1000L,
                         dateTaken = taken,
@@ -441,9 +445,9 @@ class DuplicatePhotoScanner(private val context: Context) {
         val longitude: Double? = null
     )
 
-    private fun readLightMetadata(path: String, needGps: Boolean): LightMeta {
+    private fun readLightMetadata(path: String, uri: Uri, needGps: Boolean): LightMeta {
         return try {
-            val exif = ExifInterface(path)
+            val exif = openExif(path, uri) ?: return LightMeta(hasMetadata = false)
             val has = !exif.getAttribute(ExifInterface.TAG_DATETIME).isNullOrBlank() ||
                 !exif.getAttribute(ExifInterface.TAG_MAKE).isNullOrBlank() ||
                 !exif.getAttribute(ExifInterface.TAG_MODEL).isNullOrBlank() ||
@@ -463,23 +467,78 @@ class DuplicatePhotoScanner(private val context: Context) {
         }
     }
 
-    private fun md5Partial(file: File): String? {
+    private fun openExif(path: String, uri: Uri): ExifInterface? {
+        return try {
+            if (path.isNotBlank() && !path.startsWith("content:") && File(path).isFile) {
+                ExifInterface(path)
+            } else {
+                context.contentResolver.openInputStream(uri)?.use { ExifInterface(it) }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun decodeBounds(path: String, uri: Uri, opts: BitmapFactory.Options) {
+        try {
+            if (path.isNotBlank() && !path.startsWith("content:") && File(path).isFile) {
+                BitmapFactory.decodeFile(path, opts)
+            } else {
+                context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, opts)
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun decodeSampled(path: String, uri: Uri, sampleSize: Int): Bitmap? {
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize.coerceAtLeast(1)
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        return try {
+            if (path.isNotBlank() && !path.startsWith("content:") && File(path).isFile) {
+                BitmapFactory.decodeFile(path, opts)
+            } else {
+                context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, opts)
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun md5Partial(photo: PhotoItem): String? {
         return try {
             val md = MessageDigest.getInstance("MD5")
-            val len = file.length()
-            FileInputStream(file).use { fis ->
-                val buf = ByteArray(8192)
-                var read = fis.read(buf)
-                if (read > 0) md.update(buf, 0, read)
-                if (len > 24_000) {
-                    fis.channel.position(len / 2)
-                    read = fis.read(buf)
+            val len = photo.sizeBytes
+            val file = File(photo.path)
+            if (file.isFile) {
+                FileInputStream(file).use { fis ->
+                    val buf = ByteArray(8192)
+                    var read = fis.read(buf)
                     if (read > 0) md.update(buf, 0, read)
-                    fis.channel.position((len - 8192).coerceAtLeast(0))
-                    read = fis.read(buf)
-                    if (read > 0) md.update(buf, 0, read)
+                    if (len > 24_000) {
+                        fis.channel.position(len / 2)
+                        read = fis.read(buf)
+                        if (read > 0) md.update(buf, 0, read)
+                        fis.channel.position((len - 8192).coerceAtLeast(0))
+                        read = fis.read(buf)
+                        if (read > 0) md.update(buf, 0, read)
+                    }
+                    md.update(len.toString().toByteArray())
                 }
-                md.update(len.toString().toByteArray())
+            } else {
+                context.contentResolver.openInputStream(photo.uri)?.use { input ->
+                    val buf = ByteArray(8192)
+                    var read = input.read(buf)
+                    if (read > 0) md.update(buf, 0, read)
+                    // Stream seek yok — baş + boyut ile kısmi parmak izi
+                    md.update(len.toString().toByteArray())
+                    md.update(photo.id.toString().toByteArray())
+                } ?: return null
             }
             md.digest().joinToString("") { "%02x".format(it) }
         } catch (_: Exception) {
@@ -487,11 +546,14 @@ class DuplicatePhotoScanner(private val context: Context) {
         }
     }
 
-    /** Temel dHash + isteğe bağlı döndürme/ayna varyantları. */
-    private fun differenceHashes(path: String, includeRotated: Boolean): List<String>? {
+    /** Temel dHash + isteğe bağlı döndürme/ayna varyantları (URI fallback). */
+    private fun differenceHashes(photo: PhotoItem, includeRotated: Boolean): List<String>? {
         return try {
-            val opts = BitmapFactory.Options().apply { inSampleSize = 8 }
-            val bmp = BitmapFactory.decodeFile(path, opts) ?: return null
+            // Hedef ~64–128 px: dinamik sample (sabit 8 modern fotoğraflarda aşırı agresifti)
+            val maxSide = maxOf(photo.width, photo.height).coerceAtLeast(1)
+            var sample = 1
+            while (maxSide / sample > 128) sample *= 2
+            val bmp = decodeSampled(photo.path, photo.uri, sample) ?: return null
             val variants = mutableListOf(bmp)
             if (includeRotated) {
                 variants += rotate(bmp, 90f)

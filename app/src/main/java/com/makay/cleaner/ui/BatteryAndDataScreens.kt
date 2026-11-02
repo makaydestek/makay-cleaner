@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.makay.cleaner.R
-import kotlin.math.roundToInt
+import com.makay.cleaner.util.BatteryStatsHelper
 
 private val HubGreen = Color(0xFF2EB050)
 private val HubBlue = Color(0xFF3F8CFF)
@@ -182,30 +182,14 @@ fun BatteryInfoScreen(
 }
 
 private fun readBatteryUi(context: Context): BatteryUi {
-    val intent = context.registerReceiver(
-        null,
-        android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-    )
-    val levelRaw = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-    val scale = (intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100).coerceAtLeast(1)
-    val pct = if (levelRaw >= 0) {
-        ((levelRaw * 100f) / scale).roundToInt().coerceIn(0, 100)
-    } else {
-        (context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager)
-            .getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).coerceIn(0, 100)
-    }
-    val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-    val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
-    val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-        status == BatteryManager.BATTERY_STATUS_FULL ||
-        plugged != 0
+    val snap = BatteryStatsHelper.readSnapshot(context)
     return BatteryUi(
-        percent = pct,
-        charging = charging,
-        health = intent?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1) ?: -1,
-        tempTenths = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1,
-        voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1,
-        plugged = plugged
+        percent = snap.percent,
+        charging = snap.charging,
+        health = snap.health,
+        tempTenths = snap.tempTenths,
+        voltage = snap.voltage,
+        plugged = snap.plugged
     )
 }
 

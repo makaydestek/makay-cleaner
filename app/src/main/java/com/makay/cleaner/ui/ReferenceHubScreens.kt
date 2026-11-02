@@ -26,23 +26,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.makay.cleaner.R
 import com.makay.cleaner.data.CleaningRecorder
 import com.makay.cleaner.util.JunkScanHelper
 import com.makay.cleaner.util.PermissionHelper
+import com.makay.cleaner.util.PlatformManager
 import com.makay.cleaner.util.UnusedAppsHelper
 import com.makay.cleaner.util.rememberStoragePermissionState
-import com.makay.cleaner.R
-import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -396,6 +398,9 @@ fun SecurityScanScreen(
     var stopRequested by remember { mutableStateOf(false) }
     val liveStorage = rememberStoragePermissionState()
     var knownStorage by remember { mutableStateOf<Boolean?>(null) }
+    val settingsFocus = rememberTvFocusRequester()
+    var tvFocusEpoch by remember { mutableIntStateOf(0) }
+    val isTv = PlatformManager.rememberIsTvMode()
 
     fun openCheck(id: String) {
         when (id) {
@@ -515,6 +520,12 @@ fun SecurityScanScreen(
         } else {
             "Bu bir virüs taraması değildir — cihaz sağlık özeti. Satırlara dokunun"
         }
+        tvFocusEpoch++
+    }
+
+    LaunchedEffect(isTv, tvFocusEpoch, scanning) {
+        if (!isTv || scanning) return@LaunchedEffect
+        requestTvFocusSafe(settingsFocus)
     }
 
     Scaffold(
@@ -525,14 +536,17 @@ fun SecurityScanScreen(
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
-                        idleContent = Color.White,
-                        modifier = Modifier.tvRequestInitialFocus()
+                        idleContent = Color.White
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
                 },
                 actions = {
-                    TvIconButton(onClick = onNavigateToSettings, idleContent = Color.White) {
+                    TvIconButton(
+                        onClick = onNavigateToSettings,
+                        idleContent = Color.White,
+                        modifier = Modifier.focusRequester(settingsFocus)
+                    ) {
                         Icon(
                             painterResource(R.drawable.ic_hub_privacy),
                             contentDescription = null,
@@ -558,7 +572,10 @@ fun SecurityScanScreen(
                 if (!scanning) {
                     OutlinedButton(
                         onClick = { scanToken++ },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .makayFocus(),
                         shape = RoundedCornerShape(50),
                         border = BorderStroke(1.dp, Color(0xFF636366)),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
@@ -616,12 +633,14 @@ fun SecurityScanScreen(
                     )
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    val ringLabel = if (scanning) "${(progress * 100).toInt()}%"
+                    else summary?.let { "${it.score}" } ?: "—"
                     Text(
-                        if (scanning) "${(progress * 100).toInt()}%"
-                        else summary?.let { "${it.score}" } ?: "—",
+                        ringLabel,
                         color = Color.White,
-                        fontSize = 40.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = if (ringLabel.length >= 4) 32.sp else 40.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                     Text(
                         when {

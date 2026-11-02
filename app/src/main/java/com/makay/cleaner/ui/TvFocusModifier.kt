@@ -223,7 +223,8 @@ fun Modifier.makayFocus(
     if (!isTv) return@composed this
 
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (focused) 1.02f else 1f, label = "tvFocusScale")
+    // 1.02 overscan’de üst/yan kırpmaya yol açıyordu; hafif ölçek yeterli
+    val scale by animateFloatAsState(if (focused) 1.01f else 1f, label = "tvFocusScale")
     val palette = LocalTvFocusPalette.current
 
     this
@@ -277,17 +278,31 @@ fun Modifier.tvSkipChildFocus(): Modifier = composed {
     this.focusProperties { canFocus = false }
 }
 
-fun Modifier.tvRequestInitialFocus(): Modifier = composed {
+/**
+ * TV’de ilk (veya [key] değişince tekrar) odak isteği.
+ * Tarama/optimizasyon sonrası Settings’e dönüş için key’i artırın.
+ */
+fun Modifier.tvRequestInitialFocus(key: Any? = Unit): Modifier = composed {
     val isTv = PlatformManager.rememberIsTvMode()
     if (!isTv) return@composed this
     val requester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(key) {
+        kotlinx.coroutines.delay(64)
         try {
             requester.requestFocus()
         } catch (_: Exception) {
         }
     }
     this.focusRequester(requester)
+}
+
+/** Dışarıdan FocusRequester ile TV odak yenileme (scroll + requestFocus). */
+suspend fun requestTvFocusSafe(requester: FocusRequester, delayMs: Long = 64L) {
+    kotlinx.coroutines.delay(delayMs)
+    try {
+        requester.requestFocus()
+    } catch (_: Exception) {
+    }
 }
 
 @Composable

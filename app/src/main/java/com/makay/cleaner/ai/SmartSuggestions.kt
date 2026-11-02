@@ -197,7 +197,7 @@ class SmartSuggestions(private val context: Context) {
         }
         val stat = StatFs(path)
         val total = stat.totalBytes
-        val free = stat.freeBytes
+        val free = stat.availableBytes
         val used = total - free
         val percent = if (total > 0) (used.toDouble() / total.toDouble()) * 100 else 0.0
         return StorageInfo(total, free, used, percent)

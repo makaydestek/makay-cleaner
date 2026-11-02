@@ -1,5 +1,6 @@
 package com.makay.cleaner.scanner
 
+import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -96,13 +97,10 @@ class PersonMismatchScanner(private val context: Context) {
                 }
                 try {
                     val faces = detectFaces(bmp)
-                    val usable = faces.filter { isUsableIdentityFace(it) }
-                    if (usable.isEmpty()) {
+                    val primary = pickIdentityFace(faces)
+                    if (primary == null) {
                         skipped++
                     } else {
-                        val primary = usable.maxBy {
-                            it.boundingBox.width() * it.boundingBox.height()
-                        }
                         embeddings += embedFace(bmp, primary)
                     }
                 } finally {
@@ -139,16 +137,22 @@ class PersonMismatchScanner(private val context: Context) {
                 val bmp = decodeBitmap(photo.uri, photo.path) ?: return@forEachIndexed
                 try {
                     val faces = detectFaces(bmp)
-                    val identityFaces = faces.filter { isUsableIdentityFace(it) }
+                    val identityFaces = selectIdentityFaces(faces)
                     if (identityFaces.isEmpty()) {
-                        // Profil / arkası dönük / yüz yok → aday değil
+                        // Yüz yok → aday değil
                         return@forEachIndexed
                     }
                     var best = -1f
                     for (face in identityFaces) {
                         val emb = embedFace(bmp, face)
                         for (ref in references) {
-                            best = maxOf(best, FaceNetEmbedder.cosineSimilarity(emb, ref))
+                            val cos = FaceNetEmbedder.cosineSimilarity(emb, ref)
+                            best = maxOf(best, cos)
+                            // Öklid yedek: L2-norm vektörlerde aynı kişi genelde < 1.05
+                            val euc = FaceNetEmbedder.euclideanDistance(emb, ref)
+                            if (euc <= EUCLIDEAN_MATCH) {
+                                best = maxOf(best, (1f - euc / 2f).coerceAtLeast(cos))
+                            }
                         }
                     }
                     if (best < matchThreshold) {
@@ -211,9 +215,9 @@ class PersonMismatchScanner(private val context: Context) {
                 val path = c.getString(dataI).orEmpty()
                 if (path.isNotBlank() && SystemFileGuard.isProtectedPath(path)) continue
                 val id = c.getLong(idI)
-                val uri = Uri.withAppendedPath(
+                val uri = ContentUris.withAppendedId(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    id.toString()
+                    id
                 )
                 out += PhotoRow(
                     path = path.ifBlank { uri.toString() },
@@ -227,15 +231,32 @@ class PersonMismatchScanner(private val context: Context) {
     }
 
     /**
-     * Kimlik karşılaştırması için yeterince cepheden / görünür yüz.
-     * Aşırı profil ve çok küçük yüzler atlanır (yanlış negatif/pozitif azaltır).
+     * Kimlik karşılaştırması için yeterince görünür yüz.
+     * Açı filtresi gevşetildi — sıkı yaw/roll referans/aday yüzlerini eleyip
+     * skorları düşürüyordu.
      */
     private fun isUsableIdentityFace(face: Face): Boolean {
         val box = face.boundingBox
-        if (box.width() < 48 || box.height() < 48) return false
-        if (abs(face.headEulerAngleY) > 42f) return false
-        if (abs(face.headEulerAngleZ) > 35f) return false
+        if (box.width() < 36 || box.height() < 36) return false
+        if (abs(face.headEulerAngleY) > 60f) return false
+        if (abs(face.headEulerAngleZ) > 45f) return false
         return true
+    }
+
+    /** Tercihen usable; yoksa en büyük yüz (sessiz atlamayı önler). */
+    private fun pickIdentityFace(faces: List<Face>): Face? {
+        if (faces.isEmpty()) return null
+        val usable = faces.filter { isUsableIdentityFace(it) }
+        val pool = usable.ifEmpty { faces }
+        return pool.maxBy { it.boundingBox.width() * it.boundingBox.height() }
+    }
+
+    private fun selectIdentityFaces(faces: List<Face>): List<Face> {
+        if (faces.isEmpty()) return emptyList()
+        val usable = faces.filter { isUsableIdentityFace(it) }
+        if (usable.isNotEmpty()) return usable
+        // Fallback: en büyük tek yüz
+        return listOfNotNull(pickIdentityFace(faces))
     }
 
     private fun embedFace(bitmap: Bitmap, face: Face): FloatArray {
@@ -313,11 +334,13 @@ class PersonMismatchScanner(private val context: Context) {
 
     companion object {
         /**
-         * MobileFaceNet + L2 kosinüs: aynı kişi genelde ≥ 0.55–0.75.
-         * Varsayılan 0.52 — aynı kişiyi yanlış “farklı” işaretlemeyi azaltır.
+         * MobileFaceNet + L2 kosinüs: aynı kişi genelde ≥ 0.45–0.75 (crop yolu).
+         * Varsayılan 0.48 — aynı kişiyi yanlış “farklı” işaretlemeyi azaltır.
          * Kaydırıcıyla yükseltmek = daha katı (daha çok aday).
          */
-        const val DEFAULT_MATCH_THRESHOLD = 0.52f
+        const val DEFAULT_MATCH_THRESHOLD = 0.48f
+        /** Öklid mesafesi bu değerin altındaysa aynı kişi kabul (kosinüs yedek). */
+        private const val EUCLIDEAN_MATCH = 1.05f
         private const val DECODE_MAX = 1280
     }
 }
