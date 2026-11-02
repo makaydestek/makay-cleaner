@@ -60,17 +60,21 @@ class AppUpdateRepository(context: Context) {
         var apkName = ""
         var apkUrl = ""
         var apkSize = 0L
+        var apkDigest: String? = null
         for (i in 0 until assets.length()) {
             val a = assets.getJSONObject(i)
             val name = a.optString("name", "")
             val url = a.optString("browser_download_url", "")
             if (!name.endsWith(".apk", true) || url.isBlank()) continue
+            // mapping.txt / .apk.sha256 değil; yalnızca gerçek APK
+            if (name.contains("mapping", ignoreCase = true)) continue
             val preferred = name.startsWith("MakayCleaner", true) ||
                 name.startsWith("Makay-Cleaner", true)
             if (apkUrl.isBlank() || preferred) {
                 apkName = name
                 apkUrl = url
                 apkSize = a.optLong("size", 0L)
+                apkDigest = a.optString("digest", "").takeIf { it.isNotBlank() && it != "null" }
                 if (preferred) break
             }
         }
@@ -81,7 +85,9 @@ class AppUpdateRepository(context: Context) {
             ApkIntegrityVerifier.Result.Ok -> Unit
         }
 
-        val expectedSha = normalizeUpdateSha(resolveExpectedSha256(release, apkName))
+        val expectedSha = normalizeUpdateSha(
+            resolveExpectedSha256(release, apkName, apkDigest)
+        )
         // SHA yoksa güncellemeyi hiç sunma (indir/kur diyaloğu açılmaz).
         if (expectedSha == null) return null
 
@@ -90,20 +96,32 @@ class AppUpdateRepository(context: Context) {
             versionName = versionName,
             apkUrl = apkUrl,
             apkName = apkName,
-            releaseNotes = release.optString("body", "").trim().take(1200),
-            htmlUrl = release.optString("html_url", "https://github.com/$owner/$repo/releases/latest"),
+            releaseNotes = cleanReleaseNotes(release),
+            htmlUrl = release.optString("html_url", "https://github.com/$owner/$repo/releases/latest")
+                .takeIf { it.isNotBlank() && it != "null" }
+                ?: "https://github.com/$owner/$repo/releases/latest",
             expectedSha256 = expectedSha,
             expectedSizeBytes = apkSize.takeIf { it > 0 }
         )
     }
 
-    private fun resolveExpectedSha256(release: JSONObject, apkName: String): String? {
+    /**
+     * SHA önceliği: GitHub asset digest → .sha256 asset → release body.
+     */
+    private fun resolveExpectedSha256(
+        release: JSONObject,
+        apkName: String,
+        apkDigest: String?
+    ): String? {
+        normalizeUpdateSha(apkDigest?.removePrefix("sha256:")?.removePrefix("SHA256:"))
+            ?.let { return it }
+
         val assets = release.optJSONArray("assets") ?: return null
         for (i in 0 until assets.length()) {
             val a = assets.getJSONObject(i)
             val name = a.optString("name", "").lowercase()
             val url = a.optString("browser_download_url", "")
-            if (url.isBlank()) continue
+            if (url.isBlank() || url == "null") continue
             if (!(name.endsWith(".sha256") || name == "sha256sums" || name == "checksums.txt")) {
                 continue
             }
@@ -112,9 +130,17 @@ class AppUpdateRepository(context: Context) {
             ApkIntegrityVerifier.parseSha256Fingerprint(text, apkName)?.let { return it }
         }
         return ApkIntegrityVerifier.parseSha256Fingerprint(
-            release.optString("body", ""),
+            cleanReleaseNotes(release),
             apkName
         )
+    }
+
+    /** Android JSONObject.optString, JSON null için literal "null" döndürür. */
+    private fun cleanReleaseNotes(release: JSONObject): String {
+        if (!release.has("body") || release.isNull("body")) return ""
+        val raw = release.optString("body", "").trim()
+        if (raw.isEmpty() || raw.equals("null", ignoreCase = true)) return ""
+        return raw.take(1200)
     }
 
     fun downloadApk(update: AvailableUpdate, onProgress: (Int) -> Unit = {}): File {
@@ -123,12 +149,19 @@ class AppUpdateRepository(context: Context) {
             ApkIntegrityVerifier.Result.Ok -> Unit
         }
 
+        // Cache temizliği veya süreç ölümü sonrası klasör kaybolabilir
+        if (!updateDir.exists() && !updateDir.mkdirs()) {
+            error("Güncelleme klasörü oluşturulamadı: ${updateDir.absolutePath}")
+        }
         updateDir.listFiles()?.forEach { runCatching { it.delete() } }
+
         val safeName = update.apkName
             .substringAfterLast('/')
             .ifBlank { "MakayCleaner-update.apk" }
             .replace(Regex("""[^\w.\-]+"""), "_")
         val target = File(updateDir, safeName)
+        val partial = File(updateDir, "$safeName.partial")
+        runCatching { partial.delete() }
 
         try {
             val conn = (URL(update.apkUrl).openConnection() as HttpURLConnection).apply {
@@ -139,12 +172,16 @@ class AppUpdateRepository(context: Context) {
                 setRequestProperty("Accept", "application/octet-stream,*/*")
             }
             try {
-                check(conn.responseCode in 200..299) { "İndirme HTTP ${conn.responseCode}" }
+                val code = conn.responseCode
+                check(code in 200..299) {
+                    "İndirme HTTP $code — GitHub’dan APK alınamadı"
+                }
                 val total = conn.contentLengthLong.takeIf { it > 0 }
                     ?: update.expectedSizeBytes
                     ?: -1L
                 var lastPct = -1
                 val raw: InputStream = conn.inputStream
+                    ?: error("İndirme akışı boş (HTTP $code)")
                 val counted = object : FilterInputStream(raw) {
                     private var written = 0L
                     override fun read(b: ByteArray, off: Int, len: Int): Int {
@@ -162,9 +199,26 @@ class AppUpdateRepository(context: Context) {
                         return n
                     }
                 }
-                FileOutputStream(target).use { out -> counted.copyTo(out) }
+                FileOutputStream(partial).use { out ->
+                    counted.copyTo(out)
+                    runCatching { out.fd.sync() }
+                }
             } finally {
                 conn.disconnect()
+            }
+
+            if (!partial.isFile || partial.length() < 1_000L) {
+                runCatching { partial.delete() }
+                error("APK indirilemedi veya dosya boş kaldı.")
+            }
+            runCatching { target.delete() }
+            if (!partial.renameTo(target)) {
+                // rename başarısızsa kopyala
+                partial.copyTo(target, overwrite = true)
+                runCatching { partial.delete() }
+            }
+            if (!target.isFile) {
+                error("APK kaydedilemedi: ${target.absolutePath}")
             }
             onProgress(100)
 
@@ -182,6 +236,7 @@ class AppUpdateRepository(context: Context) {
                 ApkIntegrityVerifier.Result.Ok -> return target
             }
         } catch (e: Exception) {
+            runCatching { partial.delete() }
             runCatching { target.delete() }
             throw e
         }
@@ -205,6 +260,10 @@ class AppUpdateRepository(context: Context) {
     }
 
     fun installIntent(file: File): Intent {
+        if (!file.isFile || file.length() < 1_000L) {
+            error("Kurulum dosyası bulunamadı. Lütfen Güncelle’ye tekrar basın.")
+        }
+        if (!updateDir.exists()) updateDir.mkdirs()
         val uri = FileProvider.getUriForFile(
             appContext,
             "${appContext.packageName}.fileprovider",
@@ -317,5 +376,6 @@ class AppUpdateRepository(context: Context) {
             }
             return 0
         }
+
     }
 }

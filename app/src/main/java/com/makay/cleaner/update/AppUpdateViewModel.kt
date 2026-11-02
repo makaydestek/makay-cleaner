@@ -206,12 +206,19 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
             val file = download.getOrNull()
-            if (file == null) {
-                val raw = download.exceptionOrNull()?.localizedMessage
-                    ?: download.exceptionOrNull()?.message
-                    ?: "İndirme başarısız"
+            if (file == null || !file.isFile) {
+                val raw = friendlyError(
+                    download.exceptionOrNull(),
+                    fallback = "İndirme başarısız. Bağlantınızı kontrol edip tekrar deneyin."
+                )
                 _state.update {
-                    it.copy(downloading = false, dialogVisible = true, error = raw, statusMessage = null)
+                    it.copy(
+                        downloading = false,
+                        dialogVisible = true,
+                        error = raw,
+                        statusMessage = null,
+                        downloadedApk = null
+                    )
                 }
                 return@launch
             }
@@ -221,14 +228,18 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
                     progress = 100,
                     downloadedApk = file,
                     statusMessage = "Doğrulandı — kurulum başlatılıyor…",
-                    dialogVisible = true
+                    dialogVisible = true,
+                    error = null
                 )
             }
             runCatching {
                 activity.startActivity(repository.installIntent(file))
             }.onFailure { e ->
                 _state.update {
-                    it.copy(dialogVisible = true, error = e.localizedMessage ?: "Kurulum ekranı açılamadı")
+                    it.copy(
+                        dialogVisible = true,
+                        error = friendlyError(e, "Kurulum ekranı açılamadı")
+                    )
                 }
             }
         }
@@ -244,6 +255,23 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
         }
         _state.update { it.copy(needsInstallPermission = false, error = null) }
         if (_state.value.available != null) startDownloadAndInstall(activity)
+    }
+
+    private fun friendlyError(t: Throwable?, fallback: String): String {
+        if (t == null) return fallback
+        val msg = sequenceOf(t.message, t.localizedMessage)
+            .mapNotNull { it?.trim() }
+            .firstOrNull { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+        return when {
+            msg == null -> fallback
+            msg.contains("ENOENT", ignoreCase = true) ||
+                msg.contains("No such file", ignoreCase = true) ->
+                "APK dosyası kaydedilemedi. Depolama alanını kontrol edip Güncelle’ye tekrar basın."
+            msg.contains("SHA-256", ignoreCase = true) ||
+                msg.contains("imza", ignoreCase = true) -> msg
+            msg.length > 280 -> msg.take(280) + "…"
+            else -> msg
+        }
     }
 
     class Factory(private val application: Application) : ViewModelProvider.Factory {
