@@ -42,6 +42,8 @@ object PermissionHelper {
             if (ctx is Activity) return ctx
             ctx = ctx.baseContext
         }
+        // Son çare: CompositionLocal yoksa (worker / non-UI). Yeni kod LocalHostActivity kullanmalı.
+        @Suppress("DEPRECATION")
         return MainActivity.instance?.get()
     }
 

@@ -73,6 +73,13 @@ fun AppLockScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
+            if (appLockManager.isStorageDegraded()) {
+                Text(
+                    text = "Uyarı: Şifreli depo kullanılamıyor. PIN koruması zayıf modda.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             Text(
                 text = when {
                     pinEnabled -> "Erişmek için PIN kodunuzu girin"

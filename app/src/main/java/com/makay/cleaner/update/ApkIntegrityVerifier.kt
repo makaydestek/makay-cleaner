@@ -162,6 +162,7 @@ class ApkIntegrityVerifier(context: Context) {
         }
     }
 
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.P)
     private fun digestsFromSigningInfo(
         signingInfo: android.content.pm.SigningInfo?
     ): Set<String> {

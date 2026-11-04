@@ -1,7 +1,6 @@
 package com.makay.cleaner.ui
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
@@ -30,11 +29,11 @@ fun MakayAdaptiveContent(
     content: @Composable () -> Unit
 ) {
     val widthClass = rememberWidthClass()
-    BoxWithConstraints(
+    val useCap = widthClass != AppWidthClass.Compact
+    Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.TopCenter
     ) {
-        val useCap = widthClass != AppWidthClass.Compact
         Box(
             modifier = if (useCap) {
                 Modifier

@@ -28,5 +28,5 @@ jobs:
         run: ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
       - name: Run unit tests
         run: ./gradlew test --no-daemon --stacktrace
-      - name: Android lint (debug)
+      - name: Android lint (debug, abort on error)
         run: ./gradlew :app:lintDebug --no-daemon --stacktrace

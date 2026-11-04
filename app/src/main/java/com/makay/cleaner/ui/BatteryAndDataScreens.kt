@@ -30,10 +30,6 @@ import androidx.compose.ui.unit.sp
 import com.makay.cleaner.R
 import com.makay.cleaner.util.BatteryStatsHelper
 
-private val HubGreen = Color(0xFF2EB050)
-private val HubBlue = Color(0xFF3F8CFF)
-private val HubCard = Color(0xFF1C1C1E)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BatteryInfoScreen(

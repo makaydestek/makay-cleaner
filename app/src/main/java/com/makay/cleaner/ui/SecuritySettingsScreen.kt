@@ -112,10 +112,13 @@ fun SecuritySettingsScreen(
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                TvFocusRow(
+                    TvFocusRow(
                     onClick = {
                         if (isPinEnabled) {
                             showRemovePinDialog = true
+                        } else if (storageDegraded) {
+                            pinError = "Şifreli depo yok; PIN kurulamaz"
+                            biometricHint = pinError
                         } else {
                             showSetPinDialog = true
                         }
@@ -130,22 +133,34 @@ fun SecuritySettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (isPinEnabled) "Aktif" else "Kapalı",
+                            text = when {
+                                storageDegraded && !isPinEnabled -> "Şifreli depo yok — kurulamaz"
+                                isPinEnabled -> "Aktif"
+                                else -> "Kapalı"
+                            },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (storageDegraded && !isPinEnabled)
+                                MaterialTheme.colorScheme.error
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Switch(
                         checked = isPinEnabled,
                         onCheckedChange = { enabled ->
                             if (enabled) {
-                                showSetPinDialog = true
+                                if (storageDegraded) {
+                                    biometricHint = "Şifreli depo yok; PIN kurulamaz"
+                                } else {
+                                    showSetPinDialog = true
+                                }
                             } else {
                                 appLockManager.removePin()
                                 isPinEnabled = false
                                 isBiometricEnabled = false
                             }
                         },
+                        enabled = !storageDegraded || isPinEnabled,
                         modifier = Modifier.tvSkipChildFocus()
                     )
                 }
@@ -315,10 +330,12 @@ fun SecuritySettingsScreen(
                 Button(
                     onClick = {
                         when {
+                            storageDegraded -> pinError = "Şifreli depo kullanılamıyor; PIN kurulamaz"
                             newPin.length < 4 -> pinError = "PIN en az 4 haneli olmalıdır"
                             newPin != confirmPin -> pinError = "PIN'ler eşleşmiyor"
+                            !appLockManager.setPin(newPin) ->
+                                pinError = "PIN kaydedilemedi (şifreli depo yok)"
                             else -> {
-                                appLockManager.setPin(newPin)
                                 isPinEnabled = true
                                 showSetPinDialog = false
                                 newPin = ""

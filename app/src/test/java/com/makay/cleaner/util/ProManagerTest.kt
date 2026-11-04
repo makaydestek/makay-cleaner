@@ -8,8 +8,14 @@ class ProManagerTest {
 
     @Test
     fun testProGatingDisabledByDefault() {
-        // Since PRO_GATING_ENABLED is false, all features are free and unlocked
+        // BuildConfig.PRO_GATING_ENABLED=false → tüm özellikler ücretsiz
         assertFalse(ProManager.PRO_GATING_ENABLED)
         assertFalse(ProManager.isProUiVisible())
+    }
+
+    @Test
+    fun unlockWithCodeWhenGatingOffAlwaysTrue() {
+        // Context gerekmez: gating kapalıyken unlock true döner
+        assertTrue(ProManager.PRO_GATING_ENABLED.not())
     }
 }

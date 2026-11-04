@@ -85,14 +85,16 @@ class CleaningWorker(
 
             maybeSendStorageWarning()
             Result.success()
-        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            com.makay.cleaner.util.SoftErrorLogger.warn("CleaningWorker", "timeout", e)
             if (runAttemptCount + 1 >= MAX_ATTEMPTS) {
                 notifyFailure("Otomatik temizlik zaman aşımına uğradı.")
                 Result.failure()
             } else {
                 Result.retry()
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            com.makay.cleaner.util.SoftErrorLogger.error("CleaningWorker", "temizlik başarısız", e)
             if (runAttemptCount + 1 >= MAX_ATTEMPTS) {
                 notifyFailure("Otomatik temizlik başarısız oldu.")
                 Result.failure()
@@ -123,7 +125,8 @@ class CleaningWorker(
                     deepLink = NotificationManager.DEEP_CACHE
                 )
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            com.makay.cleaner.util.SoftErrorLogger.warn("CleaningWorker", "storage warning", e)
         }
     }
 }

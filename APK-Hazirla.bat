@@ -74,6 +74,11 @@ if errorlevel 1 (
     echo [HATA] git bulunamadi.  winget install Git.Git
     goto :END_FAIL
 )
+if not exist "%~dp0tool\git_commit.cmd" (
+    echo [HATA] tool\git_commit.cmd yok - yayin kimligi kurulamadi.
+    goto :END_FAIL
+)
+call "%~dp0tool\git_identity.cmd"
 where gh >nul 2>&1
 if errorlevel 1 (
     echo [HATA] GitHub CLI ^(gh^) bulunamadi.
@@ -113,10 +118,10 @@ REM ============================================================
 git add -A >nul 2>&1
 git diff --cached --quiet >nul 2>&1
 if errorlevel 1 (
-    git commit -m "Makay Cleaner v!VERSION!: birikimli guncelleme" >nul 2>&1
+    call "%~dp0tool\git_commit.cmd" -m "Makay Cleaner v!VERSION!: birikimli guncelleme" >nul 2>&1
     if errorlevel 1 (
         echo [HATA] Commit basarisiz.
-        git commit -m "Makay Cleaner v!VERSION!: birikimli guncelleme"
+        call "%~dp0tool\git_commit.cmd" -m "Makay Cleaner v!VERSION!: birikimli guncelleme"
         goto :END_FAIL
     )
     for /f "delims=" %%H in ('git rev-parse --short HEAD 2^>nul') do set "C1=%%H"
@@ -159,6 +164,21 @@ echo.
 REM ============================================================
 echo [3/6] Release APK derleniyor + APK\ klasorune yayinlaniyor (v!VERSION!)...
 REM ============================================================
+REM Uretim keystore zorunlu (debug imza fallback kaldirildi).
+set "HAS_RELEASE_KEY=0"
+findstr /B /C:"RELEASE_STORE_FILE=" "%PROJECT_DIR%\local.properties" >nul 2>&1
+if not errorlevel 1 (
+    findstr /B /C:"RELEASE_STORE_PASSWORD=" "%PROJECT_DIR%\local.properties" >nul 2>&1
+    if not errorlevel 1 (
+        findstr /B /C:"RELEASE_KEY_ALIAS=" "%PROJECT_DIR%\local.properties" >nul 2>&1
+        if not errorlevel 1 set "HAS_RELEASE_KEY=1"
+    )
+)
+if "!HAS_RELEASE_KEY!"=="0" (
+    echo [HATA] local.properties icinde RELEASE_STORE_FILE / PASSWORD / KEY_ALIAS eksik.
+    echo        Debug imzali release yayini engellendi.
+    goto :END_FAIL
+)
 echo  Bu islem birka dakika surebilir.
 echo.
 call "%GRADLEW%" --stop >nul 2>&1
@@ -220,10 +240,10 @@ REM ============================================================
 git add "VERSION.txt" >nul 2>&1
 git diff --cached --quiet -- "VERSION.txt" >nul 2>&1
 if errorlevel 1 (
-    git commit -m "Yayin: MakayCleaner v!VERSION!" -- "VERSION.txt" >nul 2>&1
+    call "%~dp0tool\git_commit.cmd" -m "Yayin: MakayCleaner v!VERSION!" -- "VERSION.txt" >nul 2>&1
     if errorlevel 1 (
         echo [HATA] Surum commit'i basarisiz.
-        git commit -m "Yayin: MakayCleaner v!VERSION!" -- "VERSION.txt"
+        call "%~dp0tool\git_commit.cmd" -m "Yayin: MakayCleaner v!VERSION!" -- "VERSION.txt"
         goto :END_FAIL
     )
     for /f "delims=" %%H in ('git rev-parse --short HEAD 2^>nul') do set "C2=%%H"

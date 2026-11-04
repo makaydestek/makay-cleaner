@@ -60,16 +60,47 @@ object JunkScanHelper {
 
     /** Varsayılan tarama zaman aşımı (ms). */
     const val DEFAULT_SCAN_TIMEOUT_MS = 90_000L
+    const val DEEP_SCAN_TIMEOUT_MS = 180_000L
 
-    fun scan(context: Context, timeoutMs: Long = DEFAULT_SCAN_TIMEOUT_MS): JunkReport =
-        scanInternal(context, deadlineMs = System.currentTimeMillis() + timeoutMs)
+    enum class ScanDepth {
+        /** Ana ekran / widget: daha düşük limit, kısa süre. */
+        QUICK,
+        /** Cleaner hub: daha geniş kapsam, yüksek limit. */
+        DEEP
+    }
 
-    /** Ayrıntılı temizleyici ile aynı kapsam (Xiaomi tarzı tam tarama). */
-    fun deepScan(context: Context, timeoutMs: Long = DEFAULT_SCAN_TIMEOUT_MS): JunkReport =
-        scanInternal(context, deadlineMs = System.currentTimeMillis() + timeoutMs)
+    fun scan(
+        context: Context,
+        timeoutMs: Long = DEFAULT_SCAN_TIMEOUT_MS,
+        cancelled: () -> Boolean = { false }
+    ): JunkReport =
+        scanInternal(
+            context,
+            deadlineMs = System.currentTimeMillis() + timeoutMs,
+            depth = ScanDepth.QUICK,
+            cancelled = cancelled
+        )
 
-    private fun scanInternal(context: Context, deadlineMs: Long): JunkReport {
-        fun timedOut(): Boolean = System.currentTimeMillis() > deadlineMs
+    /** Cleaner hub için geniş kapsamlı tarama (daha yüksek limit / uzun timeout). */
+    fun deepScan(
+        context: Context,
+        timeoutMs: Long = DEEP_SCAN_TIMEOUT_MS,
+        cancelled: () -> Boolean = { false }
+    ): JunkReport =
+        scanInternal(
+            context,
+            deadlineMs = System.currentTimeMillis() + timeoutMs,
+            depth = ScanDepth.DEEP,
+            cancelled = cancelled
+        )
+
+    private fun scanInternal(
+        context: Context,
+        deadlineMs: Long,
+        depth: ScanDepth,
+        cancelled: () -> Boolean
+    ): JunkReport {
+        fun timedOut(): Boolean = System.currentTimeMillis() > deadlineMs || cancelled()
         if (timedOut()) {
             return JunkReport(categories = emptyList(), totalBytes = 0L)
         }
@@ -78,18 +109,20 @@ object JunkScanHelper {
             return JunkReport(categories = emptyList(), totalBytes = 0L)
         }
         val thumbs = thumbnailFiles(context)
-        val extra = extraCacheFiles(context)
+        val extra = extraCacheFiles(context, deep = depth == ScanDepth.DEEP)
         val seen = mutableSetOf<String>()
         fun File.takeUnique(): Boolean = seen.add(absolutePath)
 
         val cacheFiles = (cache.map { it.file } + thumbs + extra).filter { it.takeUnique() }
-        val system = if (timedOut()) emptyList() else systemItems(4000)
+        val systemLimit = if (depth == ScanDepth.DEEP) 8000 else 2500
+        val unusedAgeDays = if (depth == ScanDepth.DEEP) 3 else 7
+        val system = if (timedOut()) emptyList() else systemItems(systemLimit)
             .filter { FilePurger.canRemove(context, it.file) && it.file.takeUnique() }
         val corpses = if (timedOut()) emptyList() else corpseItems(context)
             .filter { FilePurger.canRemove(context, File(it.path)) && File(it.path).takeUnique() }
-        val apks = if (timedOut()) emptyList() else apkItems(0)
+        val apks = if (timedOut()) emptyList() else apkItems(if (depth == ScanDepth.DEEP) 0 else 1)
             .filter { FilePurger.canRemove(context, it.file) && it.file.takeUnique() }
-        val unused = if (timedOut()) emptyList() else unusedDownloadFiles(context, 7).filter {
+        val unused = if (timedOut()) emptyList() else unusedDownloadFiles(context, unusedAgeDays).filter {
             FilePurger.canRemove(context, it) && it.takeUnique()
         }
 
@@ -324,7 +357,8 @@ object JunkScanHelper {
     private fun cacheEntries(context: Context): List<AppCacheRepository.CacheFileEntry> = try {
         AppCacheRepository(context).scanAccessibleCacheFiles()
             .filter { FilePurger.canRemove(context, it.file) }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        SoftErrorLogger.warn("JunkScan", "cacheEntries başarısız", e)
         emptyList()
     }
 
@@ -347,7 +381,8 @@ object JunkScanHelper {
                         }
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                SoftErrorLogger.warn("JunkScan", "thumbnailFiles: ${dir.name}", e)
             }
         }
         return out
@@ -355,19 +390,22 @@ object JunkScanHelper {
 
     private fun systemItems(maxItems: Int = 500) = try {
         SystemCleanerScanner().scan(maxItems = maxItems)
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        SoftErrorLogger.warn("JunkScan", "systemItems başarısız", e)
         emptyList()
     }
 
     private fun corpseItems(context: Context) = try {
         CorpseFinder(context).scan()
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        SoftErrorLogger.warn("JunkScan", "corpseItems başarısız", e)
         emptyList()
     }
 
     private fun apkItems(minAgeDays: Int = 1) = try {
         ApkRemnantScanner().scan(minAgeDays = minAgeDays, limit = if (minAgeDays <= 0) 400 else 200)
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        SoftErrorLogger.warn("JunkScan", "apkItems başarısız", e)
         emptyList()
     }
 
@@ -391,13 +429,14 @@ object JunkScanHelper {
                     )
                     if ((old && f.length() > 20 * 1024) || junkExt) out.add(f)
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                SoftErrorLogger.warn("JunkScan", "unusedDownloadFiles: ${dir.name}", e)
             }
         }
         return out
     }
 
-    private fun extraCacheFiles(context: Context): List<File> {
+    private fun extraCacheFiles(context: Context, deep: Boolean = false): List<File> {
         val ext = Environment.getExternalStorageDirectory() ?: return emptyList()
         val roots = mutableListOf(
             File(ext, "Android/data/com.whatsapp/cache"),
@@ -412,18 +451,21 @@ object JunkScanHelper {
         )
         roots.addAll(TvHelper.getTvStreamingCachePaths(context))
         val out = mutableListOf<File>()
+        val maxFiles = if (deep) 4000 else 1500
+        val maxDepth = if (deep) 6 else 4
         fun walk(dir: File, depth: Int) {
-            if (depth > 5 || out.size >= 2000) return
+            if (depth > maxDepth || out.size >= maxFiles) return
             if (!dir.exists()) return
             try {
                 dir.listFiles()?.forEach { child ->
-                    if (out.size >= 2000) return
+                    if (out.size >= maxFiles) return
                     if (child.isDirectory) walk(child, depth + 1)
                     else if (child.isFile && FilePurger.canRemove(context, child) && child.length() > 0) {
                         out.add(child)
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                SoftErrorLogger.warn("JunkScan", "extraCacheFiles walk", e)
             }
         }
         roots.distinctBy { it.absolutePath }.forEach { walk(it, 0) }

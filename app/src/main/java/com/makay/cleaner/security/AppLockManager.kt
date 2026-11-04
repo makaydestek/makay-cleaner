@@ -41,11 +41,17 @@ class AppLockManager(context: Context) {
         return bytes.joinToString("") { "%02x".format(it) }
     }
 
-    fun setPin(pin: String) {
+    /**
+     * Şifreli depo yokken yeni PIN kurulumu güvenilir değildir.
+     * @return false ise degraded mode; UI kullanıcıyı uyarmalı
+     */
+    fun setPin(pin: String): Boolean {
+        if (isStorageDegraded()) return false
         val salt = generateSalt()
         secureStorage.saveString(KEY_PIN_SALT, salt)
         secureStorage.saveString(KEY_PIN_HASH, hashPin(pin, salt))
         secureStorage.saveBoolean(KEY_PIN_ENABLED, true)
+        return true
     }
 
     fun verifyPin(pin: String): Boolean {

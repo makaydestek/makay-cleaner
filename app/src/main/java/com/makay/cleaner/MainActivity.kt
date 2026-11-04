@@ -38,6 +38,8 @@ class MainActivity : FragmentActivity() {
 
     companion object {
         const val ACTION_QUICK_CLEAN = "com.makay.cleaner.QUICK_CLEAN"
+        /** @deprecated Yerine [com.makay.cleaner.ui.LocalHostActivity] kullanın. */
+        @Deprecated("Use LocalHostActivity CompositionLocal")
         var instance: WeakReference<MainActivity>? = null
     }
 
@@ -63,6 +65,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        @Suppress("DEPRECATION")
         instance = WeakReference(this)
         enableEdgeToEdge()
 
@@ -71,21 +74,25 @@ class MainActivity : FragmentActivity() {
         consumeUpdateIntent(intent)
 
         setContent {
-            MakayCleanerTheme(themeRepository = themeRepository) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    val promptToken by _updatePromptToken
-                    val fromNotif by _updateFromNotification
-                    val autoDl by _updateAutoDownload
-                    Box(Modifier.fillMaxSize()) {
-                        AppWithSplash()
-                        AppUpdateHost(
-                            openFromNotification = fromNotif,
-                            autoDownload = autoDl,
-                            promptToken = promptToken
-                        )
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.makay.cleaner.ui.LocalHostActivity provides this
+            ) {
+                MakayCleanerTheme(themeRepository = themeRepository) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        val promptToken by _updatePromptToken
+                        val fromNotif by _updateFromNotification
+                        val autoDl by _updateAutoDownload
+                        Box(Modifier.fillMaxSize()) {
+                            AppWithSplash()
+                            AppUpdateHost(
+                                openFromNotification = fromNotif,
+                                autoDownload = autoDl,
+                                promptToken = promptToken
+                            )
+                        }
                     }
                 }
             }
@@ -164,6 +171,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        @Suppress("DEPRECATION")
         instance = null
     }
 

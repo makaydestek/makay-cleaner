@@ -33,6 +33,8 @@ val hasReleaseKey = releaseStore.isNotEmpty() &&
     localProp("RELEASE_KEY_ALIAS").isNotEmpty() &&
     localProp("RELEASE_KEY_PASSWORD").isNotEmpty() &&
     rootProject.file(releaseStore).isFile
+// Pro acma kodu duz metin olarak kaynakta tutulmaz; SHA-256 (hex) local.properties'ten gelir.
+val proUnlockSha = localProp("PRO_UNLOCK_CODE_SHA256").lowercase()
 
 android {
     namespace = "com.makay.cleaner"
@@ -46,6 +48,9 @@ android {
         versionName = appVersionName
         buildConfigField("String", "UPDATE_GITHUB_OWNER", "\"makaydestek\"")
         buildConfigField("String", "UPDATE_GITHUB_REPO", "\"makay-cleaner\"")
+        buildConfigField("boolean", "PRO_GATING_ENABLED", "false")
+        buildConfigField("String", "PRO_UNLOCK_CODE_SHA256", "\"$proUnlockSha\"")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -68,12 +73,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Mevcut kurulumlar debug anahtariyla guncelleniyor. Uretim anahtari
-            // local.properties'te yoksa bu zinciri kirmamak icin debug imza kalir.
-            signingConfig = if (hasReleaseKey) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // Debug imza fallback YOK. Keystore yoksa asagidaki task guard assembleRelease'i kirar.
+            if (hasReleaseKey) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
         debug {
@@ -97,8 +99,10 @@ android {
     }
 
     lint {
-        checkReleaseBuilds = false
-        abortOnError = false
+        checkReleaseBuilds = true
+        abortOnError = true
+        // Bilinen sideload gürültülerini CI'yi kırmadan tutmak için
+        warningsAsErrors = false
     }
 
     packaging {
@@ -161,6 +165,11 @@ fun deleteStrayDeliveryApks(keepDir: java.io.File) {
 tasks.register("publishReleaseApk") {
     group = "distribution"
     description = "Release APK + SHA-256 + R8 mapping'i yalnizca APK/ klasorune yazar; baska klasordeki kopyalari siler"
+    doFirst {
+        check(hasReleaseKey) {
+            "publishReleaseApk: uretim keystore zorunlu (debug imzali yayin engellendi)."
+        }
+    }
     doLast {
         val src = layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile
         check(src.exists()) { "APK bulunamadi: ${src.absolutePath}" }
@@ -213,7 +222,19 @@ tasks.register("publishReleaseApk") {
 
 afterEvaluate {
     tasks.named("assembleRelease").configure {
+        doFirst {
+            check(hasReleaseKey) {
+                "assembleRelease: uretim keystore zorunlu. local.properties icinde RELEASE_* alanlarini " +
+                    "doldurun; debug imzali release yayini engellendi."
+            }
+        }
         finalizedBy("publishReleaseApk")
+    }
+    // Paketleme de ayni kapidan gecsin (CI compileReleaseKotlin imza istemez).
+    tasks.findByName("packageRelease")?.doFirst {
+        check(hasReleaseKey) {
+            "packageRelease: uretim keystore zorunlu (debug imza fallback kaldirildi)."
+        }
     }
 }
 
@@ -239,7 +260,8 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
 
     implementation("androidx.biometric:biometric:1.1.0")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     // Bundled yüz tespiti (sideload / Play Services indirmesi gerekmez)
@@ -249,5 +271,8 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
     testImplementation("junit:junit:4.13.2")
 }

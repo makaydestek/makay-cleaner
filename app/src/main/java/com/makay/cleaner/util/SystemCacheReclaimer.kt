@@ -17,10 +17,33 @@ import kotlin.math.min
  * Xiaomi Güvenlik’in sildiği uygulama iç önbelleği.
  * Sideload File.delete ile buna erişemez; sistem allocateBytes / freeStorage
  * ile önbelleği boşaltır — Xiaomi taramasının da düşmesi gerekir.
+ *
+ * Agresif reflection / allocateBytes OEM bayrağı ile sınırlanır
+ * ([isAggressiveReclaimEnabled]).
  */
 object SystemCacheReclaimer {
 
+    private const val TAG = "SysCacheReclaim"
+    private const val PREFS = "system_cache_reclaimer"
+    private const val KEY_AGGRESSIVE = "aggressive_reclaim"
+    /** allocateBytes üst sınırı (OEM'de ANR/ısınma riskini sınırlar). */
+    private const val MAX_ALLOCATE_BYTES = 512L * 1024 * 1024
+    private const val ALLOCATE_CHUNK = 64L * 1024 * 1024
+
     data class Result(val bytesFreed: Long, val packagesTouched: Int)
+
+    fun isAggressiveReclaimEnabled(context: Context): Boolean =
+        context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AGGRESSIVE, true)
+
+    fun setAggressiveReclaimEnabled(context: Context, enabled: Boolean) {
+        context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_AGGRESSIVE, enabled)
+            .apply()
+    }
 
     fun queryCacheBytes(context: Context): Long {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return 0L
@@ -40,9 +63,12 @@ object SystemCacheReclaimer {
             return Result(ext.spaceSaved, ext.filesDeleted)
         }
 
-        val packages = tryDeleteApplicationCacheFiles(context)
-        freeStorage(context, goal)
-        evictViaAllocate(context, goal)
+        val aggressive = isAggressiveReclaimEnabled(context)
+        val packages = if (aggressive) tryDeleteApplicationCacheFiles(context) else 0
+        if (aggressive) {
+            freeStorage(context, goal)
+            evictViaAllocate(context, min(goal, MAX_ALLOCATE_BYTES))
+        }
         val ext = wipeExternalAppCaches(context)
 
         val after = queryCacheBytes(context)
@@ -55,7 +81,8 @@ object SystemCacheReclaimer {
         return try {
             val m = StorageStatsManager::class.java.getMethod("getCacheBytes", UUID::class.java)
             (m.invoke(ssm, uuid) as? Long) ?: 0L
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            SoftErrorLogger.warn(TAG, "getCacheBytes yansıtması başarısız", e)
             0L
         }
     }
@@ -74,6 +101,7 @@ object SystemCacheReclaimer {
                     total += stats.externalCacheBytes
                 }
             } catch (_: Exception) {
+                // OEM / izin kısıtı sık; paket başına log şişirmeyi önle
             }
         }
         return total
@@ -87,10 +115,9 @@ object SystemCacheReclaimer {
         val target = min(wantBytes, allocatable).coerceAtLeast(0L)
         if (target <= 0L) return
 
-        val chunk = 128L * 1024 * 1024
         var left = target
         while (left > 0L) {
-            val n = min(chunk, left)
+            val n = min(ALLOCATE_CHUNK, left)
             val tmp = File(context.cacheDir, "makay_alloc_${System.nanoTime()}")
             try {
                 tmp.createNewFile()
@@ -100,7 +127,8 @@ object SystemCacheReclaimer {
                 ).use { pfd ->
                     sm.allocateBytes(pfd.fileDescriptor, n)
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                SoftErrorLogger.warn(TAG, "allocateBytes kesildi", e)
                 left = 0L
             } finally {
                 if (tmp.exists()) tmp.delete()
@@ -112,7 +140,6 @@ object SystemCacheReclaimer {
 
     private fun allocatableBytes(sm: StorageManager, uuid: UUID): Long {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return 0L
-        // FLAG_ALLOCATE_AGGRESSIVE = 1 — sistem önbelleğini daha agresif boşaltır
         runCatching {
             val m = StorageManager::class.java.getMethod(
                 "getAllocatableBytes",
@@ -120,7 +147,7 @@ object SystemCacheReclaimer {
                 Int::class.javaPrimitiveType
             )
             return (m.invoke(sm, uuid, 1) as? Long) ?: 0L
-        }
+        }.onFailure { SoftErrorLogger.warn(TAG, "getAllocatableBytes(flag) yok", it) }
         return runCatching { sm.getAllocatableBytes(uuid) }.getOrDefault(0L)
     }
 
@@ -132,7 +159,7 @@ object SystemCacheReclaimer {
                 it.name == "freeStorageAndNotify" && it.parameterTypes.size == 2
             }
             m.invoke(pm, bytes, observer)
-        }
+        }.onFailure { SoftErrorLogger.warn(TAG, "freeStorageAndNotify başarısız", it) }
         runCatching {
             val m = pm.javaClass.methods.first {
                 it.name == "freeStorage" && it.parameterTypes.size >= 2
@@ -142,7 +169,7 @@ object SystemCacheReclaimer {
                 3 -> m.invoke(pm, null, bytes, null)
                 else -> m.invoke(pm, bytes)
             }
-        }
+        }.onFailure { SoftErrorLogger.warn(TAG, "freeStorage başarısız", it) }
     }
 
     private fun tryDeleteApplicationCacheFiles(context: Context): Int {
@@ -169,7 +196,8 @@ object SystemCacheReclaimer {
         return try {
             val clz = Class.forName("android.content.pm.IPackageDataObserver")
             Proxy.newProxyInstance(clz.classLoader, arrayOf(clz)) { _, _, _ -> null }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            SoftErrorLogger.warn(TAG, "IPackageDataObserver proxy yok", e)
             null
         }
     }

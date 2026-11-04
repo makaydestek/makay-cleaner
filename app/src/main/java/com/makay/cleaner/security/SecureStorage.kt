@@ -1,15 +1,17 @@
+@file:Suppress("DEPRECATION")
+
 package com.makay.cleaner.security
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
+import com.makay.cleaner.util.SoftErrorLogger
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 /**
  * PIN / kilit tercihleri için şifreli depo.
  * Keystore açılamazsa uygulama çökmez; düz SharedPreferences’e düşer ve
- * [isEncryptionAvailable] false olur (UI uyarı gösterebilir).
+ * [isEncryptionAvailable] false olur. Bu durumda yeni PIN kurulumu reddedilmelidir.
  */
 class SecureStorage(context: Context) {
 
@@ -26,8 +28,12 @@ class SecureStorage(context: Context) {
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
-    }.onFailure {
-        Log.w(TAG, "EncryptedSharedPreferences açılamadı; düz depo kullanılacak")
+    }.onFailure { error ->
+        SoftErrorLogger.warn(
+            TAG,
+            "EncryptedSharedPreferences açılamadı; düz depo kullanılacak (degraded)",
+            error
+        )
     }.getOrNull()
 
     private val prefs: SharedPreferences =
