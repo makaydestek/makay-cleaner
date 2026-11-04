@@ -102,15 +102,6 @@ fun AppUpdateHost(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (update.releaseNotes.isNotBlank() &&
-                        !update.releaseNotes.equals("null", ignoreCase = true)
-                    ) {
-                        Text(
-                            update.releaseNotes,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                     if (state.downloading) {
                         LinearProgressIndicator(
                             progress = { state.progress / 100f },
