@@ -202,6 +202,8 @@ if not exist "!APK_TARGET!" (
     echo  !APK_TARGET!
     goto :END_FAIL
 )
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_DIR%\tools\verify-apk-version.ps1" -ApkPath "!APK_TARGET!" -ExpectedVersion "!VERSION!"
+if errorlevel 1 goto :END_FAIL
 if not exist "!SHA_TARGET!" (
     echo [UYARI] SHA dosyasi yok, olusturuluyor...
     powershell -NoProfile -ExecutionPolicy Bypass -Command ^
@@ -337,7 +339,7 @@ REM Once tum tag adlarini topla; sonra gereksiz release'leri sil;
 REM en sonda release'siz kalan tag'leri temizle (etiket birikimini onle).
 gh api "repos/%REPO%/tags" --paginate --jq ".[].name" > "!ALL_TAGS!" 2>nul
 
-gh release list --repo %REPO% --json tagName -q ".[].tagName" > "!TAGS_FILE!" 2>nul
+gh release list --repo %REPO% --limit 200 --json tagName -q ".[].tagName" > "!TAGS_FILE!" 2>nul
 if exist "!TAGS_FILE!" (
     for /f "usebackq delims=" %%T in ("!TAGS_FILE!") do (
         if /i not "%%T"=="!TAG!" (
@@ -372,6 +374,7 @@ if "!NOPAUSE!"=="0" start "" explorer "%APK_DIR%"
 
 echo ================================================
 echo  Tamamlandi - MakayCleaner v!VERSION!
+echo  Not: Cihazda bu surum zaten yukluyse "Uygulama guncel" normaldir.
 echo  Kurulum : APK\MakayCleaner_v!VERSION!.apk
 echo  Release : https://github.com/%REPO%/releases/tag/!VERSION!
 echo ================================================
