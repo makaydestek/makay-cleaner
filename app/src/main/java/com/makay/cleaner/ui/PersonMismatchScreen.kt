@@ -1,10 +1,9 @@
 package com.makay.cleaner.ui
 
 import android.app.Application
-import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
@@ -13,9 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,25 +23,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.makay.cleaner.data.CleaningRecorder
-import com.makay.cleaner.data.RecycleBinRepository
 import com.makay.cleaner.scanner.PersonMismatchScanner
-import com.makay.cleaner.util.CleanResultTracker
-import com.makay.cleaner.util.FilePurger
 import com.makay.cleaner.util.PermissionHelper
-import com.makay.cleaner.util.PhotoAlbumMover
 import com.makay.cleaner.util.rememberStoragePermissionState
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Klasörde “asıl kişi” referansı ile farklı kişi fotoğraflarını bulur;
  * Sil (çöp) / Taşı / Kopyala.
+ *
+ * Sonuçlar Activity-scoped ViewModel + disk arşivinde tutulur;
+ * geri navigasyon tamamlanan taramayı silmez.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,187 +47,60 @@ fun PersonMismatchScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val scanner = remember { PersonMismatchScanner(application) }
-    val trash = remember { RecycleBinRepository(application) }
+    val activity = context as? ComponentActivity
+    val vm: PersonMismatchViewModel = if (activity != null) {
+        viewModel(
+            viewModelStoreOwner = activity,
+            factory = PersonMismatchViewModel.Factory(application)
+        )
+    } else {
+        viewModel(factory = PersonMismatchViewModel.Factory(application))
+    }
+    val state by vm.uiState.collectAsStateWithLifecycle()
     val hasPermission = rememberStoragePermissionState()
 
-    var buckets by remember { mutableStateOf<List<PersonMismatchScanner.BucketInfo>>(emptyList()) }
-    var selectedBucket by remember { mutableStateOf<String?>(null) }
     var bucketMenu by remember { mutableStateOf(false) }
-    var referenceUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
-    var candidates by remember { mutableStateOf<List<PersonMismatchScanner.MismatchCandidate>>(emptyList()) }
-    var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var loadingBuckets by remember { mutableStateOf(false) }
-    var scanning by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    var hasScanned by remember { mutableStateOf(false) }
-    var progressText by remember { mutableStateOf("") }
-    var progressCur by remember { mutableIntStateOf(0) }
-    var progressTot by remember { mutableIntStateOf(1) }
-    var threshold by remember { mutableFloatStateOf(PersonMismatchScanner.DEFAULT_MATCH_THRESHOLD) }
     var albumDialog by remember { mutableStateOf<AlbumAction?>(null) }
     var albumName by remember { mutableStateOf("") }
-    var scanJob by remember { mutableStateOf<Job?>(null) }
-    val cancelFlag = remember { AtomicBoolean(false) }
+    var leaveWhileScanning by remember { mutableStateOf(false) }
 
     val pickRefs = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
     ) { uris ->
-        if (uris.isNotEmpty()) {
-            referenceUris = (referenceUris + uris).distinct().take(12)
+        if (uris.isNotEmpty()) vm.addReferences(uris)
+    }
+
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) vm.refreshBuckets()
+    }
+
+    LaunchedEffect(state.toastMessage) {
+        val msg = state.toastMessage ?: return@LaunchedEffect
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        vm.consumeToast()
+    }
+
+    LaunchedEffect(state.errorMessage) {
+        val msg = state.errorMessage ?: return@LaunchedEffect
+        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        vm.consumeError()
+    }
+
+    fun goBack() {
+        vm.persistArchiveBlocking()
+        onNavigateBack()
+    }
+
+    BackHandler {
+        if (state.scanning) {
+            leaveWhileScanning = true
+        } else {
+            goBack()
         }
     }
 
-    fun refreshBuckets() {
-        if (!hasPermission) return
-        scope.launch {
-            loadingBuckets = true
-            buckets = withContext(Dispatchers.IO) { scanner.listBuckets() }
-            if (selectedBucket == null) {
-                selectedBucket = buckets.firstOrNull()?.name
-            }
-            loadingBuckets = false
-        }
-    }
-
-    LaunchedEffect(hasPermission) { refreshBuckets() }
-    DisposableEffect(Unit) {
-        onDispose { scanner.close() }
-    }
-
-    fun runScan() {
-        val bucket = selectedBucket ?: return
-        if (referenceUris.isEmpty()) {
-            Toast.makeText(context, "Önce asıl kişi için örnek foto seçin", Toast.LENGTH_SHORT).show()
-            return
-        }
-        scanJob?.cancel()
-        cancelFlag.set(false)
-        scanJob = scope.launch {
-            scanning = true
-            hasScanned = true
-            candidates = emptyList()
-            selected = emptySet()
-            progressText = "Referans yüzler çıkarılıyor…"
-            progressCur = 0
-            progressTot = 1
-            val mainHandler = Handler(Looper.getMainLooper())
-            val result = withContext(Dispatchers.Default) {
-                val refs = scanner.buildReferences(referenceUris)
-                if (refs.embeddings.isEmpty()) {
-                    return@withContext ScanOutcome.NoFace(refs.skippedNoFace, refs.errors)
-                }
-                val found = scanner.scan(
-                    bucketName = bucket,
-                    references = refs.embeddings,
-                    matchThreshold = threshold,
-                    cancelled = cancelFlag,
-                    progress = PersonMismatchScanner.ProgressListener { phase, cur, tot ->
-                        mainHandler.post {
-                            progressText = phase
-                            progressCur = cur
-                            progressTot = tot.coerceAtLeast(1)
-                        }
-                    }
-                )
-                ScanOutcome.Ok(found, refs.embeddings.size, refs.skippedNoFace)
-            }
-            scanning = false
-            when (result) {
-                is ScanOutcome.NoFace -> {
-                    Toast.makeText(
-                        context,
-                        "Referanslarda yüz bulunamadı (yüz yok: ${result.skipped}, hata: ${result.errors})",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-                is ScanOutcome.Ok -> {
-                    candidates = result.items
-                    if (result.skippedRefs > 0) {
-                        Toast.makeText(
-                            context,
-                            "${result.refCount} yüz kaydı · ${result.skippedRefs} örnekte yüz yoktu",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            }
-        }
-    }
-
-    fun applyTrash(paths: List<PersonMismatchScanner.MismatchCandidate>) {
-        scope.launch {
-            busy = true
-            var n = 0
-            var saved = 0L
-            withContext(Dispatchers.IO) {
-                trash.beginBatch()
-                paths.forEach { item ->
-                    val f = File(item.path)
-                    val size = item.sizeBytes
-                    val ok = if (f.isFile) {
-                        FilePurger.remove(context, f, trash = trash, category = "Farklı kişi")
-                    } else {
-                        trash.moveUriToTrash(item.uri, item.displayName, size, "Farklı kişi")
-                    }
-                    if (ok) {
-                        n++
-                        saved += size
-                    }
-                }
-            }
-            if (n > 0) {
-                CleaningRecorder.record(application, "Farklı kişi", saved, n)
-                CleanResultTracker.record("Farklı kişi", n, saved)
-            }
-            busy = false
-            Toast.makeText(
-                context,
-                if (n > 0) "$n foto çöp kutusuna taşındı" else "Silinemedi",
-                Toast.LENGTH_SHORT
-            ).show()
-            val done = paths.map { it.path }.toSet()
-            candidates = candidates.filterNot { it.path in done }
-            selected = emptySet()
-        }
-    }
-
-    fun applyCopyOrMove(paths: List<PersonMismatchScanner.MismatchCandidate>, move: Boolean, album: String) {
-        scope.launch {
-            busy = true
-            val donePaths = mutableSetOf<String>()
-            withContext(Dispatchers.IO) {
-                paths.forEach { item ->
-                    val ok = if (move) {
-                        PhotoAlbumMover.moveToAlbum(
-                            context, item.path, item.uri, item.displayName, album
-                        )
-                    } else {
-                        PhotoAlbumMover.copyToAlbum(
-                            context, item.path, item.uri, item.displayName, album
-                        )
-                    }
-                    if (ok) donePaths += item.path
-                }
-            }
-            busy = false
-            val verb = if (move) "taşındı" else "kopyalandı"
-            Toast.makeText(
-                context,
-                if (donePaths.isNotEmpty()) "${donePaths.size} foto «$album» albümüne $verb"
-                else "İşlem başarısız",
-                Toast.LENGTH_SHORT
-            ).show()
-            if (move && donePaths.isNotEmpty()) {
-                candidates = candidates.filterNot { it.path in donePaths }
-                selected = selected - donePaths
-            }
-        }
-    }
-
-    val selectedItems = remember(candidates, selected) {
-        candidates.filter { it.path in selected }
+    val selectedItems = remember(state.candidates, state.selected) {
+        state.candidates.filter { it.path in state.selected }
     }
 
     Scaffold(
@@ -241,17 +108,16 @@ fun PersonMismatchScreen(
             TopAppBar(
                 title = { Text("Klasörde farklı kişi", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = {
+                        if (state.scanning) leaveWhileScanning = true
+                        else goBack()
+                    }) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
                     }
                 },
                 actions = {
-                    if (scanning) {
-                        TextButton(onClick = {
-                            cancelFlag.set(true)
-                            scanJob?.cancel()
-                            scanning = false
-                        }) { Text("İptal") }
+                    if (state.scanning) {
+                        TextButton(onClick = { vm.cancelScan() }) { Text("İptal") }
                     }
                 }
             )
@@ -270,147 +136,201 @@ fun PersonMismatchScreen(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            Column(
-                Modifier
-                    .weight(1f, fill = true)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            // LazyColumn: büyük aday listelerinde OOM / UI çökmesini önler
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                Text(
-                    "Örnek fotoğraflarla asıl kişiyi belirleyin; klasördeki tüm fotoğraflar " +
-                        "MobileFaceNet YZ modeli ile taranır. Eşleşmeyenler listelenir — Sil / Taşı / Kopyala.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text("1. Klasör", fontWeight = FontWeight.SemiBold)
-                ExposedDropdownMenuBox(
-                    expanded = bucketMenu,
-                    onExpandedChange = { bucketMenu = it }
-                ) {
-                    OutlinedTextField(
-                        value = selectedBucket ?: if (loadingBuckets) "Yükleniyor…" else "Klasör seçin",
-                        onValueChange = {},
-                        readOnly = true,
-                        modifier = Modifier
-                            .menuAnchor()
-                            .fillMaxWidth(),
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(bucketMenu) },
-                        label = { Text("Albüm / klasör") }
+                item(key = "intro") {
+                    Text(
+                        "Örnek fotoğraflarla asıl kişiyi belirleyin; klasördeki tüm fotoğraflar " +
+                            "MobileFaceNet YZ modeli ile taranır. Eşleşmeyenler listelenir — Sil / Taşı / Kopyala. " +
+                            "Son tarama otomatik arşivlenir; geri tuşu sonuçları silmez.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    ExposedDropdownMenu(
+                }
+
+                if (state.archiveRestored && state.candidates.isNotEmpty()) {
+                    item(key = "archive_banner") {
+                        val whenText = if (state.archiveSavedAt > 0L) {
+                            SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                                .format(Date(state.archiveSavedAt))
+                        } else {
+                            "önceki oturum"
+                        }
+                        AssistChip(
+                            onClick = {},
+                            label = {
+                                Text("Son tarama yüklendi · $whenText · ${state.candidates.size} aday")
+                            }
+                        )
+                    }
+                }
+
+                item(key = "bucket_label") {
+                    Text("1. Klasör", fontWeight = FontWeight.SemiBold)
+                }
+                item(key = "bucket_field") {
+                    ExposedDropdownMenuBox(
                         expanded = bucketMenu,
-                        onDismissRequest = { bucketMenu = false }
+                        onExpandedChange = { bucketMenu = it }
                     ) {
-                        buckets.forEach { b ->
-                            DropdownMenuItem(
-                                text = { Text("${b.name} (${b.count})") },
-                                onClick = {
-                                    selectedBucket = b.name
-                                    bucketMenu = false
-                                    candidates = emptyList()
-                                    hasScanned = false
-                                }
-                            )
+                        OutlinedTextField(
+                            value = state.selectedBucket
+                                ?: if (state.loadingBuckets) "Yükleniyor…" else "Klasör seçin",
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(bucketMenu) },
+                            label = { Text("Albüm / klasör") }
+                        )
+                        ExposedDropdownMenu(
+                            expanded = bucketMenu,
+                            onDismissRequest = { bucketMenu = false }
+                        ) {
+                            state.buckets.forEach { b ->
+                                DropdownMenuItem(
+                                    text = { Text("${b.name} (${b.count})") },
+                                    onClick = {
+                                        vm.selectBucket(b.name)
+                                        bucketMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
 
-                Text("2. Asıl kişi örnekleri", fontWeight = FontWeight.SemiBold)
-                Text(
-                    "1–12 net, kameraya bakan yüz fotoğrafı seçin (aynı kişi). Daha fazla örnek = daha doğru YZ eşleşme.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(referenceUris, key = { it.toString() }) { uri ->
-                        Box {
-                            AsyncImage(
-                                model = uri,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp)),
-                                contentScale = ContentScale.Crop
+                item(key = "refs_label") {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("2. Asıl kişi örnekleri", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "1–${PersonMismatchScanner.MAX_REFERENCES} net, kameraya bakan yüz fotoğrafı seçin (aynı kişi). " +
+                                "Daha fazla örnek = daha doğru YZ eşleşme.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                item(key = "refs_row") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(state.referenceUris, key = { it.toString() }) { uri ->
+                            Box {
+                                AsyncImage(
+                                    model = uri,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(72.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .border(
+                                            1.dp,
+                                            MaterialTheme.colorScheme.outline,
+                                            RoundedCornerShape(10.dp)
+                                        ),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Text(
+                                    "×",
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .clickable { vm.removeReference(uri) }
+                                        .padding(4.dp),
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        item {
+                            OutlinedButton(onClick = { pickRefs.launch("image/*") }) {
+                                Text(if (state.referenceUris.isEmpty()) "Örnek seç" else "Ekle")
+                            }
+                        }
+                    }
+                }
+
+                item(key = "threshold") {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("3. Hassasiyet (YZ)", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Eşik: %${(state.threshold * 100).toInt()} — düşük = aynı kişiyi daha iyi tutar; " +
+                                "yüksek = daha katı (daha çok aday). Öneri: %45–%55",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = state.threshold,
+                            onValueChange = { vm.setThreshold(it) },
+                            valueRange = 0.30f..0.70f,
+                            steps = 39
+                        )
+                    }
+                }
+
+                item(key = "scan_btn") {
+                    Button(
+                        onClick = { vm.runScan() },
+                        enabled = !state.scanning && !state.busy &&
+                            state.selectedBucket != null && state.referenceUris.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (state.scanning) "Taranıyor…" else "Tara")
+                    }
+                }
+
+                if (state.scanning) {
+                    item(key = "progress") {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LinearProgressIndicator(
+                                progress = {
+                                    state.progressCur.toFloat() /
+                                        state.progressTot.coerceAtLeast(1)
+                                },
+                                modifier = Modifier.fillMaxWidth()
                             )
                             Text(
-                                "×",
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .clickable {
-                                        referenceUris = referenceUris.filterNot { it == uri }
-                                    }
-                                    .padding(4.dp),
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Bold
+                                "${state.progressText} (${state.progressCur} / ${state.progressTot})",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                "Tarama arka planda sürer; geri tuşu sonuçları silmez.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    item {
-                        OutlinedButton(onClick = { pickRefs.launch("image/*") }) {
-                            Text(if (referenceUris.isEmpty()) "Örnek seç" else "Ekle")
+                }
+
+                if (state.hasScanned && !state.scanning) {
+                    item(key = "results_header") {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                if (state.candidates.isEmpty()) "Farklı kişi adayı bulunamadı."
+                                else "${state.candidates.size} aday · ${state.selected.size} seçili",
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (state.candidates.isNotEmpty()) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = { vm.selectAll() }) { Text("Tümünü seç") }
+                                    TextButton(onClick = { vm.clearSelection() }) { Text("Seçimi kaldır") }
+                                }
+                            }
                         }
                     }
                 }
 
-                Text("3. Hassasiyet (YZ)", fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Eşik: %${(threshold * 100).toInt()} — düşük = aynı kişiyi daha iyi tutar; " +
-                        "yüksek = daha katı (daha çok aday). Öneri: %45–%55",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Slider(
-                    value = threshold,
-                    onValueChange = { threshold = it },
-                    valueRange = 0.30f..0.70f,
-                    steps = 39
-                )
-
-                Button(
-                    onClick = { runScan() },
-                    enabled = !scanning && !busy && selectedBucket != null && referenceUris.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (scanning) "Taranıyor…" else "Tara")
-                }
-
-                if (scanning) {
-                    LinearProgressIndicator(
-                        progress = { progressCur.toFloat() / progressTot.coerceAtLeast(1) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        "$progressText ($progressCur / $progressTot)",
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-
-                if (hasScanned && !scanning) {
-                    Text(
-                        if (candidates.isEmpty()) "Farklı kişi adayı bulunamadı."
-                        else "${candidates.size} aday · ${selected.size} seçili",
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    if (candidates.isNotEmpty()) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = {
-                                selected = candidates.map { it.path }.toSet()
-                            }) { Text("Tümünü seç") }
-                            TextButton(onClick = { selected = emptySet() }) { Text("Seçimi kaldır") }
-                        }
-                    }
-                }
-
-                candidates.forEach { item ->
-                    val on = item.path in selected
+                items(
+                    items = state.candidates,
+                    key = { it.path }
+                ) { item ->
+                    val on = item.path in state.selected
                     Card(
-                        onClick = {
-                            selected = if (on) selected - item.path else selected + item.path
-                        },
+                        onClick = { vm.toggleSelected(item.path) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
                             containerColor = if (on)
@@ -451,9 +371,7 @@ fun PersonMismatchScreen(
                             }
                             Checkbox(
                                 checked = on,
-                                onCheckedChange = {
-                                    selected = if (it) selected + item.path else selected - item.path
-                                }
+                                onCheckedChange = { vm.toggleSelected(item.path) }
                             )
                         }
                     }
@@ -463,12 +381,14 @@ fun PersonMismatchScreen(
             if (selectedItems.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Row(
-                    Modifier.fillMaxWidth(),
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
-                        onClick = { applyTrash(selectedItems) },
-                        enabled = !busy && !scanning,
+                        onClick = { vm.applyTrash(selectedItems) },
+                        enabled = !state.busy && !state.scanning,
                         modifier = Modifier.weight(1f)
                     ) { Text("Sil") }
                     OutlinedButton(
@@ -476,7 +396,7 @@ fun PersonMismatchScreen(
                             albumName = ""
                             albumDialog = AlbumAction.MOVE
                         },
-                        enabled = !busy && !scanning,
+                        enabled = !state.busy && !state.scanning,
                         modifier = Modifier.weight(1f)
                     ) { Text("Taşı") }
                     OutlinedButton(
@@ -484,7 +404,7 @@ fun PersonMismatchScreen(
                             albumName = ""
                             albumDialog = AlbumAction.COPY
                         },
-                        enabled = !busy && !scanning,
+                        enabled = !state.busy && !state.scanning,
                         modifier = Modifier.weight(1f)
                     ) { Text("Kopyala") }
                 }
@@ -492,9 +412,39 @@ fun PersonMismatchScreen(
         }
     }
 
+    if (leaveWhileScanning) {
+        AlertDialog(
+            onDismissRequest = { leaveWhileScanning = false },
+            title = { Text("Tarama sürüyor") },
+            text = {
+                Text(
+                    "Tarama arka planda devam eder ve bitince arşivlenir. " +
+                        "Çıkmak ister misiniz, yoksa taramayı durdurup kısmi sonucu kaydetmek mi?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    leaveWhileScanning = false
+                    // Tarama ViewModel’de devam eder; sonuç arşive yazılır
+                    goBack()
+                }) { Text("Arka planda sürdür") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        leaveWhileScanning = false
+                        vm.cancelScan()
+                        goBack()
+                    }) { Text("Durdur ve kaydet") }
+                    TextButton(onClick = { leaveWhileScanning = false }) { Text("Kal") }
+                }
+            }
+        )
+    }
+
     albumDialog?.let { action ->
         AlertDialog(
-            onDismissRequest = { if (!busy) albumDialog = null },
+            onDismissRequest = { if (!state.busy) albumDialog = null },
             title = {
                 Text(if (action == AlbumAction.MOVE) "Albüme taşı" else "Albüme kopyala")
             },
@@ -511,10 +461,10 @@ fun PersonMismatchScreen(
                         label = { Text("Albüm adı") },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    if (buckets.isNotEmpty()) {
+                    if (state.buckets.isNotEmpty()) {
                         Text("Mevcut klasörler:", style = MaterialTheme.typography.labelMedium)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            items(buckets.take(20), key = { it.name }) { b ->
+                            items(state.buckets.take(20), key = { it.name }) { b ->
                                 AssistChip(
                                     onClick = { albumName = b.name },
                                     label = { Text(b.name) }
@@ -526,13 +476,13 @@ fun PersonMismatchScreen(
             },
             confirmButton = {
                 TextButton(
-                    enabled = albumName.isNotBlank() && !busy,
+                    enabled = albumName.isNotBlank() && !state.busy,
                     onClick = {
                         val name = albumName
                         val items = selectedItems
                         val move = action == AlbumAction.MOVE
                         albumDialog = null
-                        applyCopyOrMove(items, move, name)
+                        vm.applyCopyOrMove(items, move, name)
                     }
                 ) { Text(if (action == AlbumAction.MOVE) "Taşı" else "Kopyala") }
             },
@@ -544,12 +494,3 @@ fun PersonMismatchScreen(
 }
 
 private enum class AlbumAction { MOVE, COPY }
-
-private sealed class ScanOutcome {
-    data class NoFace(val skipped: Int, val errors: Int) : ScanOutcome()
-    data class Ok(
-        val items: List<PersonMismatchScanner.MismatchCandidate>,
-        val refCount: Int,
-        val skippedRefs: Int
-    ) : ScanOutcome()
-}

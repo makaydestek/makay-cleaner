@@ -172,6 +172,9 @@ class PersonMismatchScanner(private val context: Context) {
                 } finally {
                     if (!bmp.isRecycled) bmp.recycle()
                 }
+            } catch (_: OutOfMemoryError) {
+                // Büyük klasörlerde tek kare OOM → devam; kısmi liste korunur
+                System.gc()
             } catch (_: Exception) {
                 // tek dosya hatası taramayı düşürmez
             }
@@ -287,7 +290,8 @@ class PersonMismatchScanner(private val context: Context) {
             while (maxDim / sample > DECODE_MAX) sample *= 2
             val opts = BitmapFactory.Options().apply {
                 inSampleSize = sample
-                inPreferredConfig = Bitmap.Config.ARGB_8888
+                // Tarama belleğini düşür — yüz tespiti RGB_565 ile yeterli
+                inPreferredConfig = Bitmap.Config.RGB_565
             }
             val raw = when {
                 !path.isNullOrBlank() && File(path).isFile ->
@@ -339,8 +343,10 @@ class PersonMismatchScanner(private val context: Context) {
          * Kaydırıcıyla yükseltmek = daha katı (daha çok aday).
          */
         const val DEFAULT_MATCH_THRESHOLD = 0.48f
+        /** Asıl kişi için seçilebilecek örnek üst sınırı. */
+        const val MAX_REFERENCES = 20
         /** Öklid mesafesi bu değerin altındaysa aynı kişi kabul (kosinüs yedek). */
         private const val EUCLIDEAN_MATCH = 1.05f
-        private const val DECODE_MAX = 1280
+        private const val DECODE_MAX = 1024
     }
 }
