@@ -1,5 +1,9 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.app.Application
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,14 +28,14 @@ fun AppCacheScreen(
     onNavigateBack: () -> Unit,
     viewModel: AppCacheViewModel = viewModel(factory = AppCacheViewModel.Factory(application))
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val hasPermission = rememberStoragePermissionState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Uygulama Önbelleği", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_uygulama_nbelle_i), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -75,9 +79,9 @@ fun AppCacheScreen(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Taranıyor...")
+                    Text(stringResource(R.string.txt_taran_yor))
                 } else {
-                    Text("🔍 Tara", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.txt_tara_2), style = MaterialTheme.typography.titleMedium)
                 }
             }
 
@@ -108,7 +112,7 @@ fun AppCacheScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Toplam Önbellek",
+                            text = stringResource(R.string.txt_toplam_nbellek),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -127,13 +131,13 @@ fun AppCacheScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    TextButton(onClick = { viewModel.selectAll() }) { Text("Tümünü Seç") }
-                    TextButton(onClick = { viewModel.clearSelection() }) { Text("Seçimi kaldır") }
+                    TextButton(onClick = { viewModel.selectAll() }) { Text(stringResource(R.string.txt_t_m_n_se_2)) }
+                    TextButton(onClick = { viewModel.clearSelection() }) { Text(stringResource(R.string.txt_se_imi_kald_r)) }
                 }
 
                 if (uiState.selectedPaths.isNotEmpty()) {
                     Text(
-                        text = "${uiState.selectedPaths.size} dosya seçildi",
+                        text = stringResource(R.string.txt_1_s_dosya_se_ildi, uiState.selectedPaths.size),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -187,7 +191,7 @@ fun AppCacheScreen(
                         )
                     ) {
                         Text(
-                            "🗑️ Seçili Dosyaları Sil (${uiState.selectedPaths.size})",
+                            stringResource(R.string.txt_se_ili_dosyalar_sil_1_s, uiState.selectedPaths.size),
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
@@ -207,7 +211,7 @@ fun AppCacheScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "Başlamak için 'Tara' butonuna basın",
+                            text = stringResource(R.string.txt_ba_lamak_i_in_tara_butonuna_bas_n),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -245,7 +249,7 @@ fun PermissionWarningCard(message: String, onRequestPermission: () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "⚠️ Depolama İzni Gerekli",
+                text = stringResource(R.string.txt_depolama_zni_gerekli),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.error
@@ -257,7 +261,7 @@ fun PermissionWarningCard(message: String, onRequestPermission: () -> Unit) {
                 onClick = onRequestPermission,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("İzin Ver")
+                Text(stringResource(R.string.txt_zin_ver_2))
             }
         }
     }

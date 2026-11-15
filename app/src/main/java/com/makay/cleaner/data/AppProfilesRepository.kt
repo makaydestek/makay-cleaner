@@ -2,11 +2,29 @@ package com.makay.cleaner.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.annotation.StringRes
+import com.makay.cleaner.R
 
-enum class AppProfile(val id: String, val titleTr: String, val descTr: String) {
-    HOME("home", "Ev", "Normal temizlik sıklığı, medya taramaları açık"),
-    WORK("work", "İş", "Wi‑Fi zorunlu otomatik temizlik, daha seyrek tarama"),
-    BATTERY("battery", "Pil", "Yalnızca önbellek, şarjdayken, uzun aralık")
+enum class AppProfile(
+    val id: String,
+    @StringRes val titleRes: Int,
+    @StringRes val descRes: Int
+) {
+    HOME(
+        "home",
+        R.string.profile_home_title,
+        R.string.profile_home_desc
+    ),
+    WORK(
+        "work",
+        R.string.profile_work_title,
+        R.string.profile_work_desc
+    ),
+    BATTERY(
+        "battery",
+        R.string.profile_battery_title,
+        R.string.profile_battery_desc
+    )
 }
 
 /**
@@ -25,9 +43,11 @@ class AppProfilesRepository(context: Context) {
 
     fun apply(profile: AppProfile) {
         prefs.edit().putString(KEY_ACTIVE, profile.id).apply()
+        // Profil otomatik temizliği KAPALIYSA zorla açmaz.
+        val keepEnabled = autoClean.getSettings().first
         when (profile) {
             AppProfile.HOME -> autoClean.saveSettings(
-                enabled = autoClean.getSettings().first,
+                enabled = keepEnabled,
                 intervalHours = 24,
                 wifiOnly = false,
                 chargingOnly = false,
@@ -35,7 +55,7 @@ class AppProfilesRepository(context: Context) {
                 useTrash = true
             )
             AppProfile.WORK -> autoClean.saveSettings(
-                enabled = true,
+                enabled = keepEnabled,
                 intervalHours = 48,
                 wifiOnly = true,
                 chargingOnly = false,
@@ -43,7 +63,7 @@ class AppProfilesRepository(context: Context) {
                 useTrash = true
             )
             AppProfile.BATTERY -> autoClean.saveSettings(
-                enabled = true,
+                enabled = keepEnabled,
                 intervalHours = 72,
                 wifiOnly = false,
                 chargingOnly = true,

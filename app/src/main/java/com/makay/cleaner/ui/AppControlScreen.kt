@@ -1,5 +1,6 @@
 package com.makay.cleaner.ui
 
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
@@ -60,7 +61,7 @@ fun AppControlScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Uygulama kontrolü", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_uygulama_kontrol), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
@@ -89,7 +90,7 @@ fun AppControlScreen(
                                 ).show()
                                 selected = emptySet()
                             }
-                        }) { Text("Kaldır (${selected.size})") }
+                        }) { Text(stringResource(R.string.txt_kald_r_1_s, selected.size)) }
                     }
                 }
             )
@@ -112,11 +113,11 @@ fun AppControlScreen(
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         )
                     }
-                }) { Text("Kullanım iznini aç (isteğe bağlı)") }
+                }) { Text(stringResource(R.string.txt_kullan_m_iznini_a_iste_e_ba_l)) }
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { reload() }) { Text("Yenile") }
+                TextButton(onClick = { reload() }) { Text(stringResource(R.string.txt_yenile)) }
             }
             Spacer(Modifier.height(8.dp))
             when {
@@ -124,7 +125,7 @@ fun AppControlScreen(
                     CircularProgressIndicator()
                 }
                 unused.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Kullanılmayan uygulama bulunamadı")
+                    Text(stringResource(R.string.txt_kullan_lmayan_uygulama_bulunamad))
                 }
                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(unused, key = { it.packageName }) { app ->
@@ -212,18 +213,18 @@ fun ToolboxScreen(
     )
 
     Scaffold(
-        containerColor = Color.Black,
+        containerColor = homeBg(),
         topBar = {
             TopAppBar(
-                title = { Text("Araç kutusu", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
+                title = { Text(stringResource(R.string.txt_ara_kutusu), fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    TvIconButton(onClick = onNavigateBack, idleContent = Color.White) {
+                    TvIconButton(onClick = onNavigateBack, idleContent = homeTextPrimary()) {
                         Text("✕", fontSize = 18.sp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black,
-                    titleContentColor = Color.White
+                    containerColor = homeBg(),
+                    titleContentColor = homeTextPrimary()
                 )
             )
         }
@@ -239,13 +240,13 @@ fun ToolboxScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
+                        colors = CardDefaults.cardColors(containerColor = hubPanel()),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Text(
                                 section.title,
-                                color = Color.White,
+                                color = homeTextPrimary(),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
                                 modifier = Modifier.padding(bottom = 12.dp)

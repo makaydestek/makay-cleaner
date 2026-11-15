@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,7 +41,7 @@ fun SuggestionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Akıllı öneriler", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_ak_ll_neriler), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -69,9 +71,9 @@ fun SuggestionsScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("✨", fontSize = 64.sp)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Şu anda önerimiz yok", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.txt_u_anda_nerimiz_yok), style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = "Her şey yolunda görünüyor!",
+                            text = stringResource(R.string.txt_her_ey_yolunda_g_r_n_yor),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -88,7 +90,7 @@ fun SuggestionsScreen(
                 ) {
                     item {
                         Text(
-                            text = "Kullanımınıza göre öneriler",
+                            text = stringResource(R.string.txt_kullan_m_n_za_g_re_neriler),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -171,7 +173,7 @@ fun SuggestionCard(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = accent)
             ) {
-                Text("Uygula")
+                Text(stringResource(R.string.txt_uygula))
             }
         }
     }

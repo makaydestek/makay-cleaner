@@ -1,5 +1,9 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -36,28 +40,29 @@ fun SettingsScreen(
     onNavigateToExclusions: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory(application))
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val themeRepository = remember { ThemeRepository.getInstance(application) }
-    val currentTheme by themeRepository.themeMode.collectAsState()
-    val currentDynamic by themeRepository.dynamicColor.collectAsState()
+    val currentTheme by themeRepository.themeMode.collectAsStateWithLifecycle()
+    val currentDynamic by themeRepository.dynamicColor.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context.findActivity() as? FragmentActivity
     val updateVm: AppUpdateViewModel? = if (activity != null) {
         viewModel(viewModelStoreOwner = activity, factory = AppUpdateViewModel.Factory(application))
     } else null
-    val updateState = updateVm?.state?.collectAsState()?.value
+    val updateState = updateVm?.state?.collectAsStateWithLifecycle()?.value
     val intervals = listOf(6L, 12L, 24L, 48L)
 
     LaunchedEffect(uiState.lastManualCleanMessage) {
         uiState.lastManualCleanMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.consumeManualCleanMessage()
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ayarlar", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_ayarlar), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
@@ -78,7 +83,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Görünüm",
+                text = stringResource(R.string.txt_g_r_n_m),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -90,13 +95,13 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Tema Modu",
+                        text = stringResource(R.string.txt_tema_modu),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Uygulamanın görünüm temasını seçin",
+                        text = stringResource(R.string.txt_uygulaman_n_g_r_n_m_temas_n_se_in),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -143,13 +148,13 @@ fun SettingsScreen(
                 ) { focused ->
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Dinamik Renk",
+                            text = stringResource(R.string.txt_dinamik_renk),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Android 12+ cihazlarda duvar kağıdına göre renk",
+                            text = stringResource(R.string.txt_android_12_cihazlarda_duvar_ka_d_na_g_re_ren),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -170,7 +175,7 @@ fun SettingsScreen(
             }
 
             val currentPlatform = PlatformManager.rememberIsTvMode()
-            val currentLang by LanguageManager.lang.collectAsState()
+            val currentLang by LanguageManager.lang.collectAsStateWithLifecycle()
             LanguageManager.init(context)
 
             Text(
@@ -227,7 +232,7 @@ fun SettingsScreen(
                         }
                     }
                     Text(
-                        text = "İngilizce şu an yalnızca ilk açılış rehberini değiştirir. Uygulamanın geri kalanı Türkçe kalır.",
+                        text = stringResource(R.string.txt_ngilizce_u_an_yaln_zca_ilk_a_l_rehberini_de),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
@@ -236,7 +241,7 @@ fun SettingsScreen(
             }
 
             Text(
-                text = "🤖 Otomatik Temizlik",
+                text = stringResource(R.string.txt_otomatik_temizlik_2),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 8.dp)
@@ -253,7 +258,7 @@ fun SettingsScreen(
                     ) { focused ->
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Otomatik Temizlik",
+                                text = stringResource(R.string.txt_otomatik_temizlik),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -277,7 +282,7 @@ fun SettingsScreen(
                     if (uiState.autoCleanEnabled) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Aralık",
+                            text = stringResource(R.string.txt_aral_k),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -291,7 +296,7 @@ fun SettingsScreen(
                                     interactionSource = chipSrc,
                                     modifier = Modifier.makayFocus(corner = 20.dp),
                                     label = {
-                                        Text("${hours}s")
+                                        Text(stringResource(R.string.txt_1_ss, hours))
                                     },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -304,7 +309,7 @@ fun SettingsScreen(
                         SettingsToggleRow("Yalnızca Wi‑Fi", uiState.wifiOnly) { viewModel.setWifiOnly(it) }
                         SettingsToggleRow("Yalnızca şarjdayken", uiState.chargingOnly) { viewModel.setChargingOnly(it) }
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Kategoriler", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.txt_kategoriler), fontWeight = FontWeight.SemiBold)
                         SettingsToggleRow("Önbellek", uiState.catCache) { viewModel.setCategoryCache(it) }
                         SettingsToggleRow("Eski APK", uiState.catApk) { viewModel.setCategoryApk(it) }
                         SettingsToggleRow("Geçici / junk", uiState.catTmp) { viewModel.setCategoryTmp(it) }
@@ -331,9 +336,13 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
+                enabled = !uiState.manualCleanRunning,
                 idle = MaterialTheme.colorScheme.primary
             ) {
-                Text("⚡ Şimdi Temizle", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (uiState.manualCleanRunning) "⏳ Temizleniyor…" else "⚡ Şimdi Temizle",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
 
             TvActionButton(
@@ -343,7 +352,7 @@ fun SettingsScreen(
                     .height(56.dp),
                 idle = MaterialTheme.colorScheme.primary
             ) {
-                Text("🗑️ Çöp kutusu", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.txt_p_kutusu_2), style = MaterialTheme.typography.titleMedium)
             }
 
             TvActionButton(
@@ -353,7 +362,7 @@ fun SettingsScreen(
                     .height(56.dp),
                 idle = MaterialTheme.colorScheme.primary
             ) {
-                Text("🚫 Hariç tutulanlar", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.txt_hari_tutulanlar_2), style = MaterialTheme.typography.titleMedium)
             }
 
             if (ProManager.isProUiVisible()) {
@@ -364,7 +373,7 @@ fun SettingsScreen(
                         .height(56.dp),
                     idle = Color(0xFF2E7D32)
                 ) {
-                    Text("⭐ Pro / Gizlilik", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.txt_pro_gizlilik), style = MaterialTheme.typography.titleMedium)
                 }
             }
 
@@ -404,7 +413,7 @@ fun SettingsScreen(
                     .height(56.dp),
                 idle = MaterialTheme.colorScheme.primary
             ) {
-                Text("🔔 Bildirim Ayarları", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.txt_bildirim_ayarlar), style = MaterialTheme.typography.titleMedium)
             }
 
             TvActionButton(
@@ -414,11 +423,11 @@ fun SettingsScreen(
                     .height(56.dp),
                 idle = Color(0xFFFF5722)
             ) {
-                Text("🔐 Güvenlik Ayarları", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.txt_g_venlik_ayarlar), style = MaterialTheme.typography.titleMedium)
             }
 
             Text(
-                text = "ℹ️ Hakkında",
+                text = stringResource(R.string.txt_hakk_nda),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 8.dp)
@@ -431,13 +440,13 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Makay Cleaner",
+                        text = stringResource(R.string.txt_makay_cleaner),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Sürüm: ${uiState.appVersion}",
+                        text = stringResource(R.string.txt_s_r_m_1_s, uiState.appVersion),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -445,13 +454,13 @@ fun SettingsScreen(
                     HorizontalDivider()
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Geliştirici",
+                        text = stringResource(R.string.txt_geli_tirici),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Bu uygulamanın tasarımı ve geliştirmesi Murat AKAY tarafından yapılmıştır.",
+                        text = stringResource(R.string.txt_bu_uygulaman_n_tasar_m_ve_geli_tirmesi_murat),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -459,7 +468,7 @@ fun SettingsScreen(
                     HorizontalDivider()
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "© 2026 Tüm hakları saklıdır. Sideload / yerel dağıtım için hazırlanmıştır.",
+                        text = stringResource(R.string.txt_2026_t_m_haklar_sakl_d_r_sideload_yerel_da_t),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

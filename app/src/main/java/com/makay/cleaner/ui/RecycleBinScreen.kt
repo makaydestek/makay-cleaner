@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -59,7 +61,7 @@ fun RecycleBinScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Çöp kutusu", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_p_kutusu), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
@@ -70,7 +72,7 @@ fun RecycleBinScreen(
                 },
                 actions = {
                     if (items.isNotEmpty()) {
-                        TextButton(onClick = { confirmEmpty = true }) { Text("Boşalt") }
+                        TextButton(onClick = { confirmEmpty = true }) { Text(stringResource(R.string.txt_bo_alt)) }
                     }
                 }
             )
@@ -88,7 +90,7 @@ fun RecycleBinScreen(
                 Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Çöp kutusu boş", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.txt_p_kutusu_bo), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             LazyColumn(
@@ -107,11 +109,11 @@ fun RecycleBinScreen(
                         Column(Modifier.padding(12.dp)) {
                             Text(item.displayName, fontWeight = FontWeight.SemiBold)
                             Text(
-                                "${item.category} · ${formatBytes(item.sizeBytes)}",
+                                stringResource(R.string.txt_1_s_2_s_14, item.category, formatBytes(item.sizeBytes)),
                                 style = MaterialTheme.typography.bodySmall
                             )
                             Text(
-                                "${dateFmt.format(Date(item.deletedAt))} · kalan ${repo.hoursRemaining(item)} saat",
+                                stringResource(R.string.txt_1_s_kalan_2_s_saat, dateFmt.format(Date(item.deletedAt)), repo.hoursRemaining(item)),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -126,8 +128,8 @@ fun RecycleBinScreen(
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }
-                                }) { Text("Geri yükle") }
-                                TextButton(onClick = { pendingPermanentDelete = item }) { Text("Kalıcı sil") }
+                                }) { Text(stringResource(R.string.txt_geri_y_kle)) }
+                                TextButton(onClick = { pendingPermanentDelete = item }) { Text(stringResource(R.string.txt_kal_c_sil)) }
                             }
                         }
                     }
@@ -138,37 +140,37 @@ fun RecycleBinScreen(
     if (confirmEmpty) {
         AlertDialog(
             onDismissRequest = { confirmEmpty = false },
-            title = { Text("Çöp kutusu boşaltılsın mı?") },
-            text = { Text("Bu işlem dosyaları kalıcı olarak siler ve geri alınamaz.") },
+            title = { Text(stringResource(R.string.txt_p_kutusu_bo_alt_ls_n_m)) },
+            text = { Text(stringResource(R.string.txt_bu_i_lem_dosyalar_kal_c_olarak_siler_ve_geri)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmEmpty = false
                     scope.launch {
                         val (saved, count) = withContext(Dispatchers.IO) { repo.emptyBin() }
                         refresh()
-                        Toast.makeText(context, "$count öğe kalıcı silindi (${formatBytes(saved)})", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.msg_items_permanently_deleted, count, formatBytes(saved)), Toast.LENGTH_SHORT).show()
                     }
-                }) { Text("Kalıcı sil") }
+                }) { Text(stringResource(R.string.txt_kal_c_sil)) }
             },
-            dismissButton = { TextButton(onClick = { confirmEmpty = false }) { Text("Vazgeç") } }
+            dismissButton = { TextButton(onClick = { confirmEmpty = false }) { Text(stringResource(R.string.txt_vazge)) } }
         )
     }
     pendingPermanentDelete?.let { item ->
         AlertDialog(
             onDismissRequest = { pendingPermanentDelete = null },
-            title = { Text("Kalıcı olarak silinsin mi?") },
-            text = { Text("${item.displayName} geri alınamayacak şekilde silinir.") },
+            title = { Text(stringResource(R.string.txt_kal_c_olarak_silinsin_mi)) },
+            text = { Text(stringResource(R.string.txt_1_s_geri_al_namayacak_ekilde_silinir, item.displayName)) },
             confirmButton = {
                 TextButton(onClick = {
                     pendingPermanentDelete = null
                     scope.launch {
                         val ok = withContext(Dispatchers.IO) { repo.purgePermanently(item.id) }
                         refresh()
-                        Toast.makeText(context, if (ok) "Kalıcı olarak silindi" else "Silme başarısız", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, if (ok) context.getString(R.string.msg_deleted_permanently) else context.getString(R.string.msg_delete_failed), Toast.LENGTH_SHORT).show()
                     }
-                }) { Text("Kalıcı sil") }
+                }) { Text(stringResource(R.string.txt_kal_c_sil)) }
             },
-            dismissButton = { TextButton(onClick = { pendingPermanentDelete = null }) { Text("Vazgeç") } }
+            dismissButton = { TextButton(onClick = { pendingPermanentDelete = null }) { Text(stringResource(R.string.txt_vazge)) } }
         )
     }
 }

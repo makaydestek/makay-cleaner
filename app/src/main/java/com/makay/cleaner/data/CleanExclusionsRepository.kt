@@ -1,5 +1,6 @@
 package com.makay.cleaner.data
 
+import com.makay.cleaner.R
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -10,7 +11,7 @@ import java.util.UUID
  * Sistem maddeleri bilgilendirme + koruma (kaldırılamaz).
  * Kullanıcı maddeleri isteğe bağlı eklenir / silinir.
  */
-class CleanExclusionsRepository(context: Context) {
+class CleanExclusionsRepository(private val context: Context) {
 
     private val prefs = context.applicationContext
         .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -39,7 +40,7 @@ class CleanExclusionsRepository(context: Context) {
                             id = o.getString("id"),
                             path = o.getString("path"),
                             title = o.optString("title").ifBlank { o.getString("path") },
-                            reason = o.optString("reason").ifBlank { "Kullanıcı hariç tutması" },
+                            reason = o.optString("reason").ifBlank { context.getString(R.string.label_excluded_user) },
                             source = Source.USER
                         )
                     )
@@ -61,7 +62,7 @@ class CleanExclusionsRepository(context: Context) {
             path = normalized,
             title = title?.trim()?.takeIf { it.isNotEmpty() }
                 ?: normalized.substringAfterLast('/').ifBlank { normalized },
-            reason = "Kullanıcı tarafından eklendi",
+            reason = context.getString(R.string.label_excluded_added),
             source = Source.USER
         )
         saveUser(existing + item)

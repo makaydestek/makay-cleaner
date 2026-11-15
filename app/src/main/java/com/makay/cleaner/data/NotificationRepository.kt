@@ -18,13 +18,19 @@ class NotificationRepository(private val context: Context) {
     }
 
     fun saveNotificationSettings(enabled: Boolean, intervalHours: Long) {
+        val safeInterval = intervalHours.coerceIn(1L, 168L)
         prefs.edit()
             .putBoolean(KEY_REMINDER_ENABLED, enabled)
-            .putLong(KEY_REMINDER_INTERVAL_HOURS, intervalHours)
+            .putLong(KEY_REMINDER_INTERVAL_HOURS, safeInterval)
             .apply()
 
         if (enabled) {
-            scheduleReminder(intervalHours)
+            // Bildirim izni yoksa iş kurmak anlamsız; kullanıcı bildirim göremez.
+            if (!com.makay.cleaner.util.PermissionHelper.hasNotificationPermission(context)) {
+                return
+            }
+            runCatching { scheduleReminder(safeInterval) }
+                .onFailure { com.makay.cleaner.util.SoftErrorLogger.warn("Notification", "hatırlatma planlanamadı", it) }
         } else {
             cancelReminder()
         }
@@ -32,7 +38,7 @@ class NotificationRepository(private val context: Context) {
 
     fun getNotificationSettings(): Pair<Boolean, Long> {
         val enabled = prefs.getBoolean(KEY_REMINDER_ENABLED, false)
-        val intervalHours = prefs.getLong(KEY_REMINDER_INTERVAL_HOURS, 24)
+        val intervalHours = prefs.getLong(KEY_REMINDER_INTERVAL_HOURS, 24).coerceIn(1L, 168L)
         return Pair(enabled, intervalHours)
     }
 

@@ -59,6 +59,8 @@ class AppUninstallViewModel(application: Application) : AndroidViewModel(applica
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

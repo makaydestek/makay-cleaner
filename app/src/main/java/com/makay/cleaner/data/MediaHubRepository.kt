@@ -144,8 +144,9 @@ class MediaHubRepository(private val context: Context) {
                 args,
                 "${MediaStore.Images.Media.DATE_ADDED} DESC"
             )?.use { c ->
-                val di = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
-                val si = c.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
+                val di = c.getColumnIndex(MediaStore.Images.Media.DATA)
+                val si = c.getColumnIndex(MediaStore.Images.Media.SIZE)
+                if (di < 0 || si < 0) return@use
                 while (c.moveToNext()) {
                     val path = c.getString(di) ?: continue
                     if (!SystemFileGuard.canDelete(path)) {

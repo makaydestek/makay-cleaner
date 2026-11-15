@@ -175,15 +175,31 @@ class DuplicatePhotoScanner(private val context: Context) {
             }
             byHash.forEach { (hash, list) ->
                 if (list.size > 1) {
-                    val sorted = sortByQuality(list)
-                    groups.add(
-                        PhotoGroup(
-                            id = "exact_$hash",
-                            type = GroupType.EXACT,
-                            photos = sorted,
-                            totalSize = sorted.sumOf { it.sizeBytes }
-                        )
-                    )
+                    // Kısmi hash yalnızca aday üretir; silmeden önce tam SHA-256
+                    // ile doğrula. Aksi halde aynı başlığa sahip farklı fotoğraflar
+                    // yanlışlıkla "yinelenen" sayılıp kalıcı silinebilir.
+                    val byFull = LinkedHashMap<String, MutableList<PhotoItem>>()
+                    list.forEach { photo ->
+                        val full = com.makay.cleaner.util.FileHashing.sha256Any(
+                            context,
+                            photo.path,
+                            photo.uri
+                        ) ?: return@forEach
+                        byFull.getOrPut(full) { mutableListOf() }.add(photo)
+                    }
+                    byFull.forEach { (fullHash, verified) ->
+                        if (verified.size > 1) {
+                            val sorted = sortByQuality(verified)
+                            groups.add(
+                                PhotoGroup(
+                                    id = "exact_sha256_$fullHash",
+                                    type = GroupType.EXACT,
+                                    photos = sorted,
+                                    totalSize = sorted.sumOf { it.sizeBytes }
+                                )
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -219,39 +235,69 @@ class DuplicatePhotoScanner(private val context: Context) {
         }
         if (entries.isEmpty()) return emptyList()
 
-        val used = BooleanArray(entries.size)
-        val groups = mutableListOf<PhotoGroup>()
-        for (a in entries.indices) {
-            if (stop()) break
-            if (used[a]) continue
-            val merged = mutableListOf(entries[a].second)
-            used[a] = true
+        // Union-find: A~B ve B~C ise A, B, C aynı grupta toplanır.
+        // Eski greedy yaklaşımı C'yi kaçırıyordu (eksik gruplar).
+        val parent = IntArray(entries.size) { it }
+        fun find(x: Int): Int {
+            var root = x
+            while (parent[root] != root) root = parent[root]
+            var cur = x
+            while (parent[cur] != root) {
+                val next = parent[cur]
+                parent[cur] = root
+                cur = next
+            }
+            return root
+        }
+        fun union(a: Int, b: Int) {
+            val ra = find(a)
+            val rb = find(b)
+            if (ra != rb) parent[rb] = ra
+        }
+
+        var stopped = false
+        loop@ for (a in entries.indices) {
+            if (stop()) {
+                stopped = true
+                break@loop
+            }
+            val pa = entries[a].second
             for (b in a + 1 until entries.size) {
-                if (stop()) break
-                if (used[b]) continue
-                val pa = entries[a].second
+                if (stop()) {
+                    stopped = true
+                    break@loop
+                }
                 val pb = entries[b].second
                 if (timeMs > 0 && !withinTime(pa, pb, timeMs)) continue
                 if (gpsM > 0f && !withinGps(pa, pb, gpsM)) continue
                 if (minHamming(entries[a].first, entries[b].first) <= threshold) {
-                    merged.add(pb)
-                    used[b] = true
+                    union(a, b)
                 }
-            }
-            if (merged.size > 1) {
-                val sorted = sortByQuality(merged)
-                groups.add(
-                    PhotoGroup(
-                        id = "sim_${entries[a].first.firstOrNull() ?: a}",
-                        type = GroupType.SIMILAR,
-                        photos = sorted,
-                        totalSize = sorted.sumOf { it.sizeBytes }
-                    )
-                )
             }
             if (a % 10 == 0) progress?.onProgress("Gruplanıyor…", a + 1, entries.size)
         }
+
+        val byRoot = LinkedHashMap<Int, MutableList<Int>>()
+        entries.indices.forEach { idx ->
+            byRoot.getOrPut(find(idx)) { mutableListOf() }.add(idx)
+        }
+        val groups = byRoot.values
+            .filter { it.size > 1 }
+            .map { idxs ->
+                val photos = idxs.map { entries[it].second }
+                val sorted = sortByQuality(photos)
+                PhotoGroup(
+                    id = "sim_${entries[idxs.first()].first.firstOrNull() ?: idxs.first()}",
+                    type = GroupType.SIMILAR,
+                    photos = sorted,
+                    totalSize = sorted.sumOf { it.sizeBytes }
+                )
+            }
         progress?.onProgress("Gruplanıyor…", entries.size, entries.size)
+        // Kısmi sonuç (zaman aşımı/iptal) sessizce "sonuç yok" gibi görünmesin.
+        if (stopped) {
+            progress?.onProgress("Kısmi sonuç (zaman aşımı)", entries.size, entries.size)
+        }
         return groups.sortedByDescending { it.wasteBytes }
     }
 
@@ -493,9 +539,29 @@ class DuplicatePhotoScanner(private val context: Context) {
     }
 
     private fun decodeSampled(path: String, uri: Uri, sampleSize: Int): Bitmap? {
+        // Gerçek piksel boyutunu önce bounds-only decode ile oku. MediaStore
+        // WIDTH/HEIGHT 0 döndürebildiğinden sabit sample=1 ile tam çözünürlük
+        // decode etmek OOM'a yol açar.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        runCatching {
+            if (path.isNotBlank() && !path.startsWith("content:") && File(path).isFile) {
+                BitmapFactory.decodeFile(path, bounds)
+            } else {
+                context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, bounds)
+                }
+            }
+        }
+        val maxSide = maxOf(bounds.outWidth, bounds.outHeight)
+        var effectiveSample = sampleSize.coerceAtLeast(1)
+        if (maxSide > 0) {
+            while (maxSide / effectiveSample > 128) effectiveSample *= 2
+        }
+        // Bellek güvenliği: en az 2, çok büyük görsellerde 4 örnekleme.
+        if (maxSide >= 4000) effectiveSample = maxOf(effectiveSample, 4)
         val opts = BitmapFactory.Options().apply {
-            inSampleSize = sampleSize.coerceAtLeast(1)
-            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inSampleSize = effectiveSample
+            inPreferredConfig = Bitmap.Config.RGB_565
         }
         return try {
             if (path.isNotBlank() && !path.startsWith("content:") && File(path).isFile) {
@@ -535,9 +601,10 @@ class DuplicatePhotoScanner(private val context: Context) {
                     val buf = ByteArray(8192)
                     var read = input.read(buf)
                     if (read > 0) md.update(buf, 0, read)
-                    // Stream seek yok — baş + boyut ile kısmi parmak izi
+                    // Stream seek yok — yalnızca baş + boyut ile kısmi parmak izi.
+                    // photo.id KULLANILMAZ: aynı içerik farklı _ID aldığı için
+                    // kimlik eklemek yinelenenleri asla eşleştirmez.
                     md.update(len.toString().toByteArray())
-                    md.update(photo.id.toString().toByteArray())
                 } ?: return null
             }
             md.digest().joinToString("") { "%02x".format(it) }

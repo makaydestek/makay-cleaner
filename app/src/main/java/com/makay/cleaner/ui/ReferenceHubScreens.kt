@@ -1,5 +1,6 @@
-﻿package com.makay.cleaner.ui
+package com.makay.cleaner.ui
 
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.content.Context
 import android.content.Intent
@@ -59,10 +60,53 @@ fun CleanerHubScreen(
     var report by remember { mutableStateOf<JunkScanHelper.JunkReport?>(null) }
     var loading by remember { mutableStateOf(true) }
     var cleaning by remember { mutableStateOf(false) }
-    var selected by remember { mutableStateOf(setOf("cache", "unused", "apk", "residue", "tmp")) }
+    var confirmClean by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf("cache", "apk", "tmp")) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val liveStorage = rememberStoragePermissionState()
+
+    fun runClean() {
+        val ids = selected.ifEmpty {
+            report?.categories?.filter { it.sizeBytes > 0 }?.map { it.id }?.toSet()
+                ?: setOf("cache", "apk", "tmp")
+        }
+        val before = report?.cleanableBytes ?: 0L
+        scope.launch {
+            cleaning = true
+            val result = withContext(Dispatchers.IO) {
+                JunkScanHelper.cleanSelected(
+                    application,
+                    ids,
+                    recordAs = "Temizleyici",
+                    useTrash = true,
+                    reclaimSystemCache = "cache" in ids
+                )
+            }
+            cleaning = false
+            val removed = result.spaceSaved
+            val trashed = result.movedToTrashBytes
+            Toast.makeText(
+                context,
+                when {
+                    removed > 0L && trashed > 0L ->
+                        "Boşalan: ${formatBytes(removed)} · Çöpe: ${formatBytes(trashed)}"
+                    removed > 0L ->
+                        "Boşalan alan: ${formatBytes(removed)}"
+                    trashed > 0L ->
+                        "Çöpe alındı: ${formatBytes(trashed)} (diskte yer kaplar)"
+                    before > 0L ->
+                        "Dosyalar duruyor. Skor, silinemeyen öğeler için yükselmez."
+                    else -> "Silinecek dosya kalmadı"
+                },
+                Toast.LENGTH_LONG
+            ).show()
+            loading = true
+            report = withContext(Dispatchers.IO) { JunkScanHelper.deepScan(application) }
+            loading = false
+            selected = report?.categories?.filter { it.sizeBytes > 0 }?.map { it.id }?.toSet().orEmpty()
+        }
+    }
 
     fun reload() {
         scope.launch {
@@ -84,17 +128,17 @@ fun CleanerHubScreen(
         ?.sumOf { it.sizeBytes } ?: 0L
 
     Scaffold(
-        containerColor = Color.Black,
+        containerColor = homeBg(),
         topBar = {
             TopAppBar(
-                title = { Text("Temizleyici", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
+                title = { Text(stringResource(R.string.txt_temizleyici), fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
-                        idleContent = Color.White,
+                        idleContent = homeTextPrimary(),
                         modifier = Modifier.tvRequestInitialFocus()
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 },
                 actions = {
@@ -109,12 +153,12 @@ fun CleanerHubScreen(
                             containerColor = Color.Transparent
                         )
                     ) {
-                        Text("Tara", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.txt_tara), fontWeight = FontWeight.SemiBold)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black,
-                    titleContentColor = Color.White
+                    containerColor = homeBg(),
+                    titleContentColor = homeTextPrimary()
                 )
             )
         },
@@ -122,49 +166,12 @@ fun CleanerHubScreen(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(Color.Black)
+                    .background(homeBg())
                     .padding(16.dp)
             ) {
                 val (cleanSrc, cleanFocused) = rememberTvInteraction()
                 Button(
-                    onClick = {
-                        scope.launch {
-                            cleaning = true
-                            val ids = selected.ifEmpty {
-                                report?.categories?.filter { it.sizeBytes > 0 }?.map { it.id }?.toSet()
-                                    ?: setOf("cache", "unused", "apk", "residue", "tmp")
-                            }
-                            val before = report?.cleanableBytes ?: 0L
-                            val result = withContext(Dispatchers.IO) {
-                                JunkScanHelper.cleanSelected(
-                                    application,
-                                    ids,
-                                    recordAs = "Temizleyici",
-                                    useTrash = true,
-                                    reclaimSystemCache = "cache" in ids
-                                )
-                            }
-                            cleaning = false
-                            val removed = result.spaceSaved
-                            val trashed = result.movedToTrashBytes
-                            Toast.makeText(
-                                context,
-                                when {
-                                    removed > 0L && trashed > 0L ->
-                                        "Boşalan: ${formatBytes(removed)} · Çöpe: ${formatBytes(trashed)}"
-                                    removed > 0L ->
-                                        "Boşalan alan: ${formatBytes(removed)}"
-                                    trashed > 0L ->
-                                        "Çöpe alındı: ${formatBytes(trashed)} (diskte yer kaplar)"
-                                    before > 0L ->
-                                        "Dosyalar duruyor. Skor, silinemeyen öğeler için yükselmez."
-                                    else -> "Silinecek dosya kalmadı"
-                                },
-                                Toast.LENGTH_LONG
-                            ).show()
-                            reload()
-                        }
-                    },
+                    onClick = { if (!loading && !cleaning) confirmClean = true },
                     interactionSource = cleanSrc,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -182,7 +189,7 @@ fun CleanerHubScreen(
                         )
                     } else {
                         Text(
-                            "Temizle: ${formatBytes(totalSelected)}",
+                            stringResource(R.string.txt_temizle_1_s, formatBytes(totalSelected)),
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -208,7 +215,7 @@ fun CleanerHubScreen(
             if (loading) {
                 CircularProgressIndicator(color = HubOrange)
                 Text(
-                    "Optimize’ten daha geniş tarama…",
+                    stringResource(R.string.txt_optimize_ten_daha_geni_tarama),
                     color = Color(0xFF8E8E93),
                     fontSize = 13.sp,
                     modifier = Modifier.padding(top = 12.dp)
@@ -217,7 +224,7 @@ fun CleanerHubScreen(
                 val needPerm = !liveStorage
                 if (needPerm && (report?.totalBytes ?: 0L) == 0L) {
                     Text(
-                        "Junk boyutları için depolama izni gerekli. İzin verdikten sonra tekrar tarayın.",
+                        stringResource(R.string.txt_junk_boyutlar_i_in_depolama_izni_gerekli_zin),
                         color = Color(0xFF8E8E93),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -228,12 +235,12 @@ fun CleanerHubScreen(
                             com.makay.cleaner.util.PermissionHelper.requestStoragePermission(context)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = HubBlue)
-                    ) { Text("İzin ver") }
+                    ) { Text(stringResource(R.string.txt_zin_ver_2)) }
                     Spacer(Modifier.height(12.dp))
                 }
                 if ((report?.totalBytes ?: 0L) == 0L && !needPerm) {
                     Text(
-                        "Şu an silinebilir ek junk bulunamadı. Büyük dosya / medya için alt kategorilere bakın.",
+                        stringResource(R.string.txt_u_an_silinebilir_ek_junk_bulunamad_b_y_k_dos),
                         color = Color(0xFF8E8E93),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -254,7 +261,7 @@ fun CleanerHubScreen(
                 }
                 if ((report?.lockedBytes ?: 0L) > 0L) {
                     Text(
-                        "Xiaomi yaklaşık ${formatBytes(report!!.lockedBytes)} daha sistem önbelleği gösterir; bu alan sideload ile silinemez.",
+                        stringResource(R.string.txt_xiaomi_yakla_k_1_s_daha_sistem_nbelle_i_g_st, formatBytes(report!!.lockedBytes)),
                         color = Color(0xFF8E8E93),
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center,
@@ -262,7 +269,7 @@ fun CleanerHubScreen(
                     )
                 }
                 Text(
-                    "Silinebilir önbellek + sistem boşaltması. Sistem dosyalarına dokunulmaz.",
+                    stringResource(R.string.txt_silinebilir_nbellek_sistem_bo_altmas_sistem),
                     color = Color(0xFF8E8E93),
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
@@ -271,6 +278,28 @@ fun CleanerHubScreen(
             }
             Spacer(Modifier.height(80.dp))
         }
+    }
+
+    if (confirmClean) {
+        AlertDialog(
+            onDismissRequest = { confirmClean = false },
+            title = { Text(stringResource(R.string.txt_temizlik_ba_lat_ls_n_m)) },
+            text = {
+                Text(
+                    "Seçilen kategoriler çöp kutusuna taşınır (48 saat geri alınabilir). " +
+                        "Uygulama önbelleği doğrudan temizlenir."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClean = false
+                    runClean()
+                }) { Text(stringResource(R.string.txt_temizle_2)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClean = false }) { Text(stringResource(R.string.txt_vazge)) }
+            }
+        )
     }
 }
 
@@ -317,8 +346,8 @@ private fun CleanerCategoryRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            "▾ $title",
-            color = Color.White,
+            stringResource(R.string.txt_1_s_5, title),
+            color = homeTextPrimary(),
             fontSize = 15.sp,
             modifier = Modifier.weight(1f)
         )
@@ -330,7 +359,7 @@ private fun CleanerCategoryRow(
         Spacer(Modifier.width(12.dp))
         Box(
             Modifier
-                .size(26.dp)
+                .size(34.dp)
                 .clip(CircleShape)
                 .clickable(enabled = enabled, onClick = onToggle),
             contentAlignment = Alignment.Center
@@ -523,22 +552,22 @@ fun SecurityScanScreen(
     }
 
     Scaffold(
-        containerColor = Color.Black,
+        containerColor = homeBg(),
         topBar = {
             TopAppBar(
-                title = { Text("Güvenlik taraması", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
+                title = { Text(stringResource(R.string.txt_g_venlik_taramas), fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
-                        idleContent = Color.White
+                        idleContent = homeTextPrimary()
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 },
                 actions = {
                     TvIconButton(
                         onClick = onNavigateToSettings,
-                        idleContent = Color.White,
+                        idleContent = homeTextPrimary(),
                         modifier = Modifier.focusRequester(settingsFocus)
                     ) {
                         Icon(
@@ -548,7 +577,7 @@ fun SecurityScanScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = homeBg(), titleContentColor = homeTextPrimary())
             )
         },
         bottomBar = {
@@ -560,7 +589,7 @@ fun SecurityScanScreen(
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(containerColor = HubOrange)
                     ) {
-                        Text("Temizleyiciye git · ${formatBytes(summary!!.junkBytes)}", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.txt_temizleyiciye_git_1_s, formatBytes(summary!!.junkBytes)), fontWeight = FontWeight.Bold)
                     }
                 }
                 if (!scanning) {
@@ -572,9 +601,9 @@ fun SecurityScanScreen(
                             .makayFocus(),
                         shape = RoundedCornerShape(50),
                         border = BorderStroke(1.dp, Color(0xFF636366)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = homeTextPrimary())
                     ) {
-                        Text("Yeniden tara", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.txt_yeniden_tara), fontWeight = FontWeight.SemiBold)
                     }
                 }
                 Button(
@@ -588,11 +617,11 @@ fun SecurityScanScreen(
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2C2C2E),
-                        contentColor = Color.White
+                        containerColor = hubPanel(),
+                        contentColor = homeTextPrimary()
                     )
                 ) {
-                    Text(if (scanning) "Dur" else "Tamam", fontWeight = FontWeight.SemiBold)
+                    Text(if (scanning) stringResource(R.string.msg_stop) else stringResource(R.string.txt_tamam), fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -631,7 +660,7 @@ fun SecurityScanScreen(
                     else summary?.let { "${it.score}" } ?: "—"
                     Text(
                         ringLabel,
-                        color = Color.White,
+                        color = homeTextPrimary(),
                         fontSize = if (ringLabel.length >= 4) 32.sp else 40.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
@@ -642,7 +671,7 @@ fun SecurityScanScreen(
                             summary == null -> "Sonuç yok — yeniden tarayın"
                             else -> "Sağlık skoru"
                         },
-                        color = Color.White.copy(0.8f),
+                        color = homeTextSecondary(),
                         fontSize = 13.sp
                     )
                 }
@@ -650,7 +679,7 @@ fun SecurityScanScreen(
             Text(currentLabel, color = Color(0xFF8E8E93), fontSize = 12.sp, textAlign = TextAlign.Center)
             if (!scanning) {
                 Text(
-                    "Makay antivirüs değildir. İzin, junk ve uygulama sağlığı özeti gösterir.",
+                    stringResource(R.string.txt_makay_antivir_s_de_ildir_zin_junk_ve_uygulam),
                     color = Color(0xFF8E8E93),
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
@@ -678,7 +707,7 @@ fun SecurityScanScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(item.title, color = Color.White, fontSize = 15.sp)
+                        Text(item.title, color = homeTextPrimary(), fontSize = 15.sp)
                         Text(
                             detail,
                             color = Color(0xFF8E8E93),
@@ -702,12 +731,12 @@ fun SecurityScanScreen(
                 Spacer(Modifier.height(12.dp))
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = HubCard),
+                    colors = CardDefaults.cardColors(containerColor = hubPanel()),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Sonuç özeti", color = Color.White, fontWeight = FontWeight.Bold)
-                        Text("• Junk adayı: ${formatBytes(s.junkBytes)} (${s.junkFiles} öğe)", color = Color(0xFFAEAEB2), fontSize = 13.sp)
+                        Text(stringResource(R.string.txt_sonu_zeti), color = homeTextPrimary(), fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.txt_junk_aday_1_s_2_s_e, formatBytes(s.junkBytes), s.junkFiles), color = Color(0xFFAEAEB2), fontSize = 13.sp)
                         Text(
                             "• Kullanılmayan uygulama: " +
                                 (if (s.appsScanned) "${s.unusedApps}" else "— (adım atlandı)"),
@@ -727,22 +756,22 @@ fun SecurityScanScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (!liveStorage) {
                                 TextButton(onClick = onOpenPermissions) {
-                                    Text("İzinler", color = HubBlue)
+                                    Text(stringResource(R.string.txt_zinler), color = HubBlue)
                                 }
                             }
                             if (s.unusedApps > 0) {
                                 TextButton(onClick = onOpenManageApps) {
-                                    Text("Uygulamalar", color = HubBlue)
+                                    Text(stringResource(R.string.txt_uygulamalar), color = HubBlue)
                                 }
                             }
                             if (s.junkBytes > 0) {
                                 TextButton(onClick = onOpenCleaner) {
-                                    Text("Temizle", color = HubOrange)
+                                    Text(stringResource(R.string.txt_temizle_2), color = HubOrange)
                                 }
                             }
                         }
                         Text(
-                            "Virüs motoru yok — bu bir cihaz sağlık özetidir. Satıra dokunarak ilgili ekranı açın.",
+                            stringResource(R.string.txt_vir_s_motoru_yok_bu_bir_cihaz_sa_l_k_zetidir),
                             color = Color(0xFF636366),
                             fontSize = 11.sp
                         )

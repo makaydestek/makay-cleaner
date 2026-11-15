@@ -43,9 +43,9 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _state.update { it.copy(checking = true, error = null) }
             val result = runCatching {
-                // Uygulama her yeni açıldığında GitHub Releases'i kontrol et.
-                // Otomatik kontrol aralığı yalnızca arka plan/diğer tetikleyicilere uygulanır.
-                withContext(Dispatchers.IO) { repository.checkForUpdate(force = true) }
+                // Otomatik kontrol: 12 saatlik aralığa saygı duy. Zorla kontrol
+                // yalnızca kullanıcı "Kontrol et" dediğinde yapılır (GitHub API kotası).
+                withContext(Dispatchers.IO) { repository.checkForUpdate(force = false) }
             }
             val update = result.getOrNull()
             if (update != null && !postponedThisSession) {
@@ -74,6 +74,7 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun handleNotificationOpen(autoDownload: Boolean, activity: Activity?) {
+        if (com.makay.cleaner.util.AppLockState.isLocked()) return
         viewModelScope.launch {
             postponedThisSession = false
             _state.update { it.copy(checking = true, error = null) }
@@ -167,7 +168,9 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun startDownloadAndInstall(activity: Activity) {
+        if (com.makay.cleaner.util.AppLockState.isLocked()) return
         val update = _state.value.available ?: return
+        if (_state.value.downloading) return
         viewModelScope.launch {
             if (!repository.canRequestInstall()) {
                 _state.update {

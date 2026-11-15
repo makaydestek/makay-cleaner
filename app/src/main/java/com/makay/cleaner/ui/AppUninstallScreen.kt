@@ -1,5 +1,9 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -30,7 +34,7 @@ fun AppUninstallScreen(
     onNavigateBack: () -> Unit,
     viewModel: AppUninstallViewModel = viewModel(factory = AppUninstallViewModel.Factory(application))
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val filteredApps = viewModel.getFilteredApps()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -48,7 +52,7 @@ fun AppUninstallScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Uygulama Kaldır", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_uygulama_kald_r), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -77,7 +81,7 @@ fun AppUninstallScreen(
                         ) {
                             Column(Modifier.padding(12.dp)) {
                                 Text(
-                                    "Uygulama listesi yüklenemedi",
+                                    stringResource(R.string.txt_uygulama_listesi_y_klenemedi),
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -87,7 +91,7 @@ fun AppUninstallScreen(
                                     style = MaterialTheme.typography.bodySmall
                                 )
                                 TextButton(onClick = { viewModel.loadApps() }) {
-                                    Text("Tekrar dene", color = MaterialTheme.colorScheme.onErrorContainer)
+                                    Text(stringResource(R.string.txt_tekrar_dene), color = MaterialTheme.colorScheme.onErrorContainer)
                                 }
                             }
                         }
@@ -102,7 +106,7 @@ fun AppUninstallScreen(
 
                 item {
                     Text(
-                        text = "Kaldırma sonrası erişilebilen kalıntılar (Download/<paket> vb.) temizlenir. " +
+                        text = stringResource(R.string.txt_kald_rma_sonras_eri_ilebilen_kal_nt_lar_down) +
                             "Android 11+ çoğu cihazda Android/data|obb klasörleri üçüncü parti uygulamaya kapalıdır; " +
                             "bu klasörler F Dosya Yöneticisi’nde kalabilir — sistem Dosyalar / üretici aracı gerekir.",
                         style = MaterialTheme.typography.bodySmall,
@@ -119,7 +123,7 @@ fun AppUninstallScreen(
 
                 item {
                     Text(
-                        text = "Yüklü Uygulamalar (${filteredApps.size})",
+                        text = stringResource(R.string.txt_y_kl_uygulamalar_1_s, filteredApps.size),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -157,7 +161,7 @@ fun AppUninstallScreen(
                             .padding(top = 8.dp),
                         shape = MaterialTheme.shapes.medium
                     ) {
-                        Text("Yenile", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.txt_yenile), style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
@@ -178,7 +182,7 @@ fun AppUninstallLoadingContent() {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Uygulamalar yükleniyor...",
+                text = stringResource(R.string.txt_uygulamalar_y_kleniyor),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -204,20 +208,20 @@ fun AppUninstallSummaryCard(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Toplam Uygulama",
+                text = stringResource(R.string.txt_toplam_uygulama),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "$totalApps uygulama",
+                text = stringResource(R.string.txt_1_s_uygulama, totalApps),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Toplam Boyut: $totalSize",
+                text = stringResource(R.string.txt_toplam_boyut_1_s, totalSize),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -244,7 +248,7 @@ fun FilterToggleButton(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Sistem Uygulamaları",
+                    text = stringResource(R.string.txt_sistem_uygulamalar),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -343,11 +347,11 @@ fun AppUninstallItem(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("Kaldır")
+                    Text(stringResource(R.string.txt_kald_r))
                 }
             } else {
                 Text(
-                    text = "Sistem",
+                    text = stringResource(R.string.txt_sistem),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold

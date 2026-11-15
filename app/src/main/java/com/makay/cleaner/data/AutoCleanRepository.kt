@@ -22,6 +22,8 @@ class AutoCleanRepository(private val context: Context) {
         const val KEY_CAT_TMP = "cat_tmp"
         /** true = APK/indirme/artık çöpe; false = kalıcı sil (cache/tmp her zaman kalıcı). */
         const val KEY_USE_TRASH = "auto_clean_use_trash"
+        const val MIN_INTERVAL_HOURS = 1L
+        const val MAX_INTERVAL_HOURS = 168L
     }
 
     data class CategoryFlags(
@@ -39,9 +41,11 @@ class AutoCleanRepository(private val context: Context) {
         categories: CategoryFlags = getCategories(),
         useTrash: Boolean = getUseTrash()
     ) {
+        // WorkManager periyodik iş alt sınırı 15 dk; 0/negatif değer çökme üretir.
+        val safeInterval = intervalHours.coerceIn(MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS)
         prefs.edit()
             .putBoolean(KEY_ENABLED, enabled)
-            .putLong(KEY_INTERVAL_HOURS, intervalHours)
+            .putLong(KEY_INTERVAL_HOURS, safeInterval)
             .putBoolean(KEY_WIFI_ONLY, wifiOnly)
             .putBoolean(KEY_CHARGING_ONLY, chargingOnly)
             .putBoolean(KEY_CAT_CACHE, categories.cache)
@@ -51,7 +55,8 @@ class AutoCleanRepository(private val context: Context) {
             .apply()
 
         if (enabled) {
-            scheduleAutoClean(intervalHours, wifiOnly, chargingOnly)
+            runCatching { scheduleAutoClean(safeInterval, wifiOnly, chargingOnly) }
+                .onFailure { com.makay.cleaner.util.SoftErrorLogger.warn("AutoClean", "iş planlanamadı", it) }
         } else {
             cancelAutoClean()
         }
@@ -60,6 +65,7 @@ class AutoCleanRepository(private val context: Context) {
     fun getSettings(): Pair<Boolean, Long> {
         val enabled = prefs.getBoolean(KEY_ENABLED, false)
         val intervalHours = prefs.getLong(KEY_INTERVAL_HOURS, 24)
+            .coerceIn(MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS)
         return Pair(enabled, intervalHours)
     }
 
@@ -116,6 +122,19 @@ class AutoCleanRepository(private val context: Context) {
 
     fun cancelAutoClean() {
         workManager.cancelUniqueWork(WORK_TAG)
+    }
+
+    /**
+     * Ayar "açık" görünürken iş kaybolmuş olabilir (planlama hatası, süreç ölümü,
+     * WorkManager temizliği). Açılışta yeniden kur.
+     */
+    fun ensureScheduled() {
+        val (enabled, interval) = getSettings()
+        if (!enabled) return
+        runCatching { scheduleAutoClean(interval, getWifiOnly(), getChargingOnly()) }
+            .onFailure {
+                com.makay.cleaner.util.SoftErrorLogger.warn("AutoClean", "açılışta yeniden planlanamadı", it)
+            }
     }
 
     fun runManualClean() {

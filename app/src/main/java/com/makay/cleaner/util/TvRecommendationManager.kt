@@ -19,10 +19,10 @@ object TvRecommendationManager {
             val channelId = "makay_tv_recommendations"
             val channel = android.app.NotificationChannel(
                 channelId,
-                "Makay Cleaner TV Önerileri",
+                context.getString(com.makay.cleaner.R.string.tv_reco_channel_name),
                 android.app.NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Android TV ana ekran temizlik önerileri"
+                description = context.getString(com.makay.cleaner.R.string.tv_reco_channel_desc)
                 setSound(null, null)
                 enableVibration(false)
             }
@@ -40,14 +40,13 @@ object TvRecommendationManager {
             )
             val formatted = formatBytes(junkBytes)
             val text = if (junkBytes > 0L) {
-                "Skor %$score · $formatted silinebilir junk"
+                context.getString(com.makay.cleaner.R.string.tv_reco_text_junk, score, formatted)
             } else {
-                "Skor %$score · cihaz iyi durumda"
+                context.getString(com.makay.cleaner.R.string.tv_reco_text_clean, score)
             }
             val notification = android.app.Notification.Builder(context, channelId)
-                .setContentTitle("Makay Cleaner")
-                .setContentText(text)
-                .setSmallIcon(com.makay.cleaner.R.mipmap.ic_launcher)
+                .setContentTitle(context.getString(com.makay.cleaner.R.string.tv_reco_title))                .setContentText(text)
+                .setSmallIcon(com.makay.cleaner.R.drawable.ic_stat_notify)
                 .setContentIntent(pending)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true)

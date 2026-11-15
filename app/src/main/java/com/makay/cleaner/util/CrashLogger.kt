@@ -15,8 +15,13 @@ object CrashLogger {
     private const val MAX_FRAMES_PER_CAUSE = 24
     private const val MAX_REPORT_CHARS = 12_000
 
+    @Volatile
+    private var installed = false
+
     fun install(context: Context) {
         val app = context.applicationContext
+        if (installed) return
+        installed = true
         clearLegacyReport(app)
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -51,7 +56,15 @@ object CrashLogger {
             }
             if (current != null) appendLine("... cause chain truncated")
         }
-        File(context.filesDir, FILE).writeText(report.take(MAX_REPORT_CHARS))
+        val target = File(context.filesDir, FILE)
+        val tmp = File(context.filesDir, "$FILE.tmp")
+        runCatching {
+            tmp.writeText(report.take(MAX_REPORT_CHARS))
+            if (!tmp.renameTo(target)) {
+                target.writeText(report.take(MAX_REPORT_CHARS))
+                tmp.delete()
+            }
+        }
     }
 
     private fun clearLegacyReport(context: Context) {
@@ -70,6 +83,11 @@ object CrashLogger {
 
     fun read(context: Context): String? {
         val f = File(context.filesDir, FILE)
-        return if (f.exists()) f.readText() else null
+        if (!f.exists()) return null
+        return runCatching {
+            val text = f.readText()
+            f.delete()
+            text
+        }.getOrNull()
     }
 }

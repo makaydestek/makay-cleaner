@@ -1,5 +1,6 @@
 package com.makay.cleaner.data
 
+import com.makay.cleaner.R
 import android.content.Context
 import android.content.SharedPreferences
 import com.google.gson.Gson
@@ -12,10 +13,17 @@ import java.util.Locale
 
 class CleaningStatsRepository(private val context: Context) {
 
+    companion object {
+        /** Worker + UI eşzamanlı yazabildiği için süreç-içi kilit. */
+        private val LOCK = Any()
+    }
+
     private val prefs: SharedPreferences = context.getSharedPreferences("cleaning_stats", Context.MODE_PRIVATE)
     private val gson = Gson()
-    private val decimalFormat = DecimalFormat("#.##")
-    private val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+
+    // SimpleDateFormat/DecimalFormat thread-safe değil; her kullanımda yerel üretilir.
+    private fun newDateFormat() = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+    private fun newDecimalFormat() = DecimalFormat("#.##")
 
     fun getStats(): CleaningStats {
         val totalCleanings = prefs.getInt("total_cleanings", 0)
@@ -36,20 +44,21 @@ class CleaningStatsRepository(private val context: Context) {
             totalSpaceSavedFormatted = formatBytes(totalSpaceSaved),
             lastCleaningDate = lastCleaningDate,
             lastCleaningDateFormatted = if (lastCleaningDate > 0) {
-                dateFormat.format(Date(lastCleaningDate))
+                newDateFormat().format(Date(lastCleaningDate))
             } else {
-                "Henüz temizlik yapılmadı"
+                context.getString(R.string.stats_never_cleaned)
             },
             cleaningHistory = cleaningHistory
         )
     }
 
-    fun addCleaningRecord(spaceSaved: Long, filesDeleted: Int, category: String) {
+    fun addCleaningRecord(spaceSaved: Long, filesDeleted: Int, category: String) = synchronized(LOCK) {
         val stats = getStats()
+        val now = System.currentTimeMillis()
         val newRecord = CleaningRecord(
-            id = System.currentTimeMillis(),
-            date = System.currentTimeMillis(),
-            dateFormatted = dateFormat.format(Date()),
+            id = now,
+            date = now,
+            dateFormatted = newDateFormat().format(Date(now)),
             spaceSaved = spaceSaved,
             spaceSavedFormatted = formatBytes(spaceSaved),
             filesDeleted = filesDeleted,
@@ -59,15 +68,18 @@ class CleaningStatsRepository(private val context: Context) {
         val updatedHistory = listOf(newRecord) + stats.cleaningHistory.take(99)
         val isScanOnly = category.startsWith("Tarama:")
 
-        prefs.edit()
+        val editor = prefs.edit()
             .putInt("total_cleanings", if (isScanOnly) stats.totalCleanings else stats.totalCleanings + 1)
             .putLong(
                 "total_space_saved",
                 if (isScanOnly) stats.totalSpaceSaved else stats.totalSpaceSaved + spaceSaved
             )
-            .putLong("last_cleaning_date", System.currentTimeMillis())
             .putString("cleaning_history", gson.toJson(updatedHistory.toTypedArray()))
-            .apply()
+        // "Son temizlik" yalnızca gerçek temizlikte güncellenir; tarama sayılmaz.
+        if (!isScanOnly) {
+            editor.putLong("last_cleaning_date", now)
+        }
+        editor.apply()
     }
 
     fun addScanRecord(itemsFound: Int, bytesFound: Long, category: String) {
@@ -75,15 +87,16 @@ class CleaningStatsRepository(private val context: Context) {
     }
 
     fun clearHistory() {
-        prefs.edit().clear().apply()
+        // Yalnızca geçmiş kayıtlarını sil; toplam istatistikler korunur.
+        prefs.edit().remove("cleaning_history").apply()
     }
 
     private fun formatBytes(bytes: Long): String {
         return when {
             bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> "${decimalFormat.format(bytes / 1024.0)} KB"
-            bytes < 1024 * 1024 * 1024 -> "${decimalFormat.format(bytes / (1024.0 * 1024.0))} MB"
-            else -> "${decimalFormat.format(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
+            bytes < 1024 * 1024 -> "${newDecimalFormat().format(bytes / 1024.0)} KB"
+            bytes < 1024 * 1024 * 1024 -> "${newDecimalFormat().format(bytes / (1024.0 * 1024.0))} MB"
+            else -> "${newDecimalFormat().format(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
         }
     }
 }

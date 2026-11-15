@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,7 +42,7 @@ fun ConfirmDeleteDialog(
             Column {
                 if (fileCount > 0) {
                     Text(
-                        text = "$fileCount dosya · ${formatBytes(totalBytes)}",
+                        text = stringResource(R.string.txt_1_s_dosya_2_s, fileCount, formatBytes(totalBytes)),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
@@ -49,7 +51,7 @@ fun ConfirmDeleteDialog(
                 }
                 if (previewPaths.isNotEmpty()) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(previewPaths.take(6)) { path ->
+                        items(previewPaths.take(6), key = { it }) { path ->
                             AsyncImage(
                                 model = if (path.startsWith("content://") || path.startsWith("file://")) {
                                     path
@@ -79,11 +81,11 @@ fun ConfirmDeleteDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(if (moveToTrash) "Çöp kutusuna taşı" else "Sil")
+                Text(if (moveToTrash) stringResource(R.string.msg_trash) else stringResource(R.string.msg_delete))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("İptal") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.txt_ptal)) }
         }
     )
 }
@@ -101,23 +103,23 @@ fun CleanSummaryDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Temizlik tamamlandı", fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(R.string.txt_temizlik_tamamland), fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.fillMaxWidth()) {
                 Text(category, style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(8.dp))
-                Text("• $filesDeleted öğe işlendi")
-                Text("• ${formatBytes(spaceSaved)} yer açıldı")
+                Text(stringResource(R.string.txt_1_s_e_i_lendi, filesDeleted))
+                Text(stringResource(R.string.txt_1_s_yer_a_ld, formatBytes(spaceSaved)))
                 if (protectedSkipped > 0) {
                     Text(
-                        "• $protectedSkipped korunan sistem dosyası atlandı",
+                        stringResource(R.string.txt_1_s_korunan_sistem_dosyas_atland, protectedSkipped),
                         color = MaterialTheme.colorScheme.tertiary
                     )
                 }
                 if (movedToTrash) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Öğeler çöp kutusunda. 48 saat içinde geri yükleyebilirsiniz.",
+                        stringResource(R.string.txt_eler_p_kutusunda_48_saat_i_inde_geri_y_kleye),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -125,7 +127,7 @@ fun CleanSummaryDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Tamam") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.txt_tamam)) }
         },
         dismissButton = {
             val extra = when {

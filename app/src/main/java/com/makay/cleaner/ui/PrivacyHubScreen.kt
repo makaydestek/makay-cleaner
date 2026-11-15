@@ -1,7 +1,9 @@
-﻿@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -43,16 +45,16 @@ fun PrivacyHubScreen(
         return if (granted) "İzin verildi" else "İzin yok / istenmedi"
     }
     Scaffold(
-        containerColor = Color.Black,
+        containerColor = homeBg(),
         topBar = {
             TopAppBar(
-                title = { Text("Gizlilik koruması", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
+                title = { Text(stringResource(R.string.txt_gizlilik_korumas), fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    TvIconButton(onClick = onNavigateBack, idleContent = Color.White) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                    TvIconButton(onClick = onNavigateBack, idleContent = homeTextPrimary()) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = homeBg(), titleContentColor = homeTextPrimary())
             )
         }
     ) { padding ->
@@ -66,13 +68,13 @@ fun PrivacyHubScreen(
         ) {
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = HubCard),
+                colors = CardDefaults.cardColors(containerColor = hubPanel()),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Hassas işlemler", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(stringResource(R.string.txt_hassas_i_lemler), fontWeight = FontWeight.Bold, color = homeTextPrimary())
                     Text(
-                        "Anlık izin durumu (sistemle tutarlı). Değiştirmek için satıra dokunun.",
+                        stringResource(R.string.txt_anl_k_izin_durumu_sistemle_tutarl_de_i_tirme),
                         color = Color(0xFF8E8E93),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -93,7 +95,7 @@ fun PrivacyHubScreen(
                         onClick = onOpenPermissions,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Tüm izinler", color = HubBlue, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.txt_t_m_izinler), color = HubBlue, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -140,7 +142,7 @@ private fun PrivacyRow(emoji: String, title: String, sub: String, onClick: (Cont
     ) {
         Text(emoji, fontSize = 20.sp, modifier = Modifier.width(36.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(title, color = homeTextPrimary(), fontWeight = FontWeight.SemiBold)
             Text(
                 sub,
                 color = Color(0xFF8E8E93),
@@ -162,7 +164,7 @@ private fun PrivacyLinkCard(title: String, sub: String, onClick: () -> Unit) {
         onClick = onClick,
         interactionSource = src,
         shape = RoundedCornerShape(16.dp),
-        colors = tvCardColors(focused, HubCard),
+        colors = tvCardColors(focused, hubPanel()),
         modifier = Modifier
             .fillMaxWidth()
             .makayFocus(corner = 16.dp)
@@ -174,7 +176,7 @@ private fun PrivacyLinkCard(title: String, sub: String, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(
                     title,
-                    color = Color.White,
+                    color = homeTextPrimary(),
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(

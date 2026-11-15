@@ -1,5 +1,9 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.app.Application
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,14 +29,14 @@ fun LargeFileScreen(
     onNavigateBack: () -> Unit,
     viewModel: LargeFileViewModel = viewModel(factory = LargeFileViewModel.Factory(application))
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val hasPermission = rememberStoragePermissionState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("🔍 Büyük Dosya Avcısı", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_b_y_k_dosya_avc_s), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
@@ -79,10 +83,10 @@ fun LargeFileScreen(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Taranıyor...")
+                    Text(stringResource(R.string.txt_taran_yor))
                 } else {
                     Text(
-                        "🔍 Tara (>${uiState.minSizeMB} MB)",
+                        stringResource(R.string.txt_tara_1_s_mb, uiState.minSizeMB),
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -91,23 +95,23 @@ fun LargeFileScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (hasPermission) {
-                Text("Boyut", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.txt_boyut), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(10, 50, 200).forEach { mb ->
                         FilterChip(
                             selected = uiState.minSizeMB == mb,
                             onClick = { viewModel.updateMinSize(mb) },
-                            label = { Text(">$mb MB") }
+                            label = { Text(stringResource(R.string.txt_1_s_mb, mb)) }
                         )
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("Tür", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.txt_t_r), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = uiState.categoryFilter == null,
                         onClick = { viewModel.setCategoryFilter(null) },
-                        label = { Text("Tümü") }
+                        label = { Text(stringResource(R.string.txt_t_m)) }
                     )
                     FileCategory.entries.take(4).forEach { cat ->
                         FilterChip(
@@ -118,22 +122,22 @@ fun LargeFileScreen(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("Tarih", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.txt_tarih), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = uiState.maxAgeDays == null,
                         onClick = { viewModel.setMaxAgeDays(null) },
-                        label = { Text("Tümü") }
+                        label = { Text(stringResource(R.string.txt_t_m)) }
                     )
                     FilterChip(
                         selected = uiState.maxAgeDays == 7,
                         onClick = { viewModel.setMaxAgeDays(7) },
-                        label = { Text("7 gün") }
+                        label = { Text(stringResource(R.string.txt_7_g_n)) }
                     )
                     FilterChip(
                         selected = uiState.maxAgeDays == 30,
                         onClick = { viewModel.setMaxAgeDays(30) },
-                        label = { Text("30 gün") }
+                        label = { Text(stringResource(R.string.txt_30_g_n)) }
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -164,12 +168,12 @@ fun LargeFileScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Bulunan Dosya",
+                            text = stringResource(R.string.txt_bulunan_dosya),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "${uiState.visibleFiles.size} dosya • ${uiState.totalSizeFormatted}",
+                            text = stringResource(R.string.txt_1_s_dosya_2_s_4, uiState.visibleFiles.size, uiState.totalSizeFormatted),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -180,13 +184,13 @@ fun LargeFileScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { viewModel.selectAll() }) { Text("Tümünü Seç") }
-                    TextButton(onClick = { viewModel.deselectAll() }) { Text("Seçimi kaldır") }
+                    TextButton(onClick = { viewModel.selectAll() }) { Text(stringResource(R.string.txt_t_m_n_se_2)) }
+                    TextButton(onClick = { viewModel.deselectAll() }) { Text(stringResource(R.string.txt_se_imi_kald_r)) }
                 }
 
                 if (uiState.selectedFiles.isNotEmpty()) {
                     Text(
-                        text = "${uiState.selectedFiles.size} dosya seçildi",
+                        text = stringResource(R.string.txt_1_s_dosya_se_ildi_2, uiState.selectedFiles.size),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -200,7 +204,7 @@ fun LargeFileScreen(
                     uiState.visibleFiles.groupBy { it.category }.forEach { (category, files) ->
                         item(key = "cat_${category.name}") {
                             Text(
-                                "${category.displayName} · ${files.size}",
+                                stringResource(R.string.txt_1_s_2_s_11, category.displayName, files.size),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
@@ -247,7 +251,7 @@ fun LargeFileScreen(
                         )
                     ) {
                         Text(
-                            "🗑️ Seçili Dosyaları Sil (${uiState.selectedFiles.size})",
+                            stringResource(R.string.txt_se_ili_dosyalar_sil_1_s_2, uiState.selectedFiles.size),
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
@@ -267,7 +271,7 @@ fun LargeFileScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "10 MB'dan büyük dosyaları bulmak için 'Tara' butonuna basın",
+                            text = stringResource(R.string.txt_10_mb_dan_b_y_k_dosyalar_bulmak_i_in_tara_bu),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -311,7 +315,7 @@ fun LargeFileItem(
                     maxLines = 1
                 )
                 Text(
-                    text = "${file.category.displayName} • ${file.dateFormatted}",
+                    text = stringResource(R.string.txt_1_s_2_s_12, file.category.displayName, file.dateFormatted),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1

@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -71,7 +73,7 @@ fun ExclusionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Hariç tutulanlar", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_hari_tutulanlar), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
@@ -81,7 +83,7 @@ fun ExclusionsScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = { showAdd = true }) { Text("Ekle") }
+                    TextButton(onClick = { showAdd = true }) { Text(stringResource(R.string.txt_ekle)) }
                 }
             )
         }
@@ -111,11 +113,11 @@ fun ExclusionsScreen(
                     ) {
                         Column(Modifier.padding(14.dp)) {
                             Text(
-                                "Kilitli sistem önbelleği",
+                                stringResource(R.string.txt_kilitli_sistem_nbelle_i),
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                "Yaklaşık ${formatBytes(lockedBytes)} — dosya listesi değil, sistem sayacı. " +
+                                stringResource(R.string.txt_yakla_k_1_s_dosya_listesi_de_il_sistem_sayac, formatBytes(lockedBytes)) +
                                     "OEM güvenlik uygulaması temizleyebilir; Makay silemez.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -127,7 +129,7 @@ fun ExclusionsScreen(
 
             item {
                 Text(
-                    "Sistem (kaldırılamaz)",
+                    stringResource(R.string.txt_sistem_kald_r_lamaz),
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                     modifier = Modifier.padding(top = 8.dp)
@@ -152,17 +154,17 @@ fun ExclusionsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Sizin ekledikleriniz",
+                        stringResource(R.string.txt_sizin_ekledikleriniz),
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )
-                    TextButton(onClick = { showAdd = true }) { Text("+ Yol ekle") }
+                    TextButton(onClick = { showAdd = true }) { Text(stringResource(R.string.txt_yol_ekle)) }
                 }
             }
             if (userItems.isEmpty()) {
                 item {
                     Text(
-                        "Henüz kullanıcı hariç tutması yok. İstediğiniz klasör yolunu ekleyebilirsiniz.",
+                        stringResource(R.string.txt_hen_z_kullan_c_hari_tutmas_yok_stedi_iniz_kl),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp
                     )
@@ -178,7 +180,7 @@ fun ExclusionsScreen(
                             scope.launch {
                                 withContext(Dispatchers.IO) { repo.removeUser(item.id) }
                                 refreshUser()
-                                Toast.makeText(context, "Kaldırıldı", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.msg_removed), Toast.LENGTH_SHORT).show()
                             }
                         }
                     )
@@ -191,25 +193,25 @@ fun ExclusionsScreen(
     if (showAdd) {
         AlertDialog(
             onDismissRequest = { showAdd = false },
-            title = { Text("Hariç tutulan yol ekle") },
+            title = { Text(stringResource(R.string.txt_hari_tutulan_yol_ekle)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Örn. /storage/emulated/0/DCIM/Camera veya Download/İş",
+                        stringResource(R.string.txt_rn_storage_emulated_0_dcim_camera_veya_downl),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     OutlinedTextField(
                         value = pathInput,
                         onValueChange = { pathInput = it },
-                        label = { Text("Yol") },
+                        label = { Text(stringResource(R.string.txt_yol)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = titleInput,
                         onValueChange = { titleInput = it },
-                        label = { Text("Başlık (isteğe bağlı)") },
+                        label = { Text(stringResource(R.string.txt_ba_l_k_iste_e_ba_l)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -227,7 +229,7 @@ fun ExclusionsScreen(
                                 titleInput = ""
                                 showAdd = false
                                 refreshUser()
-                                Toast.makeText(context, "Eklendi", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.msg_added), Toast.LENGTH_SHORT).show()
                             } else {
                                 Toast.makeText(
                                     context,
@@ -237,10 +239,10 @@ fun ExclusionsScreen(
                             }
                         }
                     }
-                ) { Text("Kaydet") }
+                ) { Text(stringResource(R.string.txt_kaydet)) }
             },
             dismissButton = {
-                TextButton(onClick = { showAdd = false }) { Text("Vazgeç") }
+                TextButton(onClick = { showAdd = false }) { Text(stringResource(R.string.txt_vazge)) }
             }
         )
     }
@@ -291,7 +293,7 @@ private fun ExclusionRow(
             if (onRemove != null) {
                 Spacer(Modifier.height(6.dp))
                 TextButton(onClick = onRemove, modifier = Modifier.align(Alignment.End)) {
-                    Text("Kaldır")
+                    Text(stringResource(R.string.txt_kald_r))
                 }
             }
         }

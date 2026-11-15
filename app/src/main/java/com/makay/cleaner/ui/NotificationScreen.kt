@@ -1,5 +1,9 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.Manifest
 import android.app.Application
 import android.content.pm.PackageManager
@@ -27,7 +31,7 @@ fun NotificationScreen(
     onNavigateBack: () -> Unit,
     viewModel: NotificationViewModel = viewModel(factory = NotificationViewModel.Factory(application))
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showNotificationRationale by remember { mutableStateOf(false) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -53,16 +57,16 @@ fun NotificationScreen(
     if (showNotificationRationale) {
         AlertDialog(
             onDismissRequest = { showNotificationRationale = false },
-            title = { Text("Bildirim izni") },
-            text = { Text("Temizlik hatırlatmalarını gösterebilmek için bildirim izni gerekir. İzin vermezseniz hatırlatmalar kapalı kalır.") },
+            title = { Text(stringResource(R.string.txt_bildirim_izni)) },
+            text = { Text(stringResource(R.string.txt_temizlik_hat_rlatmalar_n_g_sterebilmek_i_in)) },
             confirmButton = {
                 TextButton(onClick = {
                     showNotificationRationale = false
                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }) { Text("Devam et") }
+                }) { Text(stringResource(R.string.txt_devam_et)) }
             },
             dismissButton = {
-                TextButton(onClick = { showNotificationRationale = false }) { Text("Şimdi değil") }
+                TextButton(onClick = { showNotificationRationale = false }) { Text(stringResource(R.string.txt_imdi_de_il)) }
             }
         )
     }
@@ -70,7 +74,7 @@ fun NotificationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bildirim Ayarlari", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_bildirim_ayarlari), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -99,7 +103,7 @@ fun NotificationScreen(
                 ) { focused ->
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Temizlik Hatirlatmasi",
+                            text = stringResource(R.string.txt_temizlik_hatirlatmasi),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -130,7 +134,7 @@ fun NotificationScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Hatirlatma Araligi",
+                            text = stringResource(R.string.txt_hatirlatma_araligi),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -176,40 +180,40 @@ fun NotificationScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Bildirim Turleri",
+                        text = stringResource(R.string.txt_bildirim_turleri),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Temizlik Tamamlandi",
+                        text = stringResource(R.string.txt_temizlik_tamamlandi),
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "Temizlik islemi bittiginde bildirim",
+                        text = stringResource(R.string.txt_temizlik_islemi_bittiginde_bildirim),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Depolama Uyarisı",
+                        text = stringResource(R.string.txt_depolama_uyaris),
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "Depolama alani azaldiginda uyari",
+                        text = stringResource(R.string.txt_depolama_alani_azaldiginda_uyari),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Temizlik Hatirlatmasi",
+                        text = stringResource(R.string.txt_temizlik_hatirlatmasi),
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "Duzenli temizlik hatirlatmalari",
+                        text = stringResource(R.string.txt_duzenli_temizlik_hatirlatmalari),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

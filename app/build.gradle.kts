@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
 }
 
 // Tek surum kaynagi: proje kokundeki VERSION.txt (ornek: 1.0.43)
@@ -262,6 +263,10 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.security:security-crypto:1.1.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    // Çöp kutusu indeksi: transactional, yarış koşullarına kapalı yerel DB
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     // Bundled yüz tespiti (sideload / Play Services indirmesi gerekmez)

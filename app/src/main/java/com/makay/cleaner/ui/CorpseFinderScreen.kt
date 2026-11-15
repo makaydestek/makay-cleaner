@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -31,9 +33,31 @@ fun CorpseFinderScreen(
     var corpses by remember { mutableStateOf<List<CorpseFinder.Corpse>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
+    var confirmAll by remember { mutableStateOf(false) }
+    var pendingCorpse by remember { mutableStateOf<CorpseFinder.Corpse?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val hasStoragePermission = rememberStoragePermissionState()
+
+    fun deleteCorpses(targets: List<CorpseFinder.Corpse>) {
+        if (targets.isEmpty()) return
+        scope.launch {
+            var deleted = 0
+            var saved = 0L
+            withContext(Dispatchers.IO) {
+                targets.forEach { c ->
+                    val (s, n) = finder.deleteCorpse(c)
+                    saved += s
+                    deleted += n
+                }
+            }
+            CleaningRecorder.record(application, "Kalıntı bulucu", saved, deleted)
+            CleanResultTracker.record("Kalıntı bulucu", deleted, saved, movedToTrash = false)
+            summary = CleanResultTracker.last
+            corpses = withContext(Dispatchers.IO) { finder.scan() }
+            Toast.makeText(context, context.getString(R.string.msg_remnants_cleaned), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     LaunchedEffect(hasStoragePermission) {
         if (hasStoragePermission) {
@@ -46,7 +70,7 @@ fun CorpseFinderScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kalıntı bulucu", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_kal_nt_bulucu), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -54,24 +78,7 @@ fun CorpseFinderScreen(
                 },
                 actions = {
                     if (corpses.isNotEmpty()) {
-                        TextButton(onClick = {
-                            scope.launch {
-                                var deleted = 0
-                                var saved = 0L
-                                withContext(Dispatchers.IO) {
-                                    corpses.forEach { c ->
-                                        val (s, n) = finder.deleteCorpse(c)
-                                        saved += s
-                                        deleted += n
-                                    }
-                                }
-                                CleaningRecorder.record(application, "Kalıntı bulucu", saved, deleted)
-                                CleanResultTracker.record("Kalıntı bulucu", deleted, saved, movedToTrash = false)
-                                summary = CleanResultTracker.last
-                                corpses = withContext(Dispatchers.IO) { finder.scan() }
-                                Toast.makeText(context, "Kalıntılar temizlendi", Toast.LENGTH_SHORT).show()
-                            }
-                        }) { Text("Tümünü temizle") }
+                        TextButton(onClick = { confirmAll = true }) { Text(stringResource(R.string.txt_t_m_n_temizle)) }
                     }
                 }
             )
@@ -85,7 +92,7 @@ fun CorpseFinderScreen(
                 CircularProgressIndicator()
             }
             corpses.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Kaldırılmış uygulama kalıntısı yok")
+                Text(stringResource(R.string.txt_kald_r_lm_uygulama_kal_nt_s_yok))
             }
             else -> LazyColumn(
                 Modifier.fillMaxSize().padding(padding).padding(16.dp),
@@ -93,7 +100,7 @@ fun CorpseFinderScreen(
             ) {
                 item {
                     Text(
-                        "Yüklü olmayan uygulamaların Android/data|obb|media klasörleri",
+                        stringResource(R.string.txt_y_kl_olmayan_uygulamalar_n_android_data_ve_a),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -103,23 +110,45 @@ fun CorpseFinderScreen(
                         Column(Modifier.padding(12.dp)) {
                             Text(corpse.packageName, fontWeight = FontWeight.SemiBold)
                             Text(
-                                "${corpse.fileCount} dosya · ${formatBytes(corpse.sizeBytes)}",
+                                stringResource(R.string.txt_1_s_dosya_2_s_2, corpse.fileCount, formatBytes(corpse.sizeBytes)),
                                 style = MaterialTheme.typography.bodySmall
                             )
-                            TextButton(onClick = {
-                                scope.launch {
-                                    val (s, n) = withContext(Dispatchers.IO) { finder.deleteCorpse(corpse) }
-                                    CleaningRecorder.record(application, "Kalıntı bulucu", s, n)
-                                    CleanResultTracker.record("Kalıntı bulucu", n, s, movedToTrash = false)
-                                    summary = CleanResultTracker.last
-                                    corpses = withContext(Dispatchers.IO) { finder.scan() }
-                                }
-                            }) { Text("Temizle") }
+                            TextButton(onClick = { pendingCorpse = corpse }) { Text(stringResource(R.string.txt_temizle_2)) }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (confirmAll) {
+        ConfirmDeleteDialog(
+            title = "Tüm kalıntılar silinsin mi?",
+            message = "${corpses.size} uygulama kalıntısı klasörü kalıcı olarak silinecek.",
+            fileCount = corpses.sumOf { it.fileCount },
+            totalBytes = corpses.sumOf { it.sizeBytes },
+            moveToTrash = false,
+            onConfirm = {
+                confirmAll = false
+                deleteCorpses(corpses)
+            },
+            onDismiss = { confirmAll = false }
+        )
+    }
+
+    pendingCorpse?.let { corpse ->
+        ConfirmDeleteDialog(
+            title = "Kalıntı silinsin mi?",
+            message = "${corpse.packageName} klasörü kalıcı olarak silinecek.",
+            fileCount = corpse.fileCount,
+            totalBytes = corpse.sizeBytes,
+            moveToTrash = false,
+            onConfirm = {
+                pendingCorpse = null
+                deleteCorpses(listOf(corpse))
+            },
+            onDismiss = { pendingCorpse = null }
+        )
     }
 
     summary?.let { s ->

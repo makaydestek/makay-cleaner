@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -38,7 +39,7 @@ fun ProScreen(
 ) {
     val context = LocalContext.current
     var isPro by remember { mutableStateOf(ProManager.isPro(application)) }
-    var code by remember { mutableStateOf("") }
+    var code by rememberSaveable { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -137,7 +138,7 @@ fun ProScreen(
                 )
             } else {
                 Text(
-                    "Pro özellikleri açık: zamanlama, otomatik junk, benzer fotoğraf, sıkıştırma ve yinelenen dosyalar.",
+                    stringResource(R.string.txt_pro_zellikleri_a_k_zamanlama_otomatik_junk_b),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 if (ProManager.PRO_GATING_ENABLED) {

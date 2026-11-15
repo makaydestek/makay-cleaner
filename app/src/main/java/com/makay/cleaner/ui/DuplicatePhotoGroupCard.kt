@@ -1,5 +1,7 @@
-﻿package com.makay.cleaner.ui
+package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,11 +47,11 @@ internal fun DuplicatePhotoGroupCard(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "$typeLabel · ${group.photos.size} fotoğraf",
+                        stringResource(R.string.txt_1_s_2_s_foto_raf, typeLabel, group.photos.size),
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "Fazlalık: ${formatBytes(group.wasteBytes)}",
+                        stringResource(R.string.txt_fazlal_k_1_s, formatBytes(group.wasteBytes)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -58,9 +60,9 @@ internal fun DuplicatePhotoGroupCard(
                     if (group.photos.size >= 2) {
                         TextButton(onClick = {
                             onCompare(group.photos[0], group.photos[1])
-                        }) { Text("Karşılaştır") }
+                        }) { Text(stringResource(R.string.txt_kar_la_t_r)) }
                     }
-                    TextButton(onClick = onKeepBest) { Text("En iyiyi tut") }
+                    TextButton(onClick = onKeepBest) { Text(stringResource(R.string.txt_en_iyiyi_tut)) }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -123,7 +125,7 @@ internal fun DuplicatePhotoGroupCard(
                         )
                         TextButton(
                             onClick = { onToggleLock(photo.path) },
-                            contentPadding = PaddingValues(0.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 if (locked) "Kilidi aç" else "Kilitle",

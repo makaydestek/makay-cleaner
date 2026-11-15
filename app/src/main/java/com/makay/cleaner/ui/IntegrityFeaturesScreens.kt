@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -53,10 +55,10 @@ fun PermissionMapScreen(onNavigateBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("İzin haritası", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_zin_haritas), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 }
             )
@@ -68,7 +70,7 @@ fun PermissionMapScreen(onNavigateBack: () -> Unit) {
         ) {
             item {
                 Text(
-                    "Kritik izinlere sahip uygulamalar. Durdurma yok — satıra dokununca sistem ayarı açılır.",
+                    stringResource(R.string.txt_kritik_izinlere_sahip_uygulamalar_durdurma_y),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -77,9 +79,9 @@ fun PermissionMapScreen(onNavigateBack: () -> Unit) {
                 item {
                     Card(onClick = { ResourceUsageHelper.openUsageAccessSettings(context) }) {
                         Column(Modifier.padding(14.dp)) {
-                            Text("Kullanım erişimi kapalı", fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.txt_kullan_m_eri_imi_kapal), fontWeight = FontWeight.SemiBold)
                             Text(
-                                "Şüpheli skor için kullanım istatistiği gerekir. Dokunarak açın.",
+                                stringResource(R.string.txt_pheli_skor_i_in_kullan_m_istatisti_i_gerekir),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -89,7 +91,7 @@ fun PermissionMapScreen(onNavigateBack: () -> Unit) {
             if (loading) {
                 item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             } else if (rows.isEmpty()) {
-                item { Text("Kritik izinli üçüncü parti uygulama bulunamadı.") }
+                item { Text(stringResource(R.string.txt_kritik_izinli_nc_parti_uygulama_bulunamad)) }
             } else {
                 items(rows, key = { it.packageName }) { row ->
                     Card(
@@ -99,7 +101,7 @@ fun PermissionMapScreen(onNavigateBack: () -> Unit) {
                         Column(Modifier.padding(14.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text(row.label, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                Text("Skor ${row.suspicionScore}", style = MaterialTheme.typography.labelMedium)
+                                Text(stringResource(R.string.txt_skor_1_s, row.suspicionScore), style = MaterialTheme.typography.labelMedium)
                             }
                             Text(
                                 row.criticalPermissions.joinToString(" · "),
@@ -139,10 +141,10 @@ fun ResourceUsageScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kaynak tüketimi", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_kaynak_t_ketimi), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 }
             )
@@ -154,14 +156,14 @@ fun ResourceUsageScreen(
         ) {
             item {
                 Text(
-                    "Son 7 günde ön planda en çok zaman harcayan uygulamalar (UsageStats).",
+                    stringResource(R.string.txt_son_7_g_nde_n_planda_en_ok_zaman_harcayan_uy),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             item {
                 OutlinedButton(onClick = onOpenSoftHibernate, modifier = Modifier.fillMaxWidth()) {
-                    Text("Kış uykusu önerileri")
+                    Text(stringResource(R.string.txt_k_uykusu_nerileri))
                 }
             }
             if (!hasUsage) {
@@ -169,12 +171,12 @@ fun ResourceUsageScreen(
                     Button(
                         onClick = { ResourceUsageHelper.openUsageAccessSettings(context) },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Kullanım erişimini aç") }
+                    ) { Text(stringResource(R.string.txt_kullan_m_eri_imini_a)) }
                 }
             } else if (loading) {
                 item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             } else if (rows.isEmpty()) {
-                item { Text("Veri yok. Birkaç gün kullanım sonrası yeniden deneyin.") }
+                item { Text(stringResource(R.string.txt_veri_yok_birka_g_n_kullan_m_sonras_yeniden_d)) }
             } else {
                 items(rows, key = { it.packageName }) { row ->
                     Card(
@@ -189,11 +191,11 @@ fun ResourceUsageScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(row.label, fontWeight = FontWeight.Bold)
                                 Text(
-                                    ResourceUsageHelper.formatDuration(row.totalForegroundMs),
+                                    ResourceUsageHelper.formatDuration(row.totalForegroundMs, context),
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                            Text("Ayarlar →", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(R.string.txt_ayarlar_2), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -222,10 +224,10 @@ fun SoftHibernateScreen(onNavigateBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kış uykusu önerileri", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_k_uykusu_nerileri), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 }
             )
@@ -237,7 +239,7 @@ fun SoftHibernateScreen(onNavigateBack: () -> Unit) {
         ) {
             item {
                 Text(
-                    "Uygulamalar zorla durdurulmaz. Sistem uygulama bilgisinden pil optimizasyonunu açmanız önerilir.",
+                    stringResource(R.string.txt_uygulamalar_zorla_durdurulmaz_sistem_uygulam),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -246,11 +248,11 @@ fun SoftHibernateScreen(onNavigateBack: () -> Unit) {
                 OutlinedButton(
                     onClick = { ResourceUsageHelper.openBatteryOptimization(context) },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Sistem pil optimizasyonu listesi") }
+                ) { Text(stringResource(R.string.txt_sistem_pil_optimizasyonu_listesi)) }
             }
             if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             else if (unused.isEmpty()) {
-                item { Text("Uzun süredir kullanılmayan uygulama adayı yok.") }
+                item { Text(stringResource(R.string.txt_uzun_s_redir_kullan_lmayan_uygulama_aday_yok)) }
             } else {
                 items(unused.take(40), key = { it.packageName }) { app ->
                     Card(
@@ -262,7 +264,7 @@ fun SoftHibernateScreen(onNavigateBack: () -> Unit) {
                         Column(Modifier.padding(14.dp)) {
                             Text(app.label, fontWeight = FontWeight.Bold)
                             Text(
-                                "Pil ayarına git · ${app.packageName}",
+                                stringResource(R.string.txt_pil_ayar_na_git_1_s, app.packageName),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -283,6 +285,38 @@ fun BlurPhotosScreen(application: Application, onNavigateBack: () -> Unit) {
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
+    var confirmTrash by remember { mutableStateOf(false) }
+
+    fun trashSelected() {
+        scope.launch {
+            busy = true
+            val trash = RecycleBinRepository(context)
+            var n = 0
+            var saved = 0L
+            withContext(Dispatchers.IO) {
+                trash.beginBatch()
+                selected.forEach { path ->
+                    val f = File(path)
+                    val size = if (f.isFile) f.length() else 0L
+                    if (FilePurger.remove(context, f, trash = trash, category = "Bulanık foto")) {
+                        n++
+                        saved += size
+                    }
+                }
+            }
+            busy = false
+            Toast.makeText(
+                context,
+                if (n > 0) "$n foto çöpe · ${formatBytes(saved)}"
+                else "Silinemedi",
+                Toast.LENGTH_SHORT
+            ).show()
+            loading = true
+            items = withContext(Dispatchers.Default) { BlurPhotoScanner.scan(application) }
+            selected = emptySet()
+            loading = false
+        }
+    }
 
     fun refresh() {
         scope.launch {
@@ -298,15 +332,15 @@ fun BlurPhotosScreen(application: Application, onNavigateBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bulanık foto adayları", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_bulan_k_foto_adaylar), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 },
                 actions = {
                     TextButton(onClick = { refresh() }, enabled = !loading && !busy) {
-                        Text("Tara")
+                        Text(stringResource(R.string.txt_tara))
                     }
                 }
             )
@@ -314,7 +348,7 @@ fun BlurPhotosScreen(application: Application, onNavigateBack: () -> Unit) {
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
             Text(
-                "Laplacian keskinlik skoru düşük görseller. İnceleyin; silme çöp kutusuna taşır.",
+                stringResource(R.string.txt_laplacian_keskinlik_skoru_d_k_g_rseller_ncel),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -327,7 +361,7 @@ fun BlurPhotosScreen(application: Application, onNavigateBack: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (items.isEmpty()) {
-                        item { Text("Bulanık aday bulunamadı.") }
+                        item { Text(stringResource(R.string.txt_bulan_k_aday_bulunamad)) }
                     }
                     items(items, key = { it.path }) { photo ->
                         val on = photo.path in selected
@@ -356,39 +390,30 @@ fun BlurPhotosScreen(application: Application, onNavigateBack: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     Button(
                         enabled = !busy,
-                        onClick = {
-                            scope.launch {
-                                busy = true
-                                val trash = RecycleBinRepository(context)
-                                var n = 0
-                                var saved = 0L
-                                withContext(Dispatchers.IO) {
-                                    selected.forEach { path ->
-                                        val f = File(path)
-                                        val size = if (f.isFile) f.length() else 0L
-                                        if (FilePurger.remove(context, f, trash = trash, category = "Bulanık foto")) {
-                                            n++
-                                            saved += size
-                                        }
-                                    }
-                                }
-                                busy = false
-                                Toast.makeText(
-                                    context,
-                                    if (n > 0) "$n foto çöpe · ${formatBytes(saved)}"
-                                    else "Silinemedi",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                refresh()
-                            }
-                        },
+                        onClick = { confirmTrash = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (busy) "Taşınıyor…" else "Seçilenleri çöpe at (${selected.size})")
+                        Text(if (busy) stringResource(R.string.msg_moving_action) else stringResource(R.string.msg_selected_trash, selected.size))
                     }
                 }
             }
         }
+    }
+
+    if (confirmTrash) {
+        ConfirmDeleteDialog(
+            title = "Seçilen fotoğraflar çöpe atılsın mı?",
+            message = "${selected.size} fotoğraf 48 saat içinde geri yüklenebilir.",
+            fileCount = selected.size,
+            totalBytes = items.filter { it.path in selected }.sumOf { it.sizeBytes },
+            moveToTrash = true,
+            previewPaths = selected.toList(),
+            onConfirm = {
+                confirmTrash = false
+                trashSelected()
+            },
+            onDismiss = { confirmTrash = false }
+        )
     }
 }
 
@@ -402,10 +427,10 @@ fun AppProfilesScreen(onNavigateBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Performans profilleri", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_performans_profilleri), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 }
             )
@@ -420,17 +445,22 @@ fun AppProfilesScreen(onNavigateBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "Ev / İş / Pil yalnızca MakayCleaner otomatik temizlik davranışını ayarlar. Wi‑Fi veya CPU’ya dokunulmaz.",
+                stringResource(R.string.txt_ev_pil_yaln_zca_makaycleaner_otomatik_temizl),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             AppProfile.entries.forEach { profile ->
                 val selected = active == profile
+                val title = stringResource(profile.titleRes)
                 Card(
                     onClick = {
                         repo.apply(profile)
                         active = profile
-                        Toast.makeText(context, "${profile.titleTr} uygulandı", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.msg_profile_applied, title),
+                            Toast.LENGTH_SHORT
+                        ).show()
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -441,10 +471,13 @@ fun AppProfilesScreen(onNavigateBack: () -> Unit) {
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            if (selected) "${profile.titleTr} · aktif" else profile.titleTr,
+                            if (selected) stringResource(R.string.profile_active, title) else title,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(profile.descTr, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            stringResource(profile.descRes),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
@@ -460,14 +493,27 @@ fun GoodNightScreen(onNavigateBack: () -> Unit) {
     var enabled by remember { mutableStateOf(repo.isEnabled()) }
     var hour by remember { mutableIntStateOf(repo.getHour()) }
     var minute by remember { mutableIntStateOf(repo.getMinute()) }
+    var exactAllowed by remember { mutableStateOf(repo.canScheduleExactAlarms()) }
+
+    // Kullanıcı sistem ayarından döndüğünde izin durumunu tazele.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                exactAllowed = repo.canScheduleExactAlarms()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("İyi Geceler", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_yi_geceler), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 }
             )
@@ -482,7 +528,7 @@ fun GoodNightScreen(onNavigateBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                "Belirlenen saatte hatırlatma bildirimi gelir. Wi‑Fi otomatik kapatılmaz; tek dokunuşla sistem ayarı açılır.",
+                stringResource(R.string.txt_belirlenen_saatte_hat_rlatma_bildirimi_gelir),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -491,7 +537,7 @@ fun GoodNightScreen(onNavigateBack: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Hatırlatmayı aç", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.txt_hat_rlatmay_a), fontWeight = FontWeight.SemiBold)
                 Switch(
                     checked = enabled,
                     onCheckedChange = {
@@ -500,15 +546,15 @@ fun GoodNightScreen(onNavigateBack: () -> Unit) {
                     }
                 )
             }
-            Text("Saat: %02d:%02d".format(hour, minute), fontWeight = FontWeight.Medium)
-            Text("Saat", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.msg_clock, "%02d:%02d".format(hour, minute)), fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.txt_saat), style = MaterialTheme.typography.labelMedium)
             Slider(
                 value = hour.toFloat(),
                 onValueChange = { hour = it.toInt() },
                 valueRange = 0f..23f,
                 steps = 22
             )
-            Text("Dakika", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.txt_dakika), style = MaterialTheme.typography.labelMedium)
             Slider(
                 value = minute.toFloat(),
                 onValueChange = { minute = it.toInt() },
@@ -518,14 +564,46 @@ fun GoodNightScreen(onNavigateBack: () -> Unit) {
             Button(
                 onClick = {
                     repo.save(enabled, hour, minute)
-                    Toast.makeText(context, "Kaydedildi", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.msg_saved), Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Kaydet") }
+            ) { Text(stringResource(R.string.txt_kaydet)) }
+
+            if (!exactAllowed) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    )
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(
+                            stringResource(R.string.txt_kesin_alarm_izni_kapal),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            stringResource(R.string.txt_hat_rlatma_birka_dakika_gecikebilir_tam_zama),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                val intent = repo.exactAlarmSettingsIntent()
+                                if (intent != null) {
+                                    runCatching { context.startActivity(intent) }
+                                }
+                            }
+                        ) { Text(stringResource(R.string.txt_zin_ver_2)) }
+                    }
+                }
+            }
+
             OutlinedButton(
                 onClick = { GoodNightReceiver.openWifiSettings(context) },
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Şimdi Wi‑Fi ayarını aç") }
+            ) { Text(stringResource(R.string.txt_imdi_wi_fi_ayar_n_a)) }
         }
     }
 }
@@ -554,10 +632,10 @@ fun BrowserCacheScreen(onNavigateBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Tarayıcı artıkları", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_taray_c_art_klar), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 }
             )
@@ -569,16 +647,16 @@ fun BrowserCacheScreen(onNavigateBack: () -> Unit) {
         ) {
             item {
                 Text(
-                    "Tarayıcı geçmişi / cookie veritabanına erişilemez. İndirmelerdeki yarım dosyalar temizlenir; tam önbellek için sistem uygulama bilgisini kullanın.",
+                    stringResource(R.string.txt_taray_c_ge_mi_i_cookie_veritaban_na_eri_ilem),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             item {
-                Text("Yüklü tarayıcılar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(stringResource(R.string.txt_y_kl_taray_c_lar), fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
             if (browsers.isEmpty()) {
-                item { Text("Bilinen tarayıcı bulunamadı.") }
+                item { Text(stringResource(R.string.txt_bilinen_taray_c_bulunamad)) }
             } else {
                 items(browsers, key = { it.packageName }) { b ->
                     Card(
@@ -590,7 +668,7 @@ fun BrowserCacheScreen(onNavigateBack: () -> Unit) {
                         Column(Modifier.padding(14.dp)) {
                             Text(b.label, fontWeight = FontWeight.SemiBold)
                             Text(
-                                "Depolama / önbelleği sistemden temizle",
+                                stringResource(R.string.txt_depolama_nbelle_i_sistemden_temizle),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -598,19 +676,19 @@ fun BrowserCacheScreen(onNavigateBack: () -> Unit) {
                 }
             }
             item {
-                Text("İndirme artıkları", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(stringResource(R.string.txt_ndirme_art_klar), fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
             if (loading) {
                 item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             } else if (leftovers.isEmpty()) {
-                item { Text("Yarım indirme artığı yok.") }
+                item { Text(stringResource(R.string.txt_yar_m_indirme_art_yok)) }
             } else {
                 items(leftovers, key = { it.file.absolutePath }) { left ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp)) {
                             Text(left.file.name, fontWeight = FontWeight.SemiBold)
                             Text(
-                                "${formatBytes(left.sizeBytes)} · ${left.reason}",
+                                stringResource(R.string.txt_1_s_2_s_10, formatBytes(left.sizeBytes), left.reason),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -640,7 +718,7 @@ fun BrowserCacheScreen(onNavigateBack: () -> Unit) {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (busy) "Temizleniyor…" else "Artıkları temizle")
+                        Text(if (busy) stringResource(R.string.msg_cleaning_action) else stringResource(R.string.msg_clean_remnants))
                     }
                 }
             }

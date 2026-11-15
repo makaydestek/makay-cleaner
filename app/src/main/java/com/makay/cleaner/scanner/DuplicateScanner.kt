@@ -49,9 +49,20 @@ class DuplicateScanner(private val context: Context) {
                 val hash = md5Partial(file) ?: return@forEach
                 byHash.getOrPut(hash) { mutableListOf() }.add(file)
             }
-            byHash.forEach { (hash, files) ->
-                if (files.size > 1) {
-                    groups.add(DuplicateGroup(hash, files.first().length(), files))
+            byHash.values.filter { it.size > 1 }.forEach { candidates ->
+                // Kısmi hash yalnızca aday üretir. Silme kararından önce
+                // tam SHA-256 ile doğrula; aksi halde aynı başlığa sahip
+                // farklı dosyalar yanlışlıkla "yinelenen" sayılır.
+                val byFull = LinkedHashMap<String, MutableList<File>>()
+                candidates.forEach { file ->
+                    val full = com.makay.cleaner.util.FileHashing.sha256File(file)
+                        ?: return@forEach
+                    byFull.getOrPut(full) { mutableListOf() }.add(file)
+                }
+                byFull.forEach { (fullHash, files) ->
+                    if (files.size > 1) {
+                        groups.add(DuplicateGroup("sha256_$fullHash", files.first().length(), files))
+                    }
                 }
             }
         }

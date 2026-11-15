@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
@@ -12,6 +14,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,82 +47,56 @@ fun DuplicateVideosScreen(
     application: Application,
     onNavigateBack: () -> Unit
 ) {
-    val scanner = remember { DuplicateVideoScanner(application) }
     val trash = remember { RecycleBinRepository(application) }
     val prefs = remember { DuplicatePhotoPrefs(application) }
+    val vm: DuplicateVideosViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = DuplicateVideosViewModel.Factory(application)
+    )
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    val groups = state.groups
+    val loading = state.loading
+    val hasScanned = state.hasScanned
+    val progressText = state.progressText
+    val progressCurrent = state.progressCurrent
+    val progressTotal = state.progressTotal
+    val buckets = state.buckets
 
-    var groups by remember { mutableStateOf<List<DuplicateVideoScanner.VideoGroup>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
-    var hasScanned by remember { mutableStateOf(false) }
-    var progressText by remember { mutableStateOf("Hazırlanıyor…") }
-    var progressCurrent by remember { mutableIntStateOf(0) }
-    var progressTotal by remember { mutableIntStateOf(1) }
-    var selectedPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var lockedPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var confirmDelete by remember { mutableStateOf(false) }
+    var selectedPaths by rememberSaveable(stateSaver = stringSetSaver) {
+        mutableStateOf<Set<String>>(emptySet())
+    }
+    var lockedPaths by rememberSaveable(stateSaver = stringSetSaver) {
+        mutableStateOf<Set<String>>(emptySet())
+    }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
-    var scanMode by remember { mutableStateOf(prefs.scanMode) }
-    var selectedBucket by remember { mutableStateOf(prefs.selectedBucket) }
-    var buckets by remember { mutableStateOf(emptyList<com.makay.cleaner.scanner.DuplicatePhotoScanner.BucketInfo>()) }
+    var scanMode by rememberSaveable { mutableStateOf(prefs.scanMode) }
+    var selectedBucket by rememberSaveable { mutableStateOf(prefs.selectedBucket) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val hasPermission = rememberStoragePermissionState()
-    val cancelFlag = remember { AtomicBoolean(false) }
-    var scanJob by remember { mutableStateOf<Job?>(null) }
 
     fun runScan() {
         if (!hasPermission) return
-        scanJob?.cancel()
-        cancelFlag.set(false)
-        hasScanned = true
-        scanJob = scope.launch {
-            loading = true
-            SystemFileGuard.consumeSkippedCount()
-            val main = Handler(Looper.getMainLooper())
-            val listener = DuplicateVideoScanner.ProgressListener { phase, cur, tot ->
-                main.post {
-                    progressText = phase
-                    progressCurrent = cur
-                    progressTotal = tot.coerceAtLeast(1)
-                }
-            }
-            groups = withContext(Dispatchers.IO) {
-                scanner.scanExact(
-                    mode = scanMode,
-                    bucketName = if (scanMode == DuplicatePhotoPrefs.MODE_FOLDER) selectedBucket else null,
-                    excludedBuckets = prefs.excludedBuckets,
-                    allowedFormats = DuplicatePhotoPrefs.VIDEO_FORMATS,
-                    quick = scanMode == DuplicatePhotoPrefs.MODE_QUICK,
-                    cancelled = cancelFlag,
-                    progress = listener
-                )
-            }
-            // Varsayılan: en iyi (ilk) hariç seç
-            val defaults = mutableSetOf<String>()
-            groups.forEach { g ->
-                g.videos.drop(1).forEach { v ->
-                    if (v.path !in lockedPaths && v.bucketName !in prefs.protectedBuckets) {
-                        defaults.add(v.path)
-                    }
-                }
-            }
-            selectedPaths = defaults
-            loading = false
-        }
+        vm.scan(scanMode, selectedBucket)
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            cancelFlag.set(true)
-            scanJob?.cancel()
+    // Tarama tamamlanınca varsayılan seçimi uygula (en iyi hariç).
+    LaunchedEffect(state.scanId) {
+        if (state.scanId == 0) return@LaunchedEffect
+        val defaults = mutableSetOf<String>()
+        state.groups.forEach { g ->
+            g.videos.drop(1).forEach { v ->
+                if (v.path !in lockedPaths && v.bucketName !in prefs.protectedBuckets) {
+                    defaults.add(v.path)
+                }
+            }
         }
+        selectedPaths = defaults
     }
 
     LaunchedEffect(hasPermission) {
-        if (hasPermission) {
-            buckets = withContext(Dispatchers.IO) { scanner.listBuckets() }
-        }
+        if (hasPermission) vm.loadBuckets()
     }
 
     val selectedCount = groups.flatMap { it.videos }.count { it.path in selectedPaths }
@@ -130,7 +108,7 @@ fun DuplicateVideosScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Yinelenen videolar", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.txt_yinelenen_videolar), fontWeight = FontWeight.Bold)
                         if (hasScanned && !loading) {
                             Text(
                                 "${groups.size} grup · ${formatBytes(groups.sumOf { it.wasteBytes })}",
@@ -146,12 +124,8 @@ fun DuplicateVideosScreen(
                 },
                 actions = {
                     when {
-                        loading -> TextButton(onClick = {
-                            cancelFlag.set(true)
-                            scanJob?.cancel()
-                            loading = false
-                        }) { Text("İptal") }
-                        hasScanned -> TextButton(onClick = { runScan() }) { Text("Yenile") }
+                        loading -> TextButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.txt_ptal)) }
+                        hasScanned -> TextButton(onClick = { runScan() }) { Text(stringResource(R.string.txt_yenile)) }
                     }
                 }
             )
@@ -168,7 +142,7 @@ fun DuplicateVideosScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("$selectedCount seçili", fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.txt_1_s_se_ili_2, selectedCount), fontWeight = FontWeight.Bold)
                             Text(formatBytes(selectedBytes), color = MaterialTheme.colorScheme.primary)
                         }
                         Button(
@@ -176,7 +150,7 @@ fun DuplicateVideosScreen(
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.error
                             )
-                        ) { Text("Çöp kutusuna taşı") }
+                        ) { Text(stringResource(R.string.txt_p_kutusuna_ta)) }
                     }
                 }
             }
@@ -193,13 +167,13 @@ fun DuplicateVideosScreen(
                         CircularProgressIndicator(progress = { fraction })
                         Spacer(Modifier.height(12.dp))
                         Text(progressText)
-                        Text("${(fraction * 100).toInt()}%")
+                        Text(stringResource(R.string.txt_1_s_2, (fraction * 100).toInt()))
                     }
                 }
 
                 !hasScanned -> {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Tarama kapsamı", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.txt_tarama_kapsam), fontWeight = FontWeight.Bold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(
                                 DuplicatePhotoPrefs.MODE_QUICK to "Hızlı",
@@ -220,13 +194,13 @@ fun DuplicateVideosScreen(
                                     FilterChip(
                                         selected = selectedBucket == b.name,
                                         onClick = { selectedBucket = b.name },
-                                        label = { Text("${b.name} (${b.count})") }
+                                        label = { Text(stringResource(R.string.txt_1_s_2_s_7, b.name, b.count)) }
                                     )
                                 }
                             }
                         }
                         Text(
-                            "Aynı boyuttaki videolar kısmi hash ile karşılaştırılır. Sistem dosyalarına dokunulmaz.",
+                            stringResource(R.string.txt_ayn_boyuttaki_videolar_k_smi_hash_ile_kar_la),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -234,14 +208,14 @@ fun DuplicateVideosScreen(
                             onClick = { runScan() },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             enabled = scanMode != DuplicatePhotoPrefs.MODE_FOLDER || !selectedBucket.isNullOrBlank()
-                        ) { Text("Tara", fontWeight = FontWeight.Bold) }
+                        ) { Text(stringResource(R.string.txt_tara), fontWeight = FontWeight.Bold) }
                     }
                 }
 
                 groups.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Yinelenen video bulunamadı")
-                        OutlinedButton(onClick = { hasScanned = false }) { Text("Ayarları değiştir") }
+                        Text(stringResource(R.string.txt_yinelenen_video_bulunamad))
+                        OutlinedButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.txt_ayarlar_de_i_tir)) }
                     }
                 }
 
@@ -256,18 +230,18 @@ fun DuplicateVideosScreen(
                                 val paths = groups.flatMap { g -> g.videos.drop(1).map { it.path } }
                                     .filter { it !in lockedPaths }.toSet()
                                 selectedPaths = selectedPaths + paths
-                            }) { Text("Fazlalıkları seç") }
+                            }) { Text(stringResource(R.string.txt_fazlal_klar_se)) }
                             TextButton(onClick = {
                                 val all = groups.flatMap { g -> g.videos.map { it.path } }.toSet()
                                 selectedPaths = selectedPaths - all
-                            }) { Text("Seçimi temizle") }
+                            }) { Text(stringResource(R.string.txt_se_imi_temizle)) }
                         }
                     }
                     items(groups, key = { it.id }) { group ->
                         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.padding(12.dp)) {
                                 Text(
-                                    "${group.videos.size} video · Fazlalık ${formatBytes(group.wasteBytes)}",
+                                    stringResource(R.string.txt_1_s_video_fazlal_k_2_s, group.videos.size, formatBytes(group.wasteBytes)),
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(Modifier.height(8.dp))
@@ -324,7 +298,7 @@ fun DuplicateVideosScreen(
                                                     }
                                                     selectedPaths = selectedPaths - video.path
                                                 },
-                                                contentPadding = PaddingValues(0.dp)
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                             ) {
                                                 Text(
                                                     if (locked) "Kilidi aç" else "Kilitle",
@@ -397,7 +371,7 @@ fun DuplicateVideosScreen(
             onUndo = {
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
-                    Toast.makeText(context, "$n öğe geri yüklendi", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
                     runScan()
                 }
             }

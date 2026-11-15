@@ -63,6 +63,42 @@ class BiometricManager(private val context: Context) {
     }
 
     /**
+     * Cihaz kimlik bilgisi (PIN/desen/parola) veya biyometrik ile doğrulama.
+     * Keystore/şifreli depo kaybolduğunda fail-closed kilitten çıkmak için kullanılır;
+     * sistem cihaz kilidi doğrulaması gerektirir.
+     */
+    fun authenticateDeviceCredential(
+        activity: FragmentActivity,
+        title: String = "Cihaz doğrulaması",
+        subtitle: String = "Kilit verisi okunamadı. Cihazınızın ekran kilidini doğrulayın.",
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val executor = ContextCompat.getMainExecutor(context)
+        val callback = object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                super.onAuthenticationSucceeded(result)
+                onSuccess()
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                super.onAuthenticationError(errorCode, errString)
+                onError(errString.toString())
+            }
+        }
+        val prompt = BiometricPrompt(activity, executor, callback)
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle(title)
+            .setSubtitle(subtitle)
+            .setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+            .build()
+        prompt.authenticate(info)
+    }
+
+    /**
      * Biyometrik türünü döndürür
      */
     fun getBiometricType(): String {

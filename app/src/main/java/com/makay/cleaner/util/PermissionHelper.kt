@@ -80,6 +80,49 @@ object PermissionHelper {
             true
         }
     }
+
+    /** Android 13+ medya okuma izni (galeri taramaları için). */
+    fun hasMediaPermission(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return hasStoragePermission(context)
+        }
+        val images = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.READ_MEDIA_IMAGES
+        ) == PackageManager.PERMISSION_GRANTED
+        val video = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.READ_MEDIA_VIDEO
+        ) == PackageManager.PERMISSION_GRANTED
+        // Kısmi erişim (Android 14) de kabul edilir; kullanıcı seçtiği öğeleri görür.
+        val partial = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            ) == PackageManager.PERMISSION_GRANTED
+        } else false
+        return (images && video) || partial
+    }
+
+    /** Medya + bildirim izinleri isteği listesi (API sürümüne göre). */
+    fun mediaPermissionRequest(): Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+        } else {
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
+    /** Verilen izinlerden eksik olanlar (runtime isteği için). */
+    fun storagePermissionRequest(): Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+        }
 }
 
 @Composable

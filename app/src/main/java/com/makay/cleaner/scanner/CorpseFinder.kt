@@ -27,8 +27,10 @@ class CorpseFinder(private val context: Context) {
         val ext = Environment.getExternalStorageDirectory() ?: return emptyList()
         val bases = listOf(
             File(ext, "Android/data"),
-            File(ext, "Android/obb"),
-            File(ext, "Android/media")
+            File(ext, "Android/obb")
+            // Android/media BİLİNÇLİ OLARAK taranmaz: WhatsApp/Telegram gibi
+            // uygulamaların indirdiği fotoğraf/video/sesler kullanıcı verisidir,
+            // uygulama önbelleği değildir.
         )
 
         val corpses = mutableListOf<Corpse>()

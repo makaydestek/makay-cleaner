@@ -1,10 +1,12 @@
 package com.makay.cleaner.scanner
 
+import com.makay.cleaner.R
+
 import android.os.Environment
 import com.makay.cleaner.util.SystemFileGuard
 import java.io.File
 
-class SystemCleanerScanner {
+class SystemCleanerScanner(private val context: android.content.Context) {
 
     data class JunkItem(
         val file: File,
@@ -66,7 +68,7 @@ class SystemCleanerScanner {
                 if (dir.absolutePath.contains("/Android/data", ignoreCase = true)) {
                     val name = child.name.lowercase()
                     if (name == "cache" || name == "code_cache" || name.contains("temp") || name.contains("tmp")) {
-                        collectFiles(child, "Önbellek / geçici", out, max)
+                        collectFiles(child, context.getString(R.string.reason_cache_temp), out, max)
                     } else {
                         walk(child, out, max)
                     }
@@ -104,7 +106,7 @@ class SystemCleanerScanner {
                 findEmptyDirs(child, out, max)
                 val kids = child.listFiles()
                 if (kids != null && kids.isEmpty() && SystemFileGuard.canDelete(child)) {
-                    out.add(JunkItem(child, "Boş klasör", 0))
+                    out.add(JunkItem(child, context.getString(R.string.reason_empty_folder), 0))
                 }
             }
         }
@@ -112,11 +114,15 @@ class SystemCleanerScanner {
 
     private fun classify(file: File): String? {
         val name = file.name.lowercase()
+        val parent = file.parent?.lowercase().orEmpty()
+        val inThumbnailsDir = parent.endsWith(".thumbnails") || parent.contains("/.thumbnails")
         return when {
-            name.endsWith(".tmp") || name.endsWith(".temp") -> "Geçici dosya"
-            name.endsWith(".log") && file.length() > 100_000 -> "Log dosyası"
-            name.endsWith(".apk") && file.lastModified() < System.currentTimeMillis() - 7L * 24 * 3600_000 -> "Eski APK"
-            name.contains("thumb") || file.parent?.contains("thumbnail", true) == true -> "Küçük resim"
+            name.endsWith(".tmp") || name.endsWith(".temp") -> context.getString(R.string.reason_temp_file)
+            name.endsWith(".log") && file.length() > 100_000 -> context.getString(R.string.reason_log_file)
+            name.endsWith(".apk") && file.lastModified() < System.currentTimeMillis() - 7L * 24 * 3600_000 -> context.getString(R.string.reason_old_apk)
+            // Yalnızca gerçek .thumbnails klasöründeki dosyalar. "thumbnail_project.jpg"
+            // gibi kullanıcı dosyaları adı yüzünden silinmez.
+            inThumbnailsDir -> context.getString(R.string.reason_thumbnail)
             name.endsWith(".nomedia") -> null
             else -> null
         }

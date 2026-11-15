@@ -1,5 +1,7 @@
 package com.makay.cleaner.data
 
+import com.makay.cleaner.R
+
 import android.app.usage.StorageStatsManager
 import android.content.Context
 import android.content.Intent
@@ -282,17 +284,18 @@ class AppUninstallRepository(private val context: Context) {
             }
 
             if (stillInstalled) {
-                true
+                // Kullanıcı sistem diyaloğunda "İptal"e bastı: listede tutma.
+                false
             } else {
                 val (saved, count, inaccessible) = cleanLeftoverFilesDetailed(packageName)
                 totalSaved += saved
                 totalCount += count
                 if (saved > 0 || count > 0) {
-                    CleaningRecorder.record(context, "Uygulama Kalıntıları", saved, count)
+                CleaningRecorder.record(context, context.getString(R.string.record_app_leftovers), saved, count)
                 }
                 // Erişilemeyen kökleri not et (Toast için paket adına eklenir)
                 if (inaccessible.isNotEmpty()) {
-                    cleaned += "$packageName (erişilemeyen: ${inaccessible.joinToString(",")})"
+                    cleaned += context.getString(R.string.record_app_leftovers_inaccessible, packageName, inaccessible.joinToString(","))
                 } else {
                     cleaned += packageName
                 }

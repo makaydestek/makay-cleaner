@@ -158,7 +158,6 @@ class AppUpdateRepository(context: Context) {
         if (!updateDir.exists() && !updateDir.mkdirs()) {
             error("Güncelleme klasörü oluşturulamadı: ${updateDir.absolutePath}")
         }
-        updateDir.listFiles()?.forEach { runCatching { it.delete() } }
 
         val safeName = update.apkName
             .substringAfterLast('/')
@@ -166,16 +165,26 @@ class AppUpdateRepository(context: Context) {
             .replace(Regex("""[^\w.\-]+"""), "_")
         val target = File(updateDir, safeName)
         val partial = File(updateDir, "$safeName.partial")
+
+        // Daha önce indirilip doğrulanmış aynı dosyayı yeniden kullan.
+        if (target.isFile &&
+            runCatching { ApkIntegrityVerifier.sha256Hex(target) }.getOrNull()
+                ?.equals(update.expectedSha256, ignoreCase = true) == true
+        ) {
+            onProgress(100)
+            return target
+        }
+
+        // Yalnızca kendi geçici/hedef dosyalarımızı temizle; başka bir
+        // indirmenin verisini silme.
         runCatching { partial.delete() }
+        runCatching { target.delete() }
+        updateDir.listFiles()
+            ?.filter { it.isFile && (it.name.endsWith(".partial") || it.name.endsWith(".apk")) && it != target }
+            ?.forEach { runCatching { it.delete() } }
 
         try {
-            val conn = (URL(update.apkUrl).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 30_000
-                readTimeout = 10 * 60_000
-                instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "MakayCleaner/${BuildConfig.VERSION_NAME}")
-                setRequestProperty("Accept", "application/octet-stream,*/*")
-            }
+            val conn = openTrustedConnection(update.apkUrl)
             try {
                 val code = conn.responseCode
                 check(code in 200..299) {
@@ -184,6 +193,10 @@ class AppUpdateRepository(context: Context) {
                 val total = conn.contentLengthLong.takeIf { it > 0 }
                     ?: update.expectedSizeBytes
                     ?: -1L
+                // Boyut üst sınırı: kötü niyetli/hatalı sunucu diski doldurmasın.
+                val hardLimit = (update.expectedSizeBytes ?: total).takeIf { it > 0 }
+                    ?.let { (it * 1.05).toLong() + 1024 * 1024 }
+                    ?: (250L * 1024 * 1024)
                 var lastPct = -1
                 val raw: InputStream = conn.inputStream
                     ?: error("İndirme akışı boş (HTTP $code)")
@@ -193,6 +206,9 @@ class AppUpdateRepository(context: Context) {
                         val n = super.read(b, off, len)
                         if (n > 0) {
                             written += n
+                            check(written <= hardLimit) {
+                                "İndirilen dosya beklenen boyutu aştı; indirme iptal edildi."
+                            }
                             if (total > 0) {
                                 val pct = ((written * 100) / total).toInt().coerceIn(0, 100)
                                 if (pct != lastPct) {
@@ -321,6 +337,38 @@ class AppUpdateRepository(context: Context) {
         )
     }
 
+    /**
+     * Yönlendirmeleri elle takip eder ve her `Location` hedefini allowlist ile
+     * doğrular. `instanceFollowRedirects = true` ile herhangi bir host'a
+     * (hatta HTTP'ye) gidilebilirdi.
+     */
+    private fun openTrustedConnection(url: String): HttpURLConnection {
+        var current = url
+        var hop = 0
+        while (hop < 4) {
+            val conn = (URL(current).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 30_000
+                readTimeout = 10 * 60_000
+                instanceFollowRedirects = false
+                setRequestProperty("User-Agent", "MakayCleaner/${BuildConfig.VERSION_NAME}")
+                setRequestProperty("Accept", "application/octet-stream,*/*")
+            }
+            val code = conn.responseCode
+            if (code !in 300..399) return conn
+            val location = conn.getHeaderField("Location")
+            conn.disconnect()
+            check(!location.isNullOrBlank()) { "Yönlendirme hedefi okunamadı (HTTP $code)" }
+            val next = URL(URL(current), location).toString()
+            when (val v = integrity.assertTrustedDownloadUrl(next)) {
+                is ApkIntegrityVerifier.Result.Failed ->
+                    error("Güncelleme yönlendirmesi güvenilir değil: ${v.message}")
+                ApkIntegrityVerifier.Result.Ok -> current = next
+            }
+            hop++
+        }
+        error("Çok fazla yönlendirme; indirme iptal edildi.")
+    }
+
     private fun fetchLatestReleaseJson(): JSONObject {
         val conn = (URL(apiLatest).openConnection() as HttpURLConnection).apply {
             connectTimeout = 12_000
@@ -339,12 +387,7 @@ class AppUpdateRepository(context: Context) {
     }
 
     private fun fetchText(url: String): String {
-        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 12_000
-            readTimeout = 30_000
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "MakayCleaner/${BuildConfig.VERSION_NAME}")
-        }
+        val conn = openTrustedConnection(url)
         try {
             check(conn.responseCode in 200..299) { "Hash HTTP ${conn.responseCode}" }
             return conn.inputStream.bufferedReader().use { it.readText() }

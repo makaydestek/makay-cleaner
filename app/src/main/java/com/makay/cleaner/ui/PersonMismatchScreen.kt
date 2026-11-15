@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -13,6 +15,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -62,6 +66,7 @@ fun PersonMismatchScreen(
     var bucketMenu by remember { mutableStateOf(false) }
     var albumDialog by remember { mutableStateOf<AlbumAction?>(null) }
     var albumName by remember { mutableStateOf("") }
+    var confirmTrash by remember { mutableStateOf(false) }
     var leaveWhileScanning by remember { mutableStateOf(false) }
 
     val pickRefs = rememberLauncherForActivityResult(
@@ -106,7 +111,7 @@ fun PersonMismatchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Klasörde farklı kişi", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_klas_rde_farkl_ki_i), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = {
                         if (state.scanning) leaveWhileScanning = true
@@ -117,7 +122,7 @@ fun PersonMismatchScreen(
                 },
                 actions = {
                     if (state.scanning) {
-                        TextButton(onClick = { vm.cancelScan() }) { Text("İptal") }
+                        TextButton(onClick = { vm.cancelScan() }) { Text(stringResource(R.string.txt_ptal)) }
                     }
                 }
             )
@@ -165,14 +170,14 @@ fun PersonMismatchScreen(
                         AssistChip(
                             onClick = {},
                             label = {
-                                Text("Son tarama yüklendi · $whenText · ${state.candidates.size} aday")
+                                Text(stringResource(R.string.txt_son_tarama_y_klendi_1_s_2_s_aday, whenText, state.candidates.size))
                             }
                         )
                     }
                 }
 
                 item(key = "bucket_label") {
-                    Text("1. Klasör", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.txt_1_klas_r), fontWeight = FontWeight.SemiBold)
                 }
                 item(key = "bucket_field") {
                     ExposedDropdownMenuBox(
@@ -188,7 +193,7 @@ fun PersonMismatchScreen(
                                 .menuAnchor()
                                 .fillMaxWidth(),
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(bucketMenu) },
-                            label = { Text("Albüm / klasör") }
+                            label = { Text(stringResource(R.string.txt_alb_m_klas_r)) }
                         )
                         ExposedDropdownMenu(
                             expanded = bucketMenu,
@@ -196,7 +201,7 @@ fun PersonMismatchScreen(
                         ) {
                             state.buckets.forEach { b ->
                                 DropdownMenuItem(
-                                    text = { Text("${b.name} (${b.count})") },
+                                    text = { Text(stringResource(R.string.txt_1_s_2_s_13, b.name, b.count)) },
                                     onClick = {
                                         vm.selectBucket(b.name)
                                         bucketMenu = false
@@ -209,9 +214,9 @@ fun PersonMismatchScreen(
 
                 item(key = "refs_label") {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("2. Asıl kişi örnekleri", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.txt_2_as_l_ki_i_rnekleri), fontWeight = FontWeight.SemiBold)
                         Text(
-                            "1–${PersonMismatchScanner.MAX_REFERENCES} net, kameraya bakan yüz fotoğrafı seçin (aynı kişi). " +
+                            stringResource(R.string.txt_1_1_s_net_kameraya_bakan_y_z_foto_raf_se_in, PersonMismatchScanner.MAX_REFERENCES) +
                                 "Daha fazla örnek = daha doğru YZ eşleşme.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -235,20 +240,21 @@ fun PersonMismatchScreen(
                                         ),
                                     contentScale = ContentScale.Crop
                                 )
-                                Text(
-                                    "×",
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .clickable { vm.removeReference(uri) }
-                                        .padding(4.dp),
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                IconButton(
+                                    onClick = { vm.removeReference(uri) },
+                                    modifier = Modifier.align(Alignment.TopEnd)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Referans fotoğrafı kaldır",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
                         item {
                             OutlinedButton(onClick = { pickRefs.launch("image/*") }) {
-                                Text(if (state.referenceUris.isEmpty()) "Örnek seç" else "Ekle")
+                                Text(if (state.referenceUris.isEmpty()) stringResource(R.string.msg_sample_select) else stringResource(R.string.msg_add))
                             }
                         }
                     }
@@ -256,9 +262,9 @@ fun PersonMismatchScreen(
 
                 item(key = "threshold") {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("3. Hassasiyet (YZ)", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.txt_3_hassasiyet_yz), fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Eşik: %${(state.threshold * 100).toInt()} — düşük = aynı kişiyi daha iyi tutar; " +
+                            stringResource(R.string.txt_e_ik_1_s_d_k_ayn_ki_iyi_daha_iyi_tutar, (state.threshold * 100).toInt()) +
                                 "yüksek = daha katı (daha çok aday). Öneri: %45–%55",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -279,7 +285,7 @@ fun PersonMismatchScreen(
                             state.selectedBucket != null && state.referenceUris.isNotEmpty(),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (state.scanning) "Taranıyor…" else "Tara")
+                        Text(if (state.scanning) stringResource(R.string.msg_scanning_action) else stringResource(R.string.txt_tara))
                     }
                 }
 
@@ -294,11 +300,11 @@ fun PersonMismatchScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Text(
-                                "${state.progressText} (${state.progressCur} / ${state.progressTot})",
+                                stringResource(R.string.txt_1_s_2_s_3_s_2, state.progressText, state.progressCur, state.progressTot),
                                 style = MaterialTheme.typography.labelMedium
                             )
                             Text(
-                                "Tarama arka planda sürer; geri tuşu sonuçları silmez.",
+                                stringResource(R.string.txt_tarama_arka_planda_s_rer_geri_tu_u_sonu_lar),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -316,8 +322,8 @@ fun PersonMismatchScreen(
                             )
                             if (state.candidates.isNotEmpty()) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    TextButton(onClick = { vm.selectAll() }) { Text("Tümünü seç") }
-                                    TextButton(onClick = { vm.clearSelection() }) { Text("Seçimi kaldır") }
+                                    TextButton(onClick = { vm.selectAll() }) { Text(stringResource(R.string.txt_t_m_n_se_2)) }
+                                    TextButton(onClick = { vm.clearSelection() }) { Text(stringResource(R.string.txt_se_imi_kald_r)) }
                                 }
                             }
                         }
@@ -359,7 +365,7 @@ fun PersonMismatchScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    "${formatBytes(item.sizeBytes)} · ${item.faceCount} yüz · " +
+                                    stringResource(R.string.txt_1_s_2_s_y_z, formatBytes(item.sizeBytes), item.faceCount) +
                                         "%${(item.bestSimilarity * 100).toInt()}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
@@ -387,10 +393,10 @@ fun PersonMismatchScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Button(
-                        onClick = { vm.applyTrash(selectedItems) },
+                        onClick = { confirmTrash = true },
                         enabled = !state.busy && !state.scanning,
                         modifier = Modifier.weight(1f)
-                    ) { Text("Sil") }
+                    ) { Text(stringResource(R.string.txt_sil)) }
                     OutlinedButton(
                         onClick = {
                             albumName = ""
@@ -398,7 +404,7 @@ fun PersonMismatchScreen(
                         },
                         enabled = !state.busy && !state.scanning,
                         modifier = Modifier.weight(1f)
-                    ) { Text("Taşı") }
+                    ) { Text(stringResource(R.string.txt_ta)) }
                     OutlinedButton(
                         onClick = {
                             albumName = ""
@@ -406,7 +412,7 @@ fun PersonMismatchScreen(
                         },
                         enabled = !state.busy && !state.scanning,
                         modifier = Modifier.weight(1f)
-                    ) { Text("Kopyala") }
+                    ) { Text(stringResource(R.string.txt_kopyala)) }
                 }
             }
         }
@@ -415,7 +421,7 @@ fun PersonMismatchScreen(
     if (leaveWhileScanning) {
         AlertDialog(
             onDismissRequest = { leaveWhileScanning = false },
-            title = { Text("Tarama sürüyor") },
+            title = { Text(stringResource(R.string.txt_tarama_s_r_yor)) },
             text = {
                 Text(
                     "Tarama arka planda devam eder ve bitince arşivlenir. " +
@@ -427,7 +433,7 @@ fun PersonMismatchScreen(
                     leaveWhileScanning = false
                     // Tarama ViewModel’de devam eder; sonuç arşive yazılır
                     goBack()
-                }) { Text("Arka planda sürdür") }
+                }) { Text(stringResource(R.string.txt_arka_planda_s_rd_r)) }
             },
             dismissButton = {
                 Row {
@@ -435,8 +441,8 @@ fun PersonMismatchScreen(
                         leaveWhileScanning = false
                         vm.cancelScan()
                         goBack()
-                    }) { Text("Durdur ve kaydet") }
-                    TextButton(onClick = { leaveWhileScanning = false }) { Text("Kal") }
+                    }) { Text(stringResource(R.string.txt_durdur_ve_kaydet)) }
+                    TextButton(onClick = { leaveWhileScanning = false }) { Text(stringResource(R.string.txt_kal)) }
                 }
             }
         )
@@ -446,23 +452,23 @@ fun PersonMismatchScreen(
         AlertDialog(
             onDismissRequest = { if (!state.busy) albumDialog = null },
             title = {
-                Text(if (action == AlbumAction.MOVE) "Albüme taşı" else "Albüme kopyala")
+                Text(stringResource(if (action == AlbumAction.MOVE) R.string.msg_move_to_album else R.string.msg_copy_to_album))
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Hedef albüm adı (Pictures altında oluşur). Örn: Denizim, Diger",
+                        stringResource(R.string.txt_hedef_alb_m_ad_pictures_alt_nda_olu_ur_rn_de),
                         style = MaterialTheme.typography.bodySmall
                     )
                     OutlinedTextField(
                         value = albumName,
                         onValueChange = { albumName = it },
                         singleLine = true,
-                        label = { Text("Albüm adı") },
+                        label = { Text(stringResource(R.string.txt_alb_m_ad)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (state.buckets.isNotEmpty()) {
-                        Text("Mevcut klasörler:", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.txt_mevcut_klas_rler), style = MaterialTheme.typography.labelMedium)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             items(state.buckets.take(20), key = { it.name }) { b ->
                                 AssistChip(
@@ -484,11 +490,27 @@ fun PersonMismatchScreen(
                         albumDialog = null
                         vm.applyCopyOrMove(items, move, name)
                     }
-                ) { Text(if (action == AlbumAction.MOVE) "Taşı" else "Kopyala") }
+                ) { Text(stringResource(if (action == AlbumAction.MOVE) R.string.msg_move else R.string.msg_copy)) }
             },
             dismissButton = {
-                TextButton(onClick = { albumDialog = null }) { Text("Vazgeç") }
+                TextButton(onClick = { albumDialog = null }) { Text(stringResource(R.string.txt_vazge)) }
             }
+        )
+    }
+
+    if (confirmTrash) {
+        ConfirmDeleteDialog(
+            title = "Seçilen fotoğraflar silinsin mi?",
+            message = "Seçilen ${selectedItems.size} fotoğraf çöp kutusuna taşınır ve 48 saat içinde geri yüklenebilir.",
+            fileCount = selectedItems.size,
+            totalBytes = selectedItems.sumOf { it.sizeBytes },
+            moveToTrash = true,
+            previewPaths = selectedItems.map { it.path },
+            onConfirm = {
+                confirmTrash = false
+                vm.applyTrash(selectedItems)
+            },
+            onDismiss = { confirmTrash = false }
         )
     }
 }

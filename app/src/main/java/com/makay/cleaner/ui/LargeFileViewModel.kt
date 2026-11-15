@@ -65,6 +65,8 @@ class LargeFileViewModel(application: Application) : AndroidViewModel(applicatio
                     totalSize,
                     CleaningRecorder.METRIC_LARGE
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

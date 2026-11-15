@@ -4,6 +4,7 @@ import android.os.Environment
 import android.os.StatFs
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.makay.cleaner.R
 import com.makay.cleaner.notification.NotificationManager
 import com.makay.cleaner.util.JunkScanHelper
 import com.makay.cleaner.util.PlatformManager
@@ -30,8 +31,8 @@ class CleaningWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             if (runAttemptCount >= MAX_ATTEMPTS) {
-                notifyFailure("Otomatik temizlik birkaç denemeden sonra durduruldu.")
-                return@withContext Result.failure()
+                notifyFailure(applicationContext.getString(R.string.worker_stopped_retries))
+                return@withContext Result.success()
             }
 
             val ids = mutableSetOf<String>()
@@ -50,7 +51,7 @@ class CleaningWorker(
                 JunkScanHelper.cleanSelected(
                     applicationContext,
                     ids,
-                    recordAs = "Otomatik Temizlik",
+                    recordAs = applicationContext.getString(R.string.worker_autoclean_title),
                     useTrash = useTrash,
                     reclaimSystemCache = "cache" in ids
                 )
@@ -84,20 +85,23 @@ class CleaningWorker(
             }
 
             maybeSendStorageWarning()
+            runCatching {
+                com.makay.cleaner.widget.CleanerWidgetProvider.refreshAll(applicationContext)
+            }
             Result.success()
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
             com.makay.cleaner.util.SoftErrorLogger.warn("CleaningWorker", "timeout", e)
             if (runAttemptCount + 1 >= MAX_ATTEMPTS) {
-                notifyFailure("Otomatik temizlik zaman aşımına uğradı.")
-                Result.failure()
+                notifyFailure(applicationContext.getString(R.string.worker_stopped_timeout))
+                Result.success()
             } else {
                 Result.retry()
             }
         } catch (e: Exception) {
             com.makay.cleaner.util.SoftErrorLogger.error("CleaningWorker", "temizlik başarısız", e)
             if (runAttemptCount + 1 >= MAX_ATTEMPTS) {
-                notifyFailure("Otomatik temizlik başarısız oldu.")
-                Result.failure()
+                notifyFailure(applicationContext.getString(R.string.worker_stopped_failed))
+                Result.success()
             } else {
                 Result.retry()
             }

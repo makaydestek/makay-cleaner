@@ -1,11 +1,12 @@
 package com.makay.cleaner.ui
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,9 +108,18 @@ fun MainAppContent() {
     val app = context.applicationContext as android.app.Application
     val appLockManager = remember { AppLockManager(app) }
     var isLocked by remember { mutableStateOf(appLockManager.shouldLock()) }
+    // OTA gibi kilit dışı bileşenler bu yayını okur.
+    LaunchedEffect(isLocked) {
+        com.makay.cleaner.util.AppLockState.setLocked(isLocked)
+    }
+    DisposableEffect(Unit) {
+        onDispose { com.makay.cleaner.util.AppLockState.setLocked(false) }
+    }
+    // Kilitliyken gelen deep link kaybolmasın: kilit açılınca işlenir.
+    var pendingDeepLink by remember { mutableStateOf<String?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
     val uninstallRepo = remember { AppUninstallRepository(context.applicationContext) }
-    val deepLink by com.makay.cleaner.util.DeepLinkBus.link.collectAsState()
+    val deepLink by com.makay.cleaner.util.DeepLinkBus.link.collectAsStateWithLifecycle()
     val resumeScope = rememberCoroutineScope()
 
     fun go(screen: AppScreen) = nav.navigate(screen)
@@ -117,9 +127,15 @@ fun MainAppContent() {
         if (!nav.pop()) nav.resetTo(AppScreen.Storage)
     }
 
-    LaunchedEffect(deepLink) {
-        val link = com.makay.cleaner.util.DeepLinkBus.consume() ?: return@LaunchedEffect
-        if (isLocked) return@LaunchedEffect
+    LaunchedEffect(deepLink, isLocked) {
+        if (isLocked) {
+            // Linki tüket ama atma; kilit açılınca işlenecek.
+            com.makay.cleaner.util.DeepLinkBus.consume()?.let { pendingDeepLink = it }
+            return@LaunchedEffect
+        }
+        val link = pendingDeepLink ?: com.makay.cleaner.util.DeepLinkBus.consume()
+            ?: return@LaunchedEffect
+        pendingDeepLink = null
         when (link) {
             com.makay.cleaner.notification.NotificationManager.DEEP_HOME -> nav.resetTo(AppScreen.Storage)
             com.makay.cleaner.notification.NotificationManager.DEEP_CACHE -> {
@@ -159,7 +175,9 @@ fun MainAppContent() {
                 go(AppScreen.GoodNight)
             }
             com.makay.cleaner.notification.NotificationManager.DEEP_LIGHT_CLEAN -> {
-                val result = QuickCleanHelper.cleanAppCaches(context)
+                val result = withContext(Dispatchers.IO) {
+                    QuickCleanHelper.cleanAppCaches(context)
+                }
                 Toast.makeText(
                     context,
                     if (result.filesDeleted > 0)

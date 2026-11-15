@@ -1,4 +1,4 @@
-﻿package com.makay.cleaner.ui
+package com.makay.cleaner.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -31,3 +31,13 @@ internal fun homeAccent() = MaterialTheme.colorScheme.primary
 
 @Composable
 internal fun homeOutline() = if (homeIsLight()) Color(0xFF1C1C1E) else Color(0xFFAEAEB2)
+
+/** Hub ekranlarının (araç kutusu, pil/veri, gizlilik, medya) tema uyumlu paneli. */
+@Composable
+internal fun hubPanel() = homeCard()
+
+@Composable
+internal fun hubTextPrimary() = homeTextPrimary()
+
+@Composable
+internal fun hubTextSecondary() = homeTextSecondary()

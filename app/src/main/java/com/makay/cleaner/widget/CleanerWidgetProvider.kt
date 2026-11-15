@@ -20,8 +20,6 @@ import java.text.DecimalFormat
 
 class CleanerWidgetProvider : AppWidgetProvider() {
 
-    private val decimalFormat = DecimalFormat("#.##")
-
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -45,20 +43,22 @@ class CleanerWidgetProvider : AppWidgetProvider() {
                         val result = JunkScanHelper.cleanSelected(
                             context,
                             setOf("cache"),
-                            recordAs = "Widget",
+                            recordAs = context.getString(R.string.record_widget),
                             useTrash = false,
                             reclaimSystemCache = true
                         )
                         val text = if (result.spaceSaved > 0L) {
-                            "Boşalan: ${formatBytes(result.spaceSaved)}"
+                            context.getString(R.string.widget_freed, formatBytes(result.spaceSaved))
                         } else {
-                            "Silinebilir önbellek yok"
+                            context.getString(R.string.widget_nothing)
                         }
                         android.os.Handler(android.os.Looper.getMainLooper()).post {
                             Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
                         }
                     }
                     refreshAll(context)
+                } catch (t: Throwable) {
+                    com.makay.cleaner.util.SoftErrorLogger.warn("Widget", "hızlı temizlik başarısız", t)
                 } finally {
                     pending.finish()
                 }
@@ -78,27 +78,29 @@ class CleanerWidgetProvider : AppWidgetProvider() {
 
         views.setTextViewText(R.id.tv_used_storage, storageInfo.usedFormatted)
         views.setTextViewText(R.id.tv_free_storage, storageInfo.freeFormatted)
-        views.setTextViewText(R.id.tv_usage_percent, "${storageInfo.usagePercent.toInt()}% Dolu")
+        views.setTextViewText(R.id.tv_usage_percent, context.getString(R.string.widget_percent_full, storageInfo.usagePercent.toInt()))
         views.setProgressBar(R.id.progress_storage, 100, storageInfo.usagePercent.toInt(), false)
 
+        // Çakışmasız requestCode tahsisi: her widget için 10'luk blok.
+        val base = appWidgetId * 10
         views.setOnClickPendingIntent(
             R.id.tv_usage_percent,
-            deepLinkPending(context, appWidgetId, NotificationManager.DEEP_CACHE)
+            deepLinkPending(context, base + 1, NotificationManager.DEEP_CACHE)
         )
         views.setOnClickPendingIntent(
             R.id.btn_open_media,
-            deepLinkPending(context, appWidgetId + 200, NotificationManager.DEEP_MEDIA)
+            deepLinkPending(context, base + 2, NotificationManager.DEEP_MEDIA)
         )
         views.setOnClickPendingIntent(
             R.id.btn_open_toolbox,
-            deepLinkPending(context, appWidgetId + 300, NotificationManager.DEEP_TOOLBOX)
+            deepLinkPending(context, base + 3, NotificationManager.DEEP_TOOLBOX)
         )
         val cleanIntent = Intent(context, CleanerWidgetProvider::class.java).apply {
             action = ACTION_WIDGET_CLEAN
         }
         val cleanPending = PendingIntent.getBroadcast(
             context,
-            appWidgetId + 1000,
+            base + 4,
             cleanIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -135,6 +137,8 @@ class CleanerWidgetProvider : AppWidgetProvider() {
     }
 
     private fun formatBytes(bytes: Long): String {
+        // DecimalFormat thread-safe değil; her çağrıda yerel örnek.
+        val decimalFormat = DecimalFormat("#.##")
         return when {
             bytes < 1024 -> "$bytes B"
             bytes < 1024 * 1024 -> "${decimalFormat.format(bytes / 1024.0)} KB"

@@ -4,14 +4,18 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import com.makay.cleaner.data.AutoCleanRepository
 import com.makay.cleaner.data.ThemeRepository
 import com.makay.cleaner.ui.theme.ThemeMode
 import com.makay.cleaner.util.ProManager
 import com.makay.cleaner.util.QuickCleanHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class SettingsUiState(
     val appVersion: String = "",
@@ -26,7 +30,8 @@ data class SettingsUiState(
     val useTrash: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
-    val lastManualCleanMessage: String? = null
+    val lastManualCleanMessage: String? = null,
+    val manualCleanRunning: Boolean = false
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -153,15 +158,29 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun runManualClean() {
-        val result = QuickCleanHelper.cleanAppCaches(getApplication())
-        autoCleanRepository.runManualClean()
-        _uiState.value = _uiState.value.copy(
-            lastManualCleanMessage = if (result.filesDeleted > 0) {
-                "${result.filesDeleted} dosya silindi (${formatBytes(result.spaceSaved)})"
-            } else {
-                "Temizlenecek ek dosya bulunamadı"
+        if (_uiState.value.manualCleanRunning) return
+        _uiState.value = _uiState.value.copy(manualCleanRunning = true)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                QuickCleanHelper.cleanAppCaches(getApplication())
             }
-        )
+            autoCleanRepository.runManualClean()
+            _uiState.value = _uiState.value.copy(
+                manualCleanRunning = false,
+                lastManualCleanMessage = if (result.filesDeleted > 0) {
+                    "${result.filesDeleted} dosya silindi (${formatBytes(result.spaceSaved)})"
+                } else {
+                    "Temizlenecek ek dosya bulunamadı"
+                }
+            )
+        }
+    }
+
+    /** Toast bir kez gösterildikten sonra mesajı tüket. */
+    fun consumeManualCleanMessage() {
+        if (_uiState.value.lastManualCleanMessage != null) {
+            _uiState.value = _uiState.value.copy(lastManualCleanMessage = null)
+        }
     }
 
     class Factory(private val application: Application) : ViewModelProvider.Factory {

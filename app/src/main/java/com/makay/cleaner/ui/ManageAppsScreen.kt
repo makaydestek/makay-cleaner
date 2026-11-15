@@ -1,7 +1,9 @@
-﻿@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.content.Intent
 import android.provider.Settings
@@ -15,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,7 +39,7 @@ fun ManageAppsScreen(
     onOpenUninstall: () -> Unit,
     onOpenProfiles: () -> Unit = {}
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     var apps by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
@@ -67,16 +70,16 @@ fun ManageAppsScreen(
     }
 
     Scaffold(
-        containerColor = Color.Black,
+        containerColor = homeBg(),
         topBar = {
             TopAppBar(
-                title = { Text("Uygulamaları yönet", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
+                title = { Text(stringResource(R.string.txt_uygulamalar_y_net), fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
-                    TvIconButton(onClick = onNavigateBack, idleContent = Color.White) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                    TvIconButton(onClick = onNavigateBack, idleContent = homeTextPrimary()) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = homeBg(), titleContentColor = homeTextPrimary())
             )
         }
     ) { padding ->
@@ -89,23 +92,23 @@ fun ManageAppsScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Uygulamaları ara") },
+                placeholder = { Text(stringResource(R.string.txt_uygulamalar_ara)) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = HubCard,
-                    unfocusedContainerColor = HubCard,
+                    focusedContainerColor = hubPanel(),
+                    unfocusedContainerColor = hubPanel(),
                     focusedBorderColor = Color.Transparent,
                     unfocusedBorderColor = Color.Transparent,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    focusedTextColor = homeTextPrimary(),
+                    unfocusedTextColor = homeTextPrimary()
                 )
             )
             Spacer(Modifier.height(12.dp))
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = HubCard),
+                colors = CardDefaults.cardColors(containerColor = hubPanel()),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -122,7 +125,7 @@ fun ManageAppsScreen(
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                "Uygulama adına göre sıralanıyor · ${filtered.size}",
+                stringResource(R.string.txt_uygulama_ad_na_g_re_s_ralan_yor_1_s, filtered.size),
                 color = Color(0xFF8E8E93),
                 fontSize = 12.sp
             )
@@ -155,7 +158,7 @@ fun ManageAppsScreen(
                         ) {
                             Text(
                                 label,
-                                color = Color.White,
+                                color = homeTextPrimary(),
                                 modifier = Modifier.weight(1f),
                                 maxLines = 1
                             )
@@ -195,7 +198,7 @@ private fun QuickTool(emoji: String, label: String, tint: Color, onClick: () -> 
         Spacer(Modifier.height(6.dp))
         Text(
             label,
-            color = Color.White,
+            color = homeTextPrimary(),
             fontSize = 11.sp,
             textAlign = TextAlign.Center,
             maxLines = 2

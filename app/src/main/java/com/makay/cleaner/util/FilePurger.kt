@@ -1,5 +1,7 @@
 package com.makay.cleaner.util
 
+import com.makay.cleaner.R
+
 import android.content.Context
 import android.os.Build
 import android.os.Environment
@@ -37,15 +39,10 @@ object FilePurger {
         return true
     }
 
-    /** İzin kontrolü olmadan silmeyi dene (Android/data listelenebiliyorsa). */
-    fun tryDelete(file: File, context: Context? = null): Boolean {
+    /** Kullanıcı hariç tutmaları ve sandbox kurallarını uygulayarak silmeyi dener. */
+    fun tryDelete(context: Context, file: File): Boolean {
         if (!file.exists()) return true
-        if (!SystemFileGuard.canDelete(file)) return false
-        if (context != null &&
-            com.makay.cleaner.data.CleanExclusionsRepository(context).isUserExcluded(file.absolutePath)
-        ) {
-            return false
-        }
+        if (!canRemove(context, file)) return false
         runCatching {
             file.setWritable(true)
             file.setReadable(true)
@@ -102,7 +99,7 @@ object FilePurger {
         listOfNotNull(context.cacheDir, context.codeCacheDir, context.externalCacheDir).forEach { dir ->
             dir.listFiles()?.forEach { child ->
                 val size = if (child.isFile) child.length() else dirSize(child)
-                if (remove(context, child, trash = null, category = "Önbellek")) {
+            if (remove(context, child, trash = null, category = context.getString(R.string.category_cache_files))) {
                     count++
                     saved += size
                 }
@@ -147,7 +144,15 @@ object FilePurger {
         trash: RecycleBinRepository?,
         category: String
     ): Boolean {
+        val canonicalParent = runCatching { dir.canonicalPath }.getOrNull()
         dir.listFiles()?.forEach { child ->
+            // Symlink ile klasör dışına çıkmayı engelle.
+            if (canonicalParent != null) {
+                val childPath = runCatching { child.canonicalPath }.getOrNull()
+                if (childPath == null || !childPath.startsWith(canonicalParent + File.separator)) {
+                    return@forEach
+                }
+            }
             remove(context, child, trash, category)
         }
         runCatching {

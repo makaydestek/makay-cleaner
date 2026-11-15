@@ -1,4 +1,7 @@
-﻿package com.makay.cleaner.ui
+package com.makay.cleaner.ui
+
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -10,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -62,7 +66,7 @@ fun StorageScreen(
     onNavigateToFileAnalysis: () -> Unit = {},
     onLightClean: (() -> Unit)? = null
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val hasPermission = rememberStoragePermissionState()
     var cleanMessage by remember { mutableStateOf<String?>(null) }
@@ -71,10 +75,10 @@ fun StorageScreen(
     var unusedApps by remember { mutableIntStateOf(0) }
     var optimizing by remember { mutableStateOf(false) }
     var scanned by remember { mutableStateOf(false) }
-    var expandedCategory by remember { mutableStateOf<String?>(null) }
-    var showWhy by remember { mutableStateOf(false) }
-    var whyDialog by remember { mutableStateOf(false) }
-    var confirmOptimization by remember { mutableStateOf(false) }
+    var expandedCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var showWhy by rememberSaveable { mutableStateOf(false) }
+    var whyDialog by rememberSaveable { mutableStateOf(false) }
+    var confirmOptimization by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val settingsFocus = remember { FocusRequester() }
     var tvFocusEpoch by remember { mutableIntStateOf(0) }
@@ -195,7 +199,7 @@ fun StorageScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Makay Cleaner",
+                text = stringResource(R.string.txt_makay_cleaner),
                 color = homeTextPrimary(),
                 fontWeight = FontWeight.SemiBold,
                 fontSize = if (isTv) 20.sp else 18.sp,
@@ -208,7 +212,7 @@ fun StorageScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Settings,
-                    contentDescription = "Ayarlar"
+                    contentDescription = stringResource(R.string.txt_ayarlar)
                 )
             }
         }
@@ -249,7 +253,7 @@ fun StorageScreen(
                     border = BorderStroke(1.dp, homeOutline().copy(alpha = 0.45f))
                 ) {
                     Text(
-                        "Sadece önbellek temizle",
+                        stringResource(R.string.txt_sadece_nbellek_temizle),
                         color = homeTextPrimary(),
                         fontWeight = FontWeight.SemiBold
                     )
@@ -311,26 +315,26 @@ fun StorageScreen(
             if (whyDialog) {
                 AlertDialog(
                     onDismissRequest = { whyDialog = false },
-                    title = { Text("Neden silinmedi?") },
+                    title = { Text(stringResource(R.string.txt_neden_silinmedi)) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             if (junkBytes > 0L) {
                                 Text(
-                                    "Kalan ${formatBytes(junkBytes)} diskte duruyor. Silme denendi, Android dosyayı yerinde bıraktı.",
+                                    stringResource(R.string.txt_kalan_1_s_diskte_duruyor_silme_denendi_andro, formatBytes(junkBytes)),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                                 Text(
-                                    "Bunlar sistem klasörü (/system, /vendor) değil. Başka uygulamanın özel alanı veya yazmaya kapalı önbellek.",
+                                    stringResource(R.string.txt_bunlar_sistem_klas_r_system_vendor_de_il_ba),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                                 Text(
-                                    "Silmek için: Ayarlar → Uygulamalar → ilgili uygulama → Depolama → Önbelleği temizle. Makay bu klasöre giremez.",
+                                    stringResource(R.string.txt_silmek_i_in_ayarlar_uygulamalar_ilgili_uygul),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                             if (lockedBytes > 0L) {
                                 Text(
-                                    "Sistem sayacı yaklaşık ${formatBytes(lockedBytes)} ek önbellek gösterir. Bu alanlar Hariç tutulanlar listesinde. Skor bunları saymaz — silinebilir junk yoksa skor %100’dür.",
+                                    stringResource(R.string.txt_sistem_sayac_yakla_k_1_s_ek_nbellek_g_sterir, formatBytes(lockedBytes)),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
@@ -340,38 +344,45 @@ fun StorageScreen(
                         TextButton(onClick = {
                             whyDialog = false
                             onNavigateToExclusions()
-                        }) { Text("Hariç tutulanlar") }
+                        }) { Text(stringResource(R.string.txt_hari_tutulanlar)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { whyDialog = false }) { Text("Kapat") }
+                        TextButton(onClick = { whyDialog = false }) { Text(stringResource(R.string.txt_kapat)) }
                     }
                 )
             }
             if (confirmOptimization) {
                 AlertDialog(
                     onDismissRequest = { confirmOptimization = false },
-                    title = { Text("Optimizasyon başlatılsın mı?") },
+                    title = { Text(stringResource(R.string.txt_optimizasyon_ba_lat_ls_n_m)) },
                     text = {
-                        Text("Bulunan gereksiz dosyalar çöp kutusuna taşınır ve 48 saat içinde geri yüklenebilir. Uygulama önbellekleri doğrudan temizlenir.")
+                        Text(stringResource(R.string.txt_uygulama_nbelle_i_ve_ge_ici_dosyalar_do_ruda))
                     },
                     confirmButton = {
                         TextButton(onClick = {
                             confirmOptimization = false
                             runOptimization()
-                        }) { Text("Temizle") }
+                        }) { Text(stringResource(R.string.txt_temizle_2)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { confirmOptimization = false }) { Text("Vazgeç") }
+                        TextButton(onClick = { confirmOptimization = false }) { Text(stringResource(R.string.txt_vazge)) }
                     }
                 )
             }
 
             val cats = uiState.categories.take(5)
             val catTotal = cats.sumOf { it.sizeBytes }
-            val weekUsage = remember {
-                AnalyticsRepository(context.applicationContext).getLast7DaysUsage()
+            // Composition sırasında disk okuma yapma; IO'ya taşı.
+            var weekSaved by remember { mutableLongStateOf(0L) }
+            LaunchedEffect(Unit) {
+                weekSaved = withContext(Dispatchers.IO) {
+                    runCatching {
+                        AnalyticsRepository(context.applicationContext)
+                            .getLast7DaysUsage()
+                            .sumOf { it.spaceSaved }
+                    }.getOrDefault(0L)
+                }
             }
-            val weekSaved = weekUsage.sumOf { it.spaceSaved }
 
             HomeInsightStrip(
                 storagePercent = usagePercent,
@@ -409,7 +420,7 @@ fun StorageScreen(
 
             Spacer(Modifier.height(18.dp))
             Text(
-                text = "Kategoriler",
+                text = stringResource(R.string.txt_kategoriler),
                 color = homeTextPrimary(),
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,

@@ -1,11 +1,12 @@
 package com.makay.cleaner.util
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.app.UiModeManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,7 +73,7 @@ object PlatformManager {
     fun rememberIsTvMode(): Boolean {
         val context = LocalContext.current
         init(context)
-        val platform by currentPlatform.collectAsState()
+        val platform by currentPlatform.collectAsStateWithLifecycle()
         return platform == Platform.TV
     }
 }

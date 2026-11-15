@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -36,6 +38,8 @@ fun VideoToolsScreen(
     var videos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
+    var pendingTrashVideo by remember { mutableStateOf<VideoItem?>(null) }
+    var pendingArchiveVideo by remember { mutableStateOf<VideoItem?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val widthClass = rememberWidthClass()
@@ -52,7 +56,7 @@ fun VideoToolsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Video araçları", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_video_ara_lar), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -79,7 +83,7 @@ fun VideoToolsScreen(
                         CircularProgressIndicator()
                     }
                     videos.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("50 MB üzeri video bulunamadı")
+                        Text(stringResource(R.string.txt_50_mb_zeri_video_bulunamad))
                     }
                     else -> LazyColumn(
                         Modifier.fillMaxSize().padding(16.dp),
@@ -92,12 +96,12 @@ fun VideoToolsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                "Not: Gerçek video yeniden kodlama yok. Kopyala = arşiv kopyası; Taşı+arşiv = arşiv + çöp; Çöp = soft-delete.",
+                                stringResource(R.string.txt_not_ger_ek_video_yeniden_kodlama_yok_kopyala),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                "Arşiv: Download/MakayArchive/Videos · Çöp: 48 saat geri alma",
+                                stringResource(R.string.txt_ar_iv_download_makayarchive_videos_p_48_saat),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -117,11 +121,11 @@ fun VideoToolsScreen(
                                     Column(Modifier.weight(1f)) {
                                         Text(video.displayName, fontWeight = FontWeight.SemiBold, maxLines = 1)
                                         Text(
-                                            "${formatBytes(video.sizeBytes)} · ${video.width}x${video.height}",
+                                            stringResource(R.string.txt_1_s_2_sx_3_s, formatBytes(video.sizeBytes), video.width, video.height),
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                         Text(
-                                            "720p tahmini: ${formatBytes(video.estimated720pBytes)}",
+                                            stringResource(R.string.txt_720p_tahmini_1_s, formatBytes(video.estimated720pBytes)),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -137,53 +141,13 @@ fun VideoToolsScreen(
                                                         Toast.LENGTH_SHORT
                                                     ).show()
                                                 }
-                                            }) { Text("Kopyala") }
-                                            TextButton(onClick = {
-                                                scope.launch {
-                                                    val ok = withContext(Dispatchers.IO) {
-                                                        VideoArchiveHelper.moveOriginalToTrashAfterArchive(
-                                                            application, video, trash
-                                                        )
-                                                    }
-                                                    if (ok) {
-                                                        CleaningRecorder.record(
-                                                            application, "Video arşiv", video.sizeBytes, 1
-                                                        )
-                                                        CleanResultTracker.record(
-                                                            "Video arşiv", 1, video.sizeBytes
-                                                        )
-                                                        summary = CleanResultTracker.last
-                                                        videos = withContext(Dispatchers.IO) { scanner.scan() }
-                                                    }
-                                                    Toast.makeText(
-                                                        context,
-                                                        if (ok) "Arşivlendi + çöp kutusu" else "İşlem başarısız",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                            }) { Text("Taşı+arşiv") }
-                                            TextButton(onClick = {
-                                                scope.launch {
-                                                    val ok = withContext(Dispatchers.IO) {
-                                                        if (!video.path.isNullOrBlank()) {
-                                                            trash.movePathToTrash(video.path, "Video")
-                                                        } else {
-                                                            trash.moveUriToTrash(
-                                                                video.uri,
-                                                                video.displayName,
-                                                                video.sizeBytes,
-                                                                "Video"
-                                                            )
-                                                        }
-                                                    }
-                                                    if (ok) {
-                                                        CleaningRecorder.record(
-                                                            application, "Video", video.sizeBytes, 1
-                                                        )
-                                                        videos = withContext(Dispatchers.IO) { scanner.scan() }
-                                                    }
-                                                }
-                                            }) { Text("Çöp") }
+                                            }) { Text(stringResource(R.string.txt_kopyala)) }
+                                            TextButton(onClick = { pendingArchiveVideo = video }) {
+                                                Text(stringResource(R.string.txt_ta_ar_iv))
+                                            }
+                                            TextButton(onClick = { pendingTrashVideo = video }) {
+                                                Text(stringResource(R.string.txt_text))
+                                            }
                                         }
                                     }
                                 }
@@ -193,6 +157,69 @@ fun VideoToolsScreen(
                 }
             }
         }
+    }
+
+    pendingArchiveVideo?.let { video ->
+        ConfirmDeleteDialog(
+            title = "Arşive taşınsın mı?",
+            message = "Video önce arşive kopyalanır, ardından orijinal çöp kutusuna taşınır.",
+            fileCount = 1,
+            totalBytes = video.sizeBytes,
+            moveToTrash = true,
+            onConfirm = {
+                pendingArchiveVideo = null
+                scope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        VideoArchiveHelper.moveOriginalToTrashAfterArchive(application, video, trash)
+                    }
+                    if (ok) {
+                        CleaningRecorder.record(application, "Video arşiv", video.sizeBytes, 1)
+                        CleanResultTracker.record("Video arşiv", 1, video.sizeBytes)
+                        summary = CleanResultTracker.last
+                        videos = withContext(Dispatchers.IO) { scanner.scan() }
+                    }
+                    Toast.makeText(
+                        context,
+                        if (ok) "Arşivlendi + çöp kutusu" else "İşlem başarısız",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            onDismiss = { pendingArchiveVideo = null }
+        )
+    }
+
+    pendingTrashVideo?.let { video ->
+        ConfirmDeleteDialog(
+            title = "Video çöp kutusuna taşınsın mı?",
+            message = "${video.displayName} 48 saat içinde geri yüklenebilir.",
+            fileCount = 1,
+            totalBytes = video.sizeBytes,
+            moveToTrash = true,
+            onConfirm = {
+                pendingTrashVideo = null
+                scope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        val path = video.path
+                        if (!path.isNullOrBlank()) {
+                            trash.movePathToTrash(path, "Video")
+                        } else {
+                            trash.moveUriToTrash(
+                                video.uri,
+                                video.displayName,
+                                video.sizeBytes,
+                                "Video"
+                            )
+                        }
+                    }
+                    if (ok) {
+                        CleaningRecorder.record(application, "Video", video.sizeBytes, 1)
+                        videos = withContext(Dispatchers.IO) { scanner.scan() }
+                    }
+                }
+            },
+            onDismiss = { pendingTrashVideo = null }
+        )
     }
 
     summary?.let { s ->
@@ -218,10 +245,31 @@ fun ApkRemnantScreen(
     var items by remember { mutableStateOf<List<com.makay.cleaner.scanner.ApkRemnant>>(emptyList()) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
+    var confirmApkDelete by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val widthClass = rememberWidthClass()
     val hasStoragePermission = rememberStoragePermissionState()
+
+    fun cleanSelectedApks() {
+        scope.launch {
+            var n = 0
+            var saved = 0L
+            withContext(Dispatchers.IO) {
+                items.filter { it.file.absolutePath in selected }.forEach {
+                    val size = it.sizeBytes
+                    if (trash.moveToTrash(it.file, "APK")) {
+                        n++
+                        saved += size
+                    }
+                }
+            }
+            CleaningRecorder.record(application, "APK kalıntı", saved, n)
+            items = withContext(Dispatchers.IO) { scanner.scan() }
+            selected = emptySet()
+            Toast.makeText(context, context.getString(R.string.msg_apk_moved, n), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     LaunchedEffect(hasStoragePermission) {
         if (hasStoragePermission) {
@@ -234,7 +282,7 @@ fun ApkRemnantScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("APK kalıntıları", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_apk_kal_nt_lar), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -242,25 +290,9 @@ fun ApkRemnantScreen(
                 },
                 actions = {
                     if (selected.isNotEmpty()) {
-                        TextButton(onClick = {
-                            scope.launch {
-                                var n = 0
-                                var saved = 0L
-                                withContext(Dispatchers.IO) {
-                                    items.filter { it.file.absolutePath in selected }.forEach {
-                                        val size = it.sizeBytes
-                                        if (trash.moveToTrash(it.file, "APK")) {
-                                            n++
-                                            saved += size
-                                        }
-                                    }
-                                }
-                                CleaningRecorder.record(application, "APK kalıntı", saved, n)
-                                items = withContext(Dispatchers.IO) { scanner.scan() }
-                                selected = emptySet()
-                                Toast.makeText(context, "$n APK çöp kutusuna", Toast.LENGTH_SHORT).show()
-                            }
-                        }) { Text("Temizle (${selected.size})") }
+                        TextButton(onClick = { confirmApkDelete = true }) {
+                            Text(stringResource(R.string.txt_temizle_1_s_3, selected.size))
+                        }
                     }
                 }
             )
@@ -285,7 +317,7 @@ fun ApkRemnantScreen(
                         CircularProgressIndicator()
                     }
                     items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Eski APK kalıntısı yok (7+ gün)")
+                        Text(stringResource(R.string.txt_eski_apk_kal_nt_s_yok_7_g_n))
                     }
                     else -> LazyColumn(
                         Modifier.fillMaxSize().padding(16.dp),
@@ -298,7 +330,7 @@ fun ApkRemnantScreen(
                             )
                             TextButton(onClick = {
                                 selected = items.map { it.file.absolutePath }.toSet()
-                            }) { Text("Tümünü seç") }
+                            }) { Text(stringResource(R.string.txt_t_m_n_se_2)) }
                         }
                         items(items, key = { it.file.absolutePath }) { apk ->
                             val path = apk.file.absolutePath
@@ -321,7 +353,7 @@ fun ApkRemnantScreen(
                                     Column(Modifier.weight(1f)) {
                                         Text(apk.file.name, fontWeight = FontWeight.Medium, maxLines = 1)
                                         Text(
-                                            "${formatBytes(apk.sizeBytes)} · ${apk.ageDays} gün önce",
+                                            stringResource(R.string.txt_1_s_2_s_g_n_nce, formatBytes(apk.sizeBytes), apk.ageDays),
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
@@ -332,5 +364,20 @@ fun ApkRemnantScreen(
                 }
             }
         }
+    }
+
+    if (confirmApkDelete) {
+        ConfirmDeleteDialog(
+            title = "Seçilen APK'lar çöp kutusuna taşınsın mı?",
+            message = "${selected.size} APK dosyası 48 saat içinde geri yüklenebilir.",
+            fileCount = selected.size,
+            totalBytes = items.filter { it.file.absolutePath in selected }.sumOf { it.sizeBytes },
+            moveToTrash = true,
+            onConfirm = {
+                confirmApkDelete = false
+                cleanSelectedApks()
+            },
+            onDismiss = { confirmApkDelete = false }
+        )
     }
 }

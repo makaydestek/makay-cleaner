@@ -1,5 +1,6 @@
 package com.makay.cleaner.ui
 
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.content.Intent
 import android.net.TrafficStats
@@ -76,16 +77,16 @@ fun BatteryInfoScreen(
     }
 
     Scaffold(
-        containerColor = Color.Black,
+        containerColor = homeBg(),
         topBar = {
             TopAppBar(
-                title = { Text("Pil", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
+                title = { Text(stringResource(R.string.txt_pil), fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri", tint = homeTextPrimary())
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = homeBg(), titleContentColor = homeTextPrimary())
             )
         }
     ) { padding ->
@@ -114,11 +115,11 @@ fun BatteryInfoScreen(
                     .padding(20.dp)
             ) {
                 Column {
-                    Text("%${battery.percent}", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
-                    Text(statusText, color = Color.White.copy(0.9f), fontSize = 14.sp)
+                    Text(stringResource(R.string.txt_1_s, battery.percent), color = homeTextPrimary(), fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                    Text(statusText, color = homeTextPrimary().copy(0.9f), fontSize = 14.sp)
                     Text(
-                        "Sistem durum çubuğu ile aynı kaynak",
-                        color = Color.White.copy(0.65f),
+                        stringResource(R.string.txt_sistem_durum_ubu_u_ile_ayn_kaynak),
+                        color = homeTextPrimary().copy(0.65f),
                         fontSize = 11.sp,
                         modifier = Modifier.padding(top = 6.dp)
                     )
@@ -126,7 +127,7 @@ fun BatteryInfoScreen(
             }
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = HubCard),
+                colors = CardDefaults.cardColors(containerColor = hubPanel()),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -147,11 +148,11 @@ fun BatteryInfoScreen(
                 shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(containerColor = HubBlue)
             ) {
-                Text("Sistem ayarlarında yönet", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.txt_sistem_ayarlar_nda_y_net), fontWeight = FontWeight.SemiBold)
             }
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = HubCard),
+                colors = CardDefaults.cardColors(containerColor = hubPanel()),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
@@ -225,7 +226,7 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
             } catch (_: Exception) {
             }
         }
-        Toast.makeText(context, "Veri ayarları bu cihazda açılamadı", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.msg_data_settings_failed), Toast.LENGTH_SHORT).show()
     }
 
     fun openNetworkSettings() {
@@ -242,20 +243,20 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
             } catch (_: Exception) {
             }
         }
-        Toast.makeText(context, "Ağ ayarları bu cihazda açılamadı", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.msg_network_settings_failed), Toast.LENGTH_SHORT).show()
     }
 
     Scaffold(
-        containerColor = Color.Black,
+        containerColor = homeBg(),
         topBar = {
             TopAppBar(
-                title = { Text("Veri kullanımı", fontWeight = FontWeight.Bold, fontSize = 22.sp) },
+                title = { Text(stringResource(R.string.txt_veri_kullan_m), fontWeight = FontWeight.Bold, fontSize = 22.sp) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri", tint = homeTextPrimary())
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = homeBg(), titleContentColor = homeTextPrimary())
             )
         }
     ) { padding ->
@@ -275,27 +276,27 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
                     .padding(20.dp)
             ) {
                 Column {
-                    Text(formatBytes(totalMobile), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    Text(formatBytes(totalMobile), color = homeTextPrimary(), fontSize = 32.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Mobil veri — cihaz açılışından beri (TrafficStats)",
-                        color = Color.White.copy(0.85f),
+                        stringResource(R.string.txt_mobil_veri_cihaz_a_l_ndan_beri_trafficstats),
+                        color = homeTextPrimary().copy(0.85f),
                         fontSize = 13.sp
                     )
                     Text(
-                        "Sistem Ayarları’ndaki aylık faturalama dönemiyle aynı değildir",
-                        color = Color.White.copy(0.65f),
+                        stringResource(R.string.txt_sistem_ayarlar_ndaki_ayl_k_faturalama_d_nemi),
+                        color = homeTextPrimary().copy(0.65f),
                         fontSize = 11.sp,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth()) {
                         Column(Modifier.weight(1f)) {
-                            Text("İndirilen", color = Color.White.copy(0.7f), fontSize = 12.sp)
-                            Text(formatBytes(mobileRx), color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.txt_ndirilen), color = homeTextPrimary().copy(0.7f), fontSize = 12.sp)
+                            Text(formatBytes(mobileRx), color = homeTextPrimary(), fontWeight = FontWeight.Bold)
                         }
                         Column(Modifier.weight(1f)) {
-                            Text("Yüklenen", color = Color.White.copy(0.7f), fontSize = 12.sp)
-                            Text(formatBytes(mobileTx), color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.txt_y_klenen), color = homeTextPrimary().copy(0.7f), fontSize = 12.sp)
+                            Text(formatBytes(mobileTx), color = homeTextPrimary(), fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(Modifier.height(16.dp))
@@ -304,16 +305,16 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(0.22f),
-                            contentColor = Color.White
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            contentColor = MaterialTheme.colorScheme.primary
                         )
-                    ) { Text("Sistem ayarlarında yönet") }
+                    ) { Text(stringResource(R.string.txt_sistem_ayarlar_nda_y_net)) }
                 }
             }
             Card(
                 onClick = { openNetworkSettings() },
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = HubCard),
+                colors = CardDefaults.cardColors(containerColor = hubPanel()),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -332,36 +333,36 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
                         )
                     }
                     Spacer(Modifier.width(12.dp))
-                    Text("Ağ bağlantısını yönet", color = Color.White, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.txt_a_ba_lant_s_n_y_net), color = homeTextPrimary(), modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color(0xFF636366))
                 }
             }
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = HubCard),
+                colors = CardDefaults.cardColors(containerColor = hubPanel()),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Toplam trafik (Wi‑Fi + mobil)", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.txt_toplam_trafik_wi_fi_mobil), color = homeTextPrimary(), fontWeight = FontWeight.SemiBold)
                     Text(
-                        "↓ ${formatBytes(totalRx)}  ·  ↑ ${formatBytes(totalTx)}",
+                        stringResource(R.string.txt_1_s_2_s, formatBytes(totalRx), formatBytes(totalTx)),
                         color = Color(0xFF8E8E93),
                         fontSize = 13.sp
                     )
                     Text(
-                        "Wi‑Fi (yaklaşık = toplam − mobil): ↓ ${formatBytes(wifiRx)} · ↑ ${formatBytes(wifiTx)}",
+                        stringResource(R.string.txt_wi_fi_yakla_k_toplam_mobil_1_s_2_s, formatBytes(wifiRx), formatBytes(wifiTx)),
                         color = Color(0xFF8E8E93),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 6.dp)
                     )
                     Text(
-                        "Aylık kota / operatör dönemi için sistem Veri kullanımı ekranına bakın. Sayaç yeniden başlatmada sıfırlanır.",
+                        stringResource(R.string.txt_ayl_k_kota_operat_r_d_nemi_i_in_sistem_veri),
                         color = Color(0xFF8E8E93),
                         fontSize = 11.sp,
                         modifier = Modifier.padding(top = 8.dp)
                     )
                     Text(
-                        "Operatör tarife limiti okunamaz. Dönemsel kullanım için sistem Veri kullanımı ekranını açın.",
+                        stringResource(R.string.txt_operat_r_tarife_limiti_okunamaz_d_nemsel_kul),
                         color = Color(0xFF8E8E93),
                         fontSize = 11.sp,
                         modifier = Modifier.padding(top = 8.dp)
@@ -385,7 +386,7 @@ private data class BatteryUi(
 private fun FactRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = Color(0xFF8E8E93), fontSize = 13.sp)
-        Text(value, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(value, color = homeTextPrimary(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -400,7 +401,7 @@ private fun NavRow(title: String, trailing: String?, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontSize = 15.sp)
+            Text(title, color = homeTextPrimary(), fontSize = 15.sp)
             if (trailing != null) Text(trailing, color = Color(0xFF8E8E93), fontSize = 12.sp)
         }
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color(0xFF636366), modifier = Modifier.size(18.dp))
@@ -420,7 +421,7 @@ private fun openSystemBattery(context: Context) {
         } catch (_: Exception) {
         }
     }
-    Toast.makeText(context, "Pil ayarları açılamadı", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, context.getString(R.string.msg_battery_settings_failed), Toast.LENGTH_SHORT).show()
 }
 
 private fun startSettings(context: Context, action: String, fallback: () -> Unit) {

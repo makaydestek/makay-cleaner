@@ -17,9 +17,19 @@ object PhotoAlbumMover {
 
     fun sanitizeAlbumName(raw: String): String {
         val cleaned = raw.trim()
-            .replace(Regex("""[\\/:*?"<>|]"""), "_")
+            .replace(Regex("""[\\/:*?"<>|\u0000-\u001f]"""), "_")
+            .trim('.', ' ')
             .take(60)
-        return cleaned.ifBlank { "Makay" }
+        return if (cleaned.isBlank() || cleaned == "." || cleaned == "..") "Makay" else cleaned
+    }
+
+    /** Dosya adını yol bileşenlerinden arındırır (path traversal engeli). */
+    private fun safeFileName(raw: String, fallback: String): String {
+        val base = raw.replace('\\', '/').substringAfterLast('/').trim()
+        val cleaned = base.replace(Regex("""[\\/:*?"<>|\u0000-\u001f]"""), "_")
+            .trim('.', ' ')
+            .take(120)
+        return if (cleaned.isBlank() || cleaned == "." || cleaned == "..") fallback else cleaned
     }
 
     fun copyToAlbum(
@@ -76,7 +86,11 @@ object PhotoAlbumMover {
         album: String
     ): Boolean {
         return try {
-            val name = displayName.ifBlank { File(sourcePath).name }.ifBlank { "photo_${System.currentTimeMillis()}.jpg" }
+            val fallback = "photo_${System.currentTimeMillis()}.jpg"
+            val name = safeFileName(
+                displayName.ifBlank { File(sourcePath).name },
+                fallback
+            )
             val mime = guessMime(name)
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, name)
@@ -115,10 +129,19 @@ object PhotoAlbumMover {
         return try {
             val pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
             val dir = File(pictures, album).also { it.mkdirs() }
-            val name = displayName.ifBlank { File(sourcePath).name }.ifBlank { "photo_${System.currentTimeMillis()}.jpg" }
+            val fallback = "photo_${System.currentTimeMillis()}.jpg"
+            val name = safeFileName(
+                displayName.ifBlank { File(sourcePath).name },
+                fallback
+            )
             var dest = File(dir, name)
             if (dest.exists()) {
                 dest = File(dir, "${System.currentTimeMillis()}_$name")
+            }
+            // Path traversal savunması: hedef albüm klasörünün dışına çıkamaz.
+            val canonicalDir = dir.canonicalPath
+            if (!dest.canonicalPath.startsWith(canonicalDir + File.separator)) {
+                return false
             }
             openSource(context, sourcePath, sourceUri)?.use { input ->
                 FileOutputStream(dest).use { output -> input.copyTo(output) }

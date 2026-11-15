@@ -1,5 +1,7 @@
-﻿package com.makay.cleaner.ui
+package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
@@ -16,6 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,32 +61,40 @@ fun DuplicatePhotosScreen(
     onNavigateBack: () -> Unit,
     initialTab: Int = 0
 ) {
-    val scanner = remember { DuplicatePhotoScanner(application) }
     val trash = remember { RecycleBinRepository(application) }
     val prefs = remember { DuplicatePhotoPrefs(application) }
+    val vm: DuplicatePhotosViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = DuplicatePhotosViewModel.Factory(application)
+    )
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    val exactGroups = state.exactGroups
+    val similarGroups = state.similarGroups
+    val loading = state.loading
+    val hasScanned = state.hasScanned
+    val cancelledEarly = state.cancelledEarly
+    val progressText = state.progressText
+    val progressCurrent = state.progressCurrent
+    val progressTotal = state.progressTotal
+    val buckets = state.buckets
 
-    var tabIndex by remember { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
-    var exactGroups by remember { mutableStateOf<List<DuplicatePhotoScanner.PhotoGroup>>(emptyList()) }
-    var similarGroups by remember { mutableStateOf<List<DuplicatePhotoScanner.PhotoGroup>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
-    var hasScanned by remember { mutableStateOf(false) }
-    var progressText by remember { mutableStateOf("Hazırlanıyor…") }
-    var progressCurrent by remember { mutableIntStateOf(0) }
-    var progressTotal by remember { mutableIntStateOf(1) }
-    var selectedPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var confirmDelete by remember { mutableStateOf(false) }
+    var tabIndex by rememberSaveable { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
+    var selectedPaths by rememberSaveable(stateSaver = stringSetSaver) {
+        mutableStateOf<Set<String>>(emptySet())
+    }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
-    var cancelledEarly by remember { mutableStateOf(false) }
-    var showAdvanced by remember { mutableStateOf(false) }
-    var showExclude by remember { mutableStateOf(false) }
-    var showProtect by remember { mutableStateOf(false) }
-    var showFormats by remember { mutableStateOf(false) }
-    var showSelectionAssistant by remember { mutableStateOf(false) }
+    var showAdvanced by rememberSaveable { mutableStateOf(false) }
+    var showExclude by rememberSaveable { mutableStateOf(false) }
+    var showProtect by rememberSaveable { mutableStateOf(false) }
+    var showFormats by rememberSaveable { mutableStateOf(false) }
+    var showSelectionAssistant by rememberSaveable { mutableStateOf(false) }
     var previewPhoto by remember { mutableStateOf<DuplicatePhotoScanner.PhotoItem?>(null) }
     var previewGroup by remember { mutableStateOf<DuplicatePhotoScanner.PhotoGroup?>(null) }
     var compareLeft by remember { mutableStateOf<DuplicatePhotoScanner.PhotoItem?>(null) }
     var compareRight by remember { mutableStateOf<DuplicatePhotoScanner.PhotoItem?>(null) }
-    var lockedPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var lockedPaths by rememberSaveable(stateSaver = stringSetSaver) {
+        mutableStateOf<Set<String>>(emptySet())
+    }
 
     var scanMode by remember { mutableStateOf(prefs.scanMode) }
     var matchingLevel by remember { mutableFloatStateOf(prefs.matchingLevel.toFloat()) }
@@ -94,14 +106,11 @@ fun DuplicatePhotosScreen(
     var protectedBuckets by remember { mutableStateOf(prefs.protectedBuckets) }
     var allowedFormats by remember { mutableStateOf(prefs.allowedFormats) }
     var selectionRules by remember { mutableStateOf(prefs.selectionRules) }
-    var buckets by remember { mutableStateOf<List<DuplicatePhotoScanner.BucketInfo>>(emptyList()) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val widthClass = rememberWidthClass()
     val hasStoragePermission = rememberStoragePermissionState()
-    val cancelFlag = remember { AtomicBoolean(false) }
-    var scanJob by remember { mutableStateOf<Job?>(null) }
 
     fun persistPrefs() {
         prefs.scanMode = scanMode
@@ -133,60 +142,23 @@ fun DuplicatePhotosScreen(
 
     fun runScan() {
         if (!hasStoragePermission) return
-        scanJob?.cancel()
-        cancelFlag.set(false)
-        cancelledEarly = false
-        hasScanned = true
-        scanJob = scope.launch {
-            loading = true
-            progressText = "Tarama başlıyor…"
-            progressCurrent = 0
-            progressTotal = 1
-            SystemFileGuard.consumeSkippedCount()
-            val options = currentOptions()
-            val mainHandler = Handler(Looper.getMainLooper())
-            val listener = DuplicatePhotoScanner.ProgressListener { phase, cur, tot ->
-                mainHandler.post {
-                    progressText = phase
-                    progressCurrent = cur
-                    progressTotal = tot.coerceAtLeast(1)
-                }
-            }
-            exactGroups = withContext(Dispatchers.IO) {
-                scanner.scanExact(options, cancelFlag, listener)
-            }
-            if (cancelFlag.get()) {
-                cancelledEarly = true
-                loading = false
-                return@launch
-            }
-            similarGroups = withContext(Dispatchers.IO) {
-                scanner.scanSimilar(options, cancelFlag, listener)
-            }
-            cancelledEarly = cancelFlag.get()
-            selectedPaths = applyAutoMark(exactGroups + similarGroups)
-            loading = false
-        }
+        vm.scan(currentOptions())
     }
 
     fun cancelScan() {
-        cancelFlag.set(true)
-        scanJob?.cancel()
-        loading = false
-        cancelledEarly = true
+        vm.cancel()
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            cancelFlag.set(true)
-            scanJob?.cancel()
+    // Tarama tamamlandığında (veya döndürme sonrası VM'den geldiğinde)
+    // akıllı seçimi bir kez uygula.
+    LaunchedEffect(state.scanId) {
+        if (state.scanId > 0) {
+            selectedPaths = applyAutoMark(state.allGroups)
         }
     }
 
     LaunchedEffect(hasStoragePermission) {
-        if (hasStoragePermission) {
-            buckets = withContext(Dispatchers.IO) { scanner.listBuckets() }
-        }
+        if (hasStoragePermission) vm.loadBuckets()
     }
 
     val activeGroups = if (tabIndex == 0) exactGroups else similarGroups
@@ -201,7 +173,7 @@ fun DuplicatePhotosScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Yinelenen fotoğraflar", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.txt_yinelenen_foto_raflar), fontWeight = FontWeight.Bold)
                         if (hasScanned && !loading) {
                             Text(
                                 "${exactGroups.size + similarGroups.size} grup · ${formatBytes(
@@ -211,7 +183,7 @@ fun DuplicatePhotosScreen(
                             )
                         } else if (!hasScanned) {
                             Text(
-                                "Tara → gözden geçir → çöp kutusuna taşı",
+                                stringResource(R.string.txt_tara_g_zden_ge_ir_p_kutusuna_ta),
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
@@ -227,13 +199,13 @@ fun DuplicatePhotosScreen(
                 },
                 actions = {
                     when {
-                        loading -> TextButton(onClick = { cancelScan() }) { Text("İptal") }
+                        loading -> TextButton(onClick = { cancelScan() }) { Text(stringResource(R.string.txt_ptal)) }
                         hasScanned -> TextButton(
                             onClick = {
                                 if (hasStoragePermission) runScan()
                                 else PermissionHelper.requestStoragePermission(context)
                             }
-                        ) { Text("Yenile") }
+                        ) { Text(stringResource(R.string.txt_yenile)) }
                     }
                 }
             )
@@ -250,7 +222,7 @@ fun DuplicatePhotosScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("$selectedInTab seçili", fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.txt_1_s_se_ili, selectedInTab), fontWeight = FontWeight.Bold)
                             Text(
                                 formatBytes(selectedBytes),
                                 style = MaterialTheme.typography.bodySmall,
@@ -263,7 +235,7 @@ fun DuplicatePhotosScreen(
                                 containerColor = MaterialTheme.colorScheme.error
                             )
                         ) {
-                            Text("Çöp kutusuna taşı")
+                            Text(stringResource(R.string.txt_p_kutusuna_ta))
                         }
                     }
                 }
@@ -295,7 +267,7 @@ fun DuplicatePhotosScreen(
                             Spacer(Modifier.height(12.dp))
                             Text(progressText, fontWeight = FontWeight.Medium)
                             Text(
-                                "${(progressFraction * 100).toInt()}% · $progressCurrent / $progressTotal",
+                                stringResource(R.string.txt_1_s_2_s_3_s, (progressFraction * 100).toInt(), progressCurrent, progressTotal),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -305,7 +277,7 @@ fun DuplicatePhotosScreen(
                                 modifier = Modifier.fillMaxWidth(0.85f)
                             )
                             Text(
-                                "Tarama cihazınızda kalır; fotoğraflar yüklenmez. Sistem dosyalarına dokunulmaz.",
+                                stringResource(R.string.txt_tarama_cihaz_n_zda_kal_r_foto_raflar_y_klenm),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 16.dp)
@@ -346,21 +318,19 @@ fun DuplicatePhotosScreen(
                             scanMode = scanMode,
                             matchingLevel = matchingLevel.toInt(),
                             onEdit = {
-                                hasScanned = false
-                                exactGroups = emptyList()
-                                similarGroups = emptyList()
+                                vm.reset()
                             }
                         )
                         TabRow(selectedTabIndex = tabIndex) {
                             Tab(
                                 selected = tabIndex == 0,
                                 onClick = { tabIndex = 0 },
-                                text = { Text("Aynı (${exactGroups.size})") }
+                                text = { Text(stringResource(R.string.txt_ayn_1_s, exactGroups.size)) }
                             )
                             Tab(
                                 selected = tabIndex == 1,
                                 onClick = { tabIndex = 1 },
-                                text = { Text("Benzer (${similarGroups.size})") }
+                                text = { Text(stringResource(R.string.txt_benzer_1_s, similarGroups.size)) }
                             )
                         }
                         if (activeGroups.isEmpty()) {
@@ -377,8 +347,8 @@ fun DuplicatePhotosScreen(
                                     )
                                     Spacer(Modifier.height(12.dp))
                                     OutlinedButton(onClick = {
-                                        hasScanned = false
-                                    }) { Text("Tarama ayarlarını değiştir") }
+                                        vm.reset()
+                                    }) { Text(stringResource(R.string.txt_tarama_ayarlar_n_de_i_tir)) }
                                 }
                             }
                         } else {
@@ -395,13 +365,13 @@ fun DuplicatePhotosScreen(
                                         ) {
                                             TextButton(onClick = {
                                                 selectedPaths = selectedPaths + applyAutoMark(activeGroups)
-                                            }) { Text("Akıllı seç") }
+                                            }) { Text(stringResource(R.string.txt_ak_ll_se)) }
                                             TextButton(onClick = {
                                                 val paths = activeGroups.flatMap { g ->
                                                     g.photos.map { it.path }
                                                 }.toSet()
                                                 selectedPaths = selectedPaths - paths
-                                            }) { Text("Seçimi temizle") }
+                                            }) { Text(stringResource(R.string.txt_se_imi_temizle)) }
                                         }
                                         Row(
                                             Modifier.fillMaxWidth(),
@@ -412,9 +382,9 @@ fun DuplicatePhotosScreen(
                                                 val unlocked = all - lockedPaths
                                                 val currently = selectedPaths.intersect(unlocked)
                                                 selectedPaths = (selectedPaths - unlocked) + (unlocked - currently)
-                                            }) { Text("Seçimi tersine çevir") }
+                                            }) { Text(stringResource(R.string.txt_se_imi_tersine_evir)) }
                                             TextButton(onClick = { showSelectionAssistant = true }) {
-                                                Text("Seçim asistanı")
+                                                Text(stringResource(R.string.txt_se_im_asistan))
                                             }
                                         }
                                     }
@@ -624,7 +594,7 @@ fun DuplicatePhotosScreen(
             onUndo = {
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
-                    Toast.makeText(context, "$n öğe geri yüklendi", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
                     runScan()
                 }
             }

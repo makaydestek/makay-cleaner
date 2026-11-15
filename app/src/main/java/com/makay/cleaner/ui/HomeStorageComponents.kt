@@ -1,7 +1,9 @@
-﻿@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -200,9 +202,9 @@ internal fun HomeStorageCompact(
                             }
                             TextButton(
                                 onClick = onOpenDetailedAnalysis,
-                                contentPadding = PaddingValues(0.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Text("Detaylı dosya analizi →", fontSize = 12.sp)
+                                Text(stringResource(R.string.txt_detayl_dosya_analizi), fontSize = 12.sp)
                             }
                         }
                     }
@@ -370,7 +372,7 @@ internal fun HomeScoreHero(
                     .padding(horizontal = if (isTv) ring * 0.10f else ring * 0.18f)
             ) {
                 Text(
-                    text = "$score",
+                    text = stringResource(R.string.txt_1_s_4, score),
                     color = textPrimary,
                     fontSize = if (isTv) {
                         if (score >= 100) 34.sp else 36.sp

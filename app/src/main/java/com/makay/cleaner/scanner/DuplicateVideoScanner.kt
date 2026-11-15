@@ -82,12 +82,23 @@ class DuplicateVideoScanner(private val context: Context) {
             }
             byHash.forEach { (hash, list) ->
                 if (list.size > 1) {
-                    val sorted = list.sortedWith(
-                        compareByDescending<VideoItem> { it.width.toLong() * it.height }
-                            .thenByDescending { it.sizeBytes }
-                            .thenByDescending { it.dateAdded }
-                    )
-                    groups.add(VideoGroup("vid_$hash", sorted, sorted.sumOf { it.sizeBytes }))
+                    // Kısmi hash aday üretir; silmeden önce tam SHA-256 doğrula.
+                    val byFull = LinkedHashMap<String, MutableList<VideoItem>>()
+                    list.forEach { v ->
+                        val full = com.makay.cleaner.util.FileHashing.sha256File(File(v.path))
+                            ?: return@forEach
+                        byFull.getOrPut(full) { mutableListOf() }.add(v)
+                    }
+                    byFull.forEach { (fullHash, verified) ->
+                        if (verified.size > 1) {
+                            val sorted = verified.sortedWith(
+                                compareByDescending<VideoItem> { it.width.toLong() * it.height }
+                                    .thenByDescending { it.sizeBytes }
+                                    .thenByDescending { it.dateAdded }
+                            )
+                            groups.add(VideoGroup("vid_sha256_$fullHash", sorted, sorted.sumOf { it.sizeBytes }))
+                        }
+                    }
                 }
             }
         }

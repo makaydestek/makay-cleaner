@@ -1,5 +1,7 @@
 package com.makay.cleaner.scanner
 
+import com.makay.cleaner.R
+
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -39,7 +41,7 @@ object BrowserCacheScanner {
         "com.brave.browser" to "Brave",
         "com.sec.android.app.sbrowser" to "Samsung Internet",
         "com.mi.globalbrowser" to "Mi Browser",
-        "com.android.browser" to "Tarayıcı"
+        "com.android.browser" to "Browser",
     )
 
     private val LEFTOVER_SUFFIXES = listOf(
@@ -80,7 +82,7 @@ object BrowserCacheScanner {
                 val name = f.name.lowercase()
                 val match = LEFTOVER_SUFFIXES.any { name.endsWith(it) }
                 if (match && FilePurger.canRemove(context, f)) {
-                    out += BrowserLeftover(f, f.length(), "Yarım / geçici indirme")
+        out += BrowserLeftover(f, f.length(), context.getString(R.string.reason_browser_partial))
                 }
             }
         }
@@ -93,7 +95,7 @@ object BrowserCacheScanner {
         var saved = 0L
         files.forEach { f ->
             val size = if (f.isFile) f.length() else 0L
-            if (FilePurger.remove(context, f, trash = trash, category = "Tarayıcı artığı")) {
+        if (FilePurger.remove(context, f, trash = trash, category = context.getString(R.string.record_browser_leftovers))) {
                 count++
                 saved += size
             }

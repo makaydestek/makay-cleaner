@@ -1,7 +1,9 @@
-﻿@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -51,12 +53,12 @@ internal fun ScanSetupPanel(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text(
-            "1. Tarama kapsamı",
+            stringResource(R.string.txt_1_tarama_kapsam),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
         Text(
-            "Galeri cihazınızda taranır; hiçbir fotoğraf sunucuya gönderilmez.",
+            stringResource(R.string.txt_galeri_cihaz_n_zda_taran_r_hi_bir_foto_raf_s),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -87,14 +89,14 @@ internal fun ScanSetupPanel(
 
         if (scanMode == DuplicatePhotoPrefs.MODE_FOLDER) {
             if (buckets.isEmpty()) {
-                Text("Albüm bulunamadı", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.txt_alb_m_bulunamad), style = MaterialTheme.typography.bodySmall)
             } else {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(buckets.take(40), key = { it.name }) { b ->
                         FilterChip(
                             selected = selectedBucket == b.name,
                             onClick = { onSelectBucket(b.name) },
-                            label = { Text("${b.name} (${b.count})") }
+                            label = { Text(stringResource(R.string.txt_1_s_2_s_5, b.name, b.count)) }
                         )
                     }
                 }
@@ -102,7 +104,7 @@ internal fun ScanSetupPanel(
         }
 
         Text(
-            "2. Benzerlik seviyesi",
+            stringResource(R.string.txt_2_benzerlik_seviyesi),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
@@ -120,16 +122,16 @@ internal fun ScanSetupPanel(
         )
 
         TextButton(onClick = onToggleAdvanced) {
-            Text(if (showAdvanced) "Gelişmiş ayarları gizle" else "Gelişmiş ayarlar")
+            Text(stringResource(if (showAdvanced) R.string.msg_hide_advanced else R.string.msg_show_advanced))
         }
         if (showAdvanced) {
-            Text("Zaman aralığı: ${if (timeIntervalSec == 0) "kapalı" else "$timeIntervalSec sn"}")
+            Text(stringResource(R.string.msg_scan_interval, if (timeIntervalSec == 0) stringResource(R.string.msg_off) else stringResource(R.string.msg_seconds, timeIntervalSec)))
             Slider(
                 value = timeIntervalSec.toFloat().coerceIn(0f, 3600f),
                 onValueChange = { onTimeInterval(it.toInt()) },
                 valueRange = 0f..3600f
             )
-            Text("GPS yakınlığı: ${if (gpsRadius == 0) "kapalı" else "$gpsRadius m"}")
+            Text(stringResource(R.string.msg_gps_radius, if (gpsRadius == 0) stringResource(R.string.msg_off) else stringResource(R.string.msg_meters, gpsRadius)))
             Slider(
                 value = gpsRadius.toFloat(),
                 onValueChange = { onGpsRadius(it.toInt()) },
@@ -140,7 +142,7 @@ internal fun ScanSetupPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Döndürülmüş / aynalanmış kopyalar")
+                Text(stringResource(R.string.txt_d_nd_r_lm_aynalanm_kopyalar))
                 Switch(checked = includeRotated, onCheckedChange = onIncludeRotated)
             }
             OutlinedButton(onClick = onOpenExclude, modifier = Modifier.fillMaxWidth()) {
@@ -156,10 +158,10 @@ internal fun ScanSetupPanel(
                 )
             }
             OutlinedButton(onClick = onOpenFormats, modifier = Modifier.fillMaxWidth()) {
-                Text("Format filtresi (${allowedFormats.size})")
+                Text(stringResource(R.string.txt_format_filtresi_1_s, allowedFormats.size))
             }
             OutlinedButton(onClick = onOpenSelectionAssistant, modifier = Modifier.fillMaxWidth()) {
-                Text("Seçim asistanı (öncelik kuralları)")
+                Text(stringResource(R.string.txt_se_im_asistan_ncelik_kurallar))
             }
         }
 
@@ -169,10 +171,10 @@ internal fun ScanSetupPanel(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             enabled = scanMode != DuplicatePhotoPrefs.MODE_FOLDER || !selectedBucket.isNullOrBlank()
         ) {
-            Text("Tara", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.txt_tara), fontWeight = FontWeight.Bold)
         }
         Text(
-            "Sonuçlarda fazlalıklar seçim asistanı kurallarına göre işaretlenir; silmeden önce önizleyin.",
+            stringResource(R.string.txt_sonu_larda_fazlal_klar_se_im_asistan_kuralla),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -205,8 +207,8 @@ internal fun ScanSetupCompact(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("$modeLabel · $matchLabel", style = MaterialTheme.typography.bodyMedium)
-            Text("Ayarlar", color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.txt_1_s_2_s_6, modeLabel, matchLabel), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.txt_ayarlar), color = MaterialTheme.colorScheme.primary)
         }
     }
 }

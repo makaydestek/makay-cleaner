@@ -250,6 +250,8 @@ class PersonMismatchViewModel(application: Application) : AndroidViewModel(appli
                 }
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 SoftErrorLogger.error(TAG, "Tarama hatası", e)
                 persistCurrentIfAny(bucket, state, completed = false)
@@ -272,11 +274,14 @@ class PersonMismatchViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    /** Navigasyon / onCleared için senkron arşiv — coroutine iptaline güvenmez. */
+    /** Navigasyon / onCleared için arşiv yazımı. UI thread'ini bloklamaz. */
     fun persistArchiveBlocking() {
         val snapshot = buildSnapshotFromState() ?: return
-        runCatching { archive.save(snapshot) }
         _uiState.update { it.copy(archiveSavedAt = snapshot.savedAt) }
+        // onCleared'da viewModelScope iptal edilmiş olabilir; ayrı IO kapsamı.
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            runCatching { archive.save(snapshot) }
+        }
     }
 
     private fun buildSnapshotFromState(): PersonMismatchScanArchive.Snapshot? {

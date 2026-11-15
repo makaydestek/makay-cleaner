@@ -1,5 +1,9 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.app.Application
 import android.content.Intent
 import android.widget.Toast
@@ -22,6 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -34,8 +41,9 @@ fun AnalyticsScreen(
     onNavigateBack: () -> Unit,
     viewModel: AnalyticsViewModel = viewModel(factory = AnalyticsViewModel.Factory(application))
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showClearConfirm by remember { mutableStateOf(false) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
@@ -47,7 +55,7 @@ fun AnalyticsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("📊 Gelişmiş Analitikler", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_geli_mi_analitikler), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
@@ -69,7 +77,7 @@ fun AnalyticsScreen(
             // Toplam İstatistikler
             item {
                 Text(
-                    text = "Genel İstatistikler",
+                    text = stringResource(R.string.txt_genel_statistikler),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -123,7 +131,7 @@ fun AnalyticsScreen(
             if (uiState.last7DaysUsage.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Son 7 Gün Aktivitesi",
+                        text = stringResource(R.string.txt_son_7_g_n_aktivitesi),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -137,7 +145,7 @@ fun AnalyticsScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "Günlük Temizlik Sayısı",
+                                text = stringResource(R.string.txt_g_nl_k_temizlik_say_s),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -200,7 +208,7 @@ fun AnalyticsScreen(
             if (uiState.last30DaysUsage.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Son 30 Gün Aktivitesi",
+                        text = stringResource(R.string.txt_son_30_g_n_aktivitesi),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -213,7 +221,7 @@ fun AnalyticsScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "Aylık temizlik trendi",
+                                text = stringResource(R.string.txt_ayl_k_temizlik_trendi),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -249,7 +257,7 @@ fun AnalyticsScreen(
             if (uiState.mostUsedFeatures.isNotEmpty()) {
                 item {
                     Text(
-                        text = "En Çok Kullanılan Özellikler (30 Gün)",
+                        text = stringResource(R.string.txt_en_ok_kullan_lan_zellikler_30_g_n),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -278,7 +286,7 @@ fun AnalyticsScreen(
                             Badge(
                                 containerColor = primaryColor
                             ) {
-                                Text("$count kez")
+                                Text(stringResource(R.string.txt_1_s_kez, count))
                             }
                         }
                     }
@@ -288,7 +296,7 @@ fun AnalyticsScreen(
             // Veri Dışa Aktarma
             item {
                 Text(
-                    text = "Veri Yönetimi",
+                    text = stringResource(R.string.txt_veri_y_netimi),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -301,31 +309,45 @@ fun AnalyticsScreen(
                 ) {
                     Button(
                         onClick = {
-                            runCatching {
-                                val jsonData = viewModel.exportData()
-                                val dir = File(application.cacheDir, "exports").apply { mkdirs() }
-                                val file = File(dir, "makay-cleaner-analitik.json")
-                                file.writeText(jsonData)
-                                val uri = FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    file
-                                )
-                                val share = Intent(Intent.ACTION_SEND).apply {
-                                    type = "application/json"
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                    putExtra(Intent.EXTRA_SUBJECT, "Makay Cleaner analitik verisi")
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        val jsonData = viewModel.exportData()
+                                        val dir = File(application.cacheDir, "exports").apply { mkdirs() }
+                                        val file = File(dir, "makay-cleaner-analitik.json")
+                                        file.writeText(jsonData)
+                                        file
+                                    }
+                                }.onSuccess { file ->
+                                    runCatching {
+                                        val uri = FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            file
+                                        )
+                                        val share = Intent(Intent.ACTION_SEND).apply {
+                                            type = "application/json"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            putExtra(Intent.EXTRA_SUBJECT, "Makay Cleaner analitik verisi")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(
+                                            Intent.createChooser(share, "Dışa aktar")
+                                        )
+                                    }.onFailure {
+                                        Toast.makeText(
+                                            context,
+                                            "Paylaşım açılamadı: ${it.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }.onFailure {
+                                    Toast.makeText(
+                                        context,
+                                        "Dışa aktarım başarısız: ${it.message}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
-                                context.startActivity(
-                                    Intent.createChooser(share, "Dışa aktar")
-                                )
-                            }.onFailure {
-                                Toast.makeText(
-                                    context,
-                                    "Dışa aktarım başarısız: ${it.message}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
                             }
                         },
                         modifier = Modifier
@@ -333,7 +355,7 @@ fun AnalyticsScreen(
                             .height(56.dp),
                         shape = MaterialTheme.shapes.medium
                     ) {
-                        Text("📤 Dışa Aktar")
+                        Text(stringResource(R.string.txt_d_a_aktar))
                     }
 
                     OutlinedButton(
@@ -343,7 +365,7 @@ fun AnalyticsScreen(
                             .height(56.dp),
                         shape = MaterialTheme.shapes.medium
                     ) {
-                        Text("️ Temizle")
+                        Text(stringResource(R.string.txt_temizle))
                     }
                 }
             }
@@ -357,7 +379,7 @@ fun AnalyticsScreen(
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
-            title = { Text("Analitik verileri silinsin mi?", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.txt_analitik_verileri_silinsin_mi), fontWeight = FontWeight.Bold) },
             text = {
                 Text(
                     "Temizlik geçmişi, kullanım istatistikleri ve grafik verileri kalıcı olarak " +
@@ -368,11 +390,11 @@ fun AnalyticsScreen(
                 TextButton(onClick = {
                     showClearConfirm = false
                     viewModel.clearAnalytics()
-                    Toast.makeText(context, "Analitik verileri silindi", Toast.LENGTH_SHORT).show()
-                }) { Text("Sil") }
+                    Toast.makeText(context, context.getString(R.string.msg_analytics_deleted), Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.txt_sil)) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) { Text("Vazgeç") }
+                TextButton(onClick = { showClearConfirm = false }) { Text(stringResource(R.string.txt_vazge)) }
             }
         )
     }

@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -57,7 +59,7 @@ fun MediaHubScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Medya merkezi", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_medya_merkezi), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
@@ -79,7 +81,7 @@ fun MediaHubScreen(
                 CircularProgressIndicator()
             }
             buckets.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Medya kategorisi bulunamadı")
+                Text(stringResource(R.string.txt_medya_kategorisi_bulunamad))
             }
             else -> LazyColumn(
                 Modifier.fillMaxSize().padding(padding).padding(16.dp),
@@ -91,7 +93,7 @@ fun MediaHubScreen(
                             Text(bucket.title, fontWeight = FontWeight.Bold)
                             Text(bucket.description, style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(6.dp))
-                            Text("${bucket.fileCount} dosya · ${formatBytes(bucket.totalBytes)}")
+                            Text(stringResource(R.string.txt_1_s_dosya_2_s_5, bucket.fileCount, formatBytes(bucket.totalBytes)))
                             Spacer(Modifier.height(8.dp))
                             if (bucket.samplePaths.isNotEmpty()) {
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -109,7 +111,7 @@ fun MediaHubScreen(
                                 Spacer(Modifier.height(8.dp))
                             }
                             TextButton(onClick = { pendingBucket = bucket }) {
-                                Text("Kategoriyi çöp kutusuna taşı")
+                                Text(stringResource(R.string.txt_kategoriyi_p_kutusuna_ta))
                             }
                         }
                     }
@@ -178,7 +180,7 @@ fun MediaHubScreen(
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
                     buckets = withContext(Dispatchers.IO) { repo.scanBuckets() }
-                    Toast.makeText(context, "$n öğe geri yüklendi", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -206,7 +208,7 @@ fun MediaCompressScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Medya sıkıştırma", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_medya_s_k_t_rma), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(
                         onClick = onNavigateBack,
@@ -233,7 +235,7 @@ fun MediaCompressScreen(
             else -> "Daha küçük dosya · görünür kayıp olabilir"
         }
         Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            Text("Kamera fotoğraflarını JPEG olarak sıkıştırır (orijinal silinmez; *_compressed.jpg).")
+            Text(stringResource(R.string.txt_kamera_foto_raflar_n_jpeg_olarak_s_k_t_r_r_o))
             Spacer(Modifier.height(12.dp))
             Text(
                 if (previewCount > 0)
@@ -244,7 +246,7 @@ fun MediaCompressScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(16.dp))
-            Text("Kalite: ${quality.toInt()} — $qualityHint")
+            Text(stringResource(R.string.txt_kalite_1_s_2_s, quality.toInt(), qualityHint))
             Slider(value = quality, onValueChange = { quality = it }, valueRange = 40f..90f)
             Spacer(Modifier.height(16.dp))
             Button(
@@ -264,7 +266,7 @@ fun MediaCompressScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
-            ) { Text(if (busy) "Sıkıştırılıyor…" else "İlk 30 kamerayı sıkıştır") }
+            ) { Text(if (busy) stringResource(R.string.msg_compress_running) else stringResource(R.string.msg_compress_first_30)) }
             resultText?.let {
                 Spacer(Modifier.height(12.dp))
                 Text(it, color = MaterialTheme.colorScheme.primary)

@@ -7,10 +7,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.makay.cleaner.data.CleaningStatsRepository
 import com.makay.cleaner.domain.model.CleaningStats
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class CleaningStatsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -25,13 +27,13 @@ class CleaningStatsViewModel(application: Application) : AndroidViewModel(applic
 
     fun loadStats() {
         viewModelScope.launch {
-            _uiState.value = repository.getStats()
+            _uiState.value = withContext(Dispatchers.IO) { repository.getStats() }
         }
     }
 
     fun clearHistory() {
         viewModelScope.launch {
-            repository.clearHistory()
+            withContext(Dispatchers.IO) { repository.clearHistory() }
             loadStats()
         }
     }

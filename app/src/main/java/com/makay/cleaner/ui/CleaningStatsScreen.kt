@@ -1,5 +1,9 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.app.Application
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -25,7 +29,7 @@ fun CleaningStatsScreen(
     onNavigateBack: () -> Unit,
     viewModel: CleaningStatsViewModel = viewModel(factory = CleaningStatsViewModel.Factory(application))
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val primaryColor = MaterialTheme.colorScheme.primary
 
     LaunchedEffect(Unit) {
@@ -35,7 +39,7 @@ fun CleaningStatsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("📊 İstatistikler", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_statistikler), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -83,7 +87,7 @@ fun CleaningStatsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Son Temizlik",
+                            text = stringResource(R.string.txt_son_temizlik),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -107,7 +111,7 @@ fun CleaningStatsScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "Temizlik Geçmişi",
+                                text = stringResource(R.string.txt_temizlik_ge_mi_i),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -141,7 +145,7 @@ fun CleaningStatsScreen(
                             
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Son 10 temizlik gösteriliyor",
+                                text = stringResource(R.string.txt_son_10_temizlik_g_steriliyor),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -158,13 +162,13 @@ fun CleaningStatsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Temizlik Geçmişi",
+                        text = stringResource(R.string.txt_temizlik_ge_mi_i),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     if (uiState.cleaningHistory.isNotEmpty()) {
                         TextButton(onClick = { viewModel.clearHistory() }) {
-                            Text("Temizle")
+                            Text(stringResource(R.string.txt_temizle_2))
                         }
                     }
                 }
@@ -190,13 +194,13 @@ fun CleaningStatsScreen(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Henüz temizlik yapılmadı",
+                                    text = stringResource(R.string.txt_hen_z_temizlik_yap_lmad),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Temizlik işlemleri burada görünecek",
+                                    text = stringResource(R.string.txt_temizlik_i_lemleri_burada_g_r_necek),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -280,7 +284,7 @@ fun CleaningHistoryItem(record: CleaningRecord) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "${record.filesDeleted} dosya silindi",
+                    text = stringResource(R.string.txt_1_s_dosya_silindi, record.filesDeleted),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

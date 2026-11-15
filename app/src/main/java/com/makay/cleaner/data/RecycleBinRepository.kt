@@ -17,6 +17,8 @@ import java.util.UUID
 /**
  * Soft-delete: dosyaları uygulama özel çöp kutusuna taşır (varsayılan 48 saat).
  * MediaStore content:// URI'leri de destekler.
+ *
+ * İndeks Room'da tutulur; eşzamanlı silmeler birbirinin kaydını ezmez.
  */
 class RecycleBinRepository(private val context: Context) {
 
@@ -29,26 +31,31 @@ class RecycleBinRepository(private val context: Context) {
         val deletedAt: Long,
         val category: String,
         val mediaStoreUri: String? = null,
-        val mimeType: String? = null
+        val mimeType: String? = null,
+        /** Orijinal albüm/klasör (MediaStore RELATIVE_PATH biçiminde). */
+        val relativePath: String? = null
     )
 
-    private val gson = Gson()
+    private val dao: TrashItemDao = RecycleBinDatabase.get(context).trashDao()
     private val prefs = context.getSharedPreferences("recycle_bin_index", Context.MODE_PRIVATE)
     private val trashRoot: File =
         File(context.filesDir, "recycle_bin").also { if (!it.exists()) it.mkdirs() }
 
-    companion object {
-        const val RETENTION_MS = 48L * 60 * 60 * 1000
+    /** Dosya işlemi + indeks yazımı tutarlı olsun diye süreç-içi kilit. */
+    private val binLock = Any()
+
+    init {
+        migrateLegacyIndexIfNeeded()
     }
 
     fun listItems(): List<TrashItem> {
         purgeExpired()
-        return loadIndex().sortedByDescending { it.deletedAt }
+        return dao.all().map { it.toModel() }
     }
 
-    fun getTotalSize(): Long = listItems().sumOf { it.sizeBytes }
+    fun getTotalSize(): Long = dao.all().sumOf { it.sizeBytes }
 
-    fun getCount(): Int = listItems().size
+    fun getCount(): Int = dao.count()
 
     fun moveToTrash(source: File, category: String = "Genel"): Boolean {
         if (!SystemFileGuard.canDelete(source)) {
@@ -62,6 +69,7 @@ class RecycleBinRepository(private val context: Context) {
             val size = source.length()
             val name = source.name
             val original = source.absolutePath
+            val relative = relativePathOf(original)
             val moved = source.renameTo(dest) || try {
                 source.copyTo(dest, overwrite = true)
                 if (dest.length() == size && source.delete()) true
@@ -90,7 +98,8 @@ class RecycleBinRepository(private val context: Context) {
                     displayName = name,
                     sizeBytes = size,
                     deletedAt = System.currentTimeMillis(),
-                    category = category
+                    category = category,
+                    relativePath = relative
                 )
             )
             true
@@ -144,41 +153,47 @@ class RecycleBinRepository(private val context: Context) {
                 dest.delete()
                 return false
             }
+            val resolvedMime = mimeType ?: context.contentResolver.getType(uri)
+            val relative = relativePathOf(uri)
+            val display = displayName.ifBlank { "media_$id" }
+            // Önce indekse yaz: delete(uri) başarılı olup indeks yazımı
+            // kaybolursa dosya hem orijinalden gitmiş hem izsiz kalırdı.
+            addIndex(
+                TrashItem(
+                    id = id,
+                    originalPath = uri.toString(),
+                    trashPath = dest.absolutePath,
+                    displayName = display,
+                    sizeBytes = size,
+                    deletedAt = System.currentTimeMillis(),
+                    category = category,
+                    mediaStoreUri = uri.toString(),
+                    mimeType = resolvedMime,
+                    relativePath = relative
+                )
+            )
             val deleted = try {
                 context.contentResolver.delete(uri, null, null) > 0
             } catch (_: Exception) {
                 false
             }
             if (!deleted) {
+                // Geri al: indeks + kopya temizlenir, orijinal yerinde kalır.
+                dao.deleteById(id)
                 if (dest.exists()) dest.delete()
                 return false
             }
-            addIndex(
-                TrashItem(
-                    id = id,
-                    originalPath = uri.toString(),
-                    trashPath = dest.absolutePath,
-                    displayName = displayName.ifBlank { "media_$id" },
-                    sizeBytes = size,
-                    deletedAt = System.currentTimeMillis(),
-                    category = category,
-                    mediaStoreUri = uri.toString(),
-                    mimeType = mimeType ?: context.contentResolver.getType(uri)
-                )
-            )
             true
         } catch (_: Exception) {
             false
         }
     }
 
-    fun restore(id: String): Boolean {
-        val index = loadIndex().toMutableList()
-        val item = index.find { it.id == id } ?: return false
+    fun restore(id: String): Boolean = synchronized(binLock) {
+        val item = dao.byId(id)?.toModel() ?: return false
         val trashFile = File(item.trashPath)
         if (!trashFile.exists()) {
-            index.removeAll { it.id == id }
-            saveIndex(index)
+            dao.deleteById(id)
             return false
         }
         return try {
@@ -195,12 +210,20 @@ class RecycleBinRepository(private val context: Context) {
                     trashFile.copyTo(target, overwrite = true)
                     trashFile.delete()
                 }
-                moved && target.exists() && target.length() == expectedLength
+                val restored = moved && target.exists() && target.length() == expectedLength
+                if (restored) {
+                    // Galeri/dosya yöneticisi yeni dosyayı hemen görsün.
+                    runCatching {
+                        android.media.MediaScannerConnection.scanFile(
+                            context, arrayOf(target.absolutePath), null, null
+                        )
+                    }
+                }
+                restored
             }
             if (ok) {
                 if (trashFile.exists()) trashFile.delete()
-                index.removeAll { it.id == id }
-                saveIndex(index)
+                dao.deleteById(id)
                 true
             } else false
         } catch (_: Exception) {
@@ -216,17 +239,16 @@ class RecycleBinRepository(private val context: Context) {
             else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         }
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "restored_${item.displayName}")
+            put(MediaStore.MediaColumns.DISPLAY_NAME, item.displayName)
             put(MediaStore.MediaColumns.MIME_TYPE, mime)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                    when {
-                        mime.startsWith("video") -> Environment.DIRECTORY_MOVIES + "/MakayRestored"
-                        mime.startsWith("audio") -> Environment.DIRECTORY_MUSIC + "/MakayRestored"
-                        else -> Environment.DIRECTORY_PICTURES + "/MakayRestored"
-                    }
-                )
+                // Orijinal albüm varsa oraya, yoksa güvenli varsayılan klasöre.
+                val relative = item.relativePath?.takeIf { it.isNotBlank() } ?: when {
+                    mime.startsWith("video") -> Environment.DIRECTORY_MOVIES + "/MakayRestored"
+                    mime.startsWith("audio") -> Environment.DIRECTORY_MUSIC + "/MakayRestored"
+                    else -> Environment.DIRECTORY_PICTURES + "/MakayRestored"
+                }
+                put(MediaStore.MediaColumns.RELATIVE_PATH, relative)
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
         }
@@ -238,7 +260,11 @@ class RecycleBinRepository(private val context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 values.clear()
                 values.put(MediaStore.MediaColumns.IS_PENDING, 0)
-                context.contentResolver.update(uri, values, null, null)
+                val updated = context.contentResolver.update(uri, values, null, null)
+                if (updated <= 0) {
+                    runCatching { context.contentResolver.delete(uri, null, null) }
+                    return false
+                }
             }
             true
         } catch (_: Exception) {
@@ -251,40 +277,39 @@ class RecycleBinRepository(private val context: Context) {
     }
 
     private fun guessMime(name: String): String {
-        val n = name.lowercase()
-        return when {
-            n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".webm") -> "video/mp4"
-            n.endsWith(".mp3") || n.endsWith(".m4a") -> "audio/mpeg"
-            n.endsWith(".png") -> "image/png"
-            n.endsWith(".webp") -> "image/webp"
-            else -> "image/jpeg"
-        }
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return android.webkit.MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(ext)
+            ?: when {
+                ext == "mkv" || ext == "webm" -> "video/x-matroska"
+                ext == "m4a" -> "audio/mp4"
+                else -> "image/jpeg"
+            }
     }
 
-    fun purgePermanently(id: String): Boolean {
-        val index = loadIndex().toMutableList()
-        val item = index.find { it.id == id } ?: return false
+    fun purgePermanently(id: String): Boolean = synchronized(binLock) {
+        val item = dao.byId(id) ?: return false
         val file = File(item.trashPath)
         if (file.exists() && !file.delete() && file.exists()) return false
-        index.removeAll { it.id == id }
-        saveIndex(index)
-        return true
+        dao.deleteById(id)
+        true
     }
 
-    fun emptyBin(): Pair<Long, Int> {
-        val index = loadIndex()
+    fun emptyBin(): Pair<Long, Int> = synchronized(binLock) {
         var saved = 0L
         var count = 0
-        val keep = mutableListOf<TrashItem>()
-        index.forEach { item ->
-            val file = File(item.trashPath)
-            if (!file.exists() || (file.delete() && !file.exists())) {
-                saved += item.sizeBytes
+        dao.all().forEach { entity ->
+            val file = File(entity.trashPath)
+            if (!file.exists()) {
+                // Zaten yok: kazanç sayma, indeksten düş.
+                dao.deleteById(entity.id)
+            } else if (file.delete() && !file.exists()) {
+                saved += entity.sizeBytes
                 count++
-            } else keep.add(item)
+                dao.deleteById(entity.id)
+            }
         }
-        saveIndex(keep)
-        return saved to count
+        saved to count
     }
 
     fun hoursRemaining(item: TrashItem, now: Long = System.currentTimeMillis()): Long {
@@ -297,59 +322,142 @@ class RecycleBinRepository(private val context: Context) {
 
     fun beginBatch() {
         lastBatchIds = emptyList()
+        prefs.edit().putString(KEY_LAST_BATCH, "").apply()
     }
 
-    fun canUndoLastBatch(): Boolean = lastBatchIds.isNotEmpty()
+    fun canUndoLastBatch(): Boolean =
+        lastBatchIds.isNotEmpty() ||
+            !prefs.getString(KEY_LAST_BATCH, "").isNullOrBlank()
 
-    fun undoLastBatch(): Pair<Int, Long> {
-        val ids = lastBatchIds
+    fun undoLastBatch(): Pair<Int, Long> = synchronized(binLock) {
+        val ids = if (lastBatchIds.isNotEmpty()) {
+            lastBatchIds
+        } else {
+            prefs.getString(KEY_LAST_BATCH, "").orEmpty()
+                .split(',')
+                .filter { it.isNotBlank() }
+        }
         lastBatchIds = emptyList()
+        prefs.edit().putString(KEY_LAST_BATCH, "").apply()
         var count = 0
         var bytes = 0L
         ids.forEach { id ->
-            val item = loadIndex().find { it.id == id } ?: return@forEach
+            val item = dao.byId(id) ?: return@forEach
             val size = item.sizeBytes
             if (restore(id)) {
                 count++
                 bytes += size
             }
         }
-        return count to bytes
+        count to bytes
     }
 
-    fun purgeExpired() {
+    fun purgeExpired() = synchronized(binLock) {
         val now = System.currentTimeMillis()
-        val index = loadIndex().toMutableList()
-        val keep = mutableListOf<TrashItem>()
-        index.forEach { item ->
-            if (now - item.deletedAt > RETENTION_MS) {
-                val file = File(item.trashPath)
-                if (file.exists() && !file.delete() && file.exists()) keep.add(item)
-            } else {
-                keep.add(item)
+        dao.expired(now - RETENTION_MS).forEach { entity ->
+            val file = File(entity.trashPath)
+            if (!file.exists() || (file.delete() && !file.exists())) {
+                dao.deleteById(entity.id)
             }
         }
-        if (keep.size != index.size) saveIndex(keep)
     }
 
-    private fun addIndex(item: TrashItem) {
-        val index = loadIndex().toMutableList()
-        index.add(item)
-        saveIndex(index)
-        lastBatchIds = lastBatchIds + item.id
-    }
-
-    private fun loadIndex(): List<TrashItem> {
-        val json = prefs.getString("items", null) ?: return emptyList()
-        return try {
-            val type = object : TypeToken<Array<TrashItem>>() {}.type
-            (gson.fromJson<Array<TrashItem>>(json, type) ?: emptyArray()).toList()
-        } catch (_: Exception) {
-            emptyList()
+    /**
+     * İndekste olmayan yetim çöp dosyalarını temizle.
+     * (Eski sürüm/yarış nedeniyle indeksten düşmüş dosyalar diski şişirmesin.)
+     */
+    fun reconcileOrphans(now: Long = System.currentTimeMillis()) {
+        val known = dao.allTrashPaths().toHashSet()
+        trashRoot.listFiles()?.forEach { f ->
+            if (!f.isFile) return@forEach
+            if (f.absolutePath in known) return@forEach
+            // Yeni oluşturulmuş olabilecek dosyaları yanlışlıkla silme.
+            if (now - f.lastModified() < 60L * 60L * 1000L) return@forEach
+            runCatching { f.delete() }
         }
     }
 
-    private fun saveIndex(items: List<TrashItem>) {
-        prefs.edit().putString("items", gson.toJson(items)).apply()
+    private fun addIndex(item: TrashItem) = synchronized(binLock) {
+        dao.insert(item.toEntity())
+        lastBatchIds = lastBatchIds + item.id
+        prefs.edit().putString(KEY_LAST_BATCH, lastBatchIds.joinToString(",")).apply()
+    }
+
+    /** Eski SharedPreferences JSON indeksini Room'a taşır (tek sefer). */
+    private fun migrateLegacyIndexIfNeeded() {
+        if (prefs.getBoolean(KEY_MIGRATED, false)) return
+        synchronized(binLock) {
+            if (prefs.getBoolean(KEY_MIGRATED, false)) return
+            val raw = prefs.getString("items", null)
+            if (!raw.isNullOrBlank() && dao.count() == 0) {
+                val parsed = runCatching {
+                    val type = object : TypeToken<Array<TrashItem?>>() {}.type
+                    Gson().fromJson<Array<TrashItem?>>(raw, type)?.filterNotNull().orEmpty()
+                }.getOrDefault(emptyList())
+                val valid = parsed.filter { it.id.isNotBlank() && it.trashPath.isNotBlank() }
+                if (valid.isNotEmpty()) {
+                    dao.insertAll(valid.map { it.toEntity() })
+                }
+            }
+            prefs.edit()
+                .putBoolean(KEY_MIGRATED, true)
+                .remove("items")
+                .apply()
+        }
+    }
+
+    private fun relativePathOf(absolutePath: String): String? {
+        val normalized = absolutePath.replace('\\', '/')
+        val root = Environment.getExternalStorageDirectory()?.absolutePath
+            ?.replace('\\', '/')?.trimEnd('/')
+        if (!root.isNullOrBlank() && normalized.startsWith("$root/")) {
+            val rel = normalized.removePrefix("$root/")
+            val dir = rel.substringBeforeLast('/', "")
+            if (dir.isNotBlank()) return "$dir/"
+        }
+        return null
+    }
+
+    private fun relativePathOf(uri: Uri): String? = runCatching {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@runCatching null
+        context.contentResolver.query(
+            uri,
+            arrayOf(MediaStore.MediaColumns.RELATIVE_PATH),
+            null, null, null
+        )?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    }.getOrNull()
+
+    private fun TrashItem.toEntity() = TrashItemEntity(
+        id = id,
+        originalPath = originalPath,
+        trashPath = trashPath,
+        displayName = displayName,
+        sizeBytes = sizeBytes,
+        deletedAt = deletedAt,
+        category = category,
+        mediaStoreUri = mediaStoreUri,
+        mimeType = mimeType,
+        relativePath = relativePath
+    )
+
+    private fun TrashItemEntity.toModel() = TrashItem(
+        id = id,
+        originalPath = originalPath,
+        trashPath = trashPath,
+        displayName = displayName,
+        sizeBytes = sizeBytes,
+        deletedAt = deletedAt,
+        category = category,
+        mediaStoreUri = mediaStoreUri,
+        mimeType = mimeType,
+        relativePath = relativePath
+    )
+
+    companion object {
+        const val RETENTION_MS = 48L * 60 * 60 * 1000
+        private const val KEY_LAST_BATCH = "last_batch_ids"
+        private const val KEY_MIGRATED = "room_migrated"
     }
 }

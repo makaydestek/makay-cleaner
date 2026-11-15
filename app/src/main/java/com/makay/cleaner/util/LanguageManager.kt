@@ -37,6 +37,14 @@ object LanguageManager {
             .putString(KEY, lang.name)
             .apply()
         _lang.value = lang
+        // Android 13+: sistem genelinde uygulama dilini uygula (resources çözümlemesi).
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            runCatching {
+                val localeManager = context.getSystemService(android.app.LocaleManager::class.java)
+                val tag = if (lang == Lang.EN) "en" else "tr"
+                localeManager?.applicationLocales = android.os.LocaleList.forLanguageTags(tag)
+            }
+        }
     }
 
     fun t(tr: String, en: String, context: Context? = null): String {

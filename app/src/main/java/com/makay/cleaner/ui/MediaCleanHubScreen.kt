@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -57,7 +59,7 @@ fun MediaCleanHubScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Medya temizliği", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_medya_temizli_i), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -75,7 +77,7 @@ fun MediaCleanHubScreen(
         ) {
             item {
                 Text(
-                    "Foto ve video araçları tek yerde. Yinelenen fotoğraflar aynı ekranda taranır; sistem dosyalarına dokunulmaz.",
+                    stringResource(R.string.txt_foto_ve_video_ara_lar_tek_yerde_yinelenen_fo),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -89,7 +91,7 @@ fun MediaCleanHubScreen(
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(item.title, fontWeight = FontWeight.Bold)
                             if (showProBadge && item.pro) {
-                                Text("Pro 🔒", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.txt_pro), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         Text(item.desc, style = MaterialTheme.typography.bodySmall)

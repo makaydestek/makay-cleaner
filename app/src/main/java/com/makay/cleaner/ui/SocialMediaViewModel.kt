@@ -63,6 +63,8 @@ class SocialMediaViewModel(application: Application) : AndroidViewModel(applicat
                     totalSize,
                     CleaningRecorder.METRIC_SOCIAL
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

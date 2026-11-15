@@ -55,6 +55,8 @@ class AppCacheViewModel(application: Application) : AndroidViewModel(application
                     files.sumOf { it.file.length() },
                     CleaningRecorder.METRIC_CACHE
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

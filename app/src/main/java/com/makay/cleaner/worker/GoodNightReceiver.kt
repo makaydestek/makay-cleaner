@@ -18,11 +18,20 @@ class GoodNightReceiver : BroadcastReceiver() {
         when (action) {
             ACTION_REMIND -> {
                 if (!repo.isEnabled()) return
-                NotificationManager(context).sendGoodNightReminder()
-                repo.scheduleNext()
+                try {
+                    NotificationManager(context).sendGoodNightReminder()
+                } catch (_: Exception) {
+                } finally {
+                    // Bildirim başarısız olsa bile bir sonraki alarm kurulmalı.
+                    repo.scheduleNext()
+                }
             }
             Intent.ACTION_BOOT_COMPLETED,
-            Intent.ACTION_MY_PACKAGE_REPLACED -> {
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            // Saat / saat dilimi değişince hedef saat kaymasın.
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            ACTION_EXACT_ALARM_PERMISSION_CHANGED -> {
                 if (repo.isEnabled()) repo.scheduleNext()
             }
         }
@@ -30,6 +39,8 @@ class GoodNightReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_REMIND = "com.makay.cleaner.GOOD_NIGHT_REMIND"
+        const val ACTION_EXACT_ALARM_PERMISSION_CHANGED =
+            "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"
 
         fun openWifiSettings(context: Context) {
             val actions = listOf(

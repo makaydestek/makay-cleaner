@@ -1,7 +1,9 @@
-﻿@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -63,16 +65,16 @@ internal fun ExcludeBucketsDialog(
                                 local = if (it) local + b.name else local - b.name
                             }
                         )
-                        Text("${b.name} (${b.count})")
+                        Text(stringResource(R.string.txt_1_s_2_s_2, b.name, b.count))
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(local) }) { Text("Kaydet") }
+            TextButton(onClick = { onConfirm(local) }) { Text(stringResource(R.string.txt_kaydet)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("İptal") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.txt_ptal)) }
         }
     )
 }
@@ -86,7 +88,7 @@ internal fun FormatFilterDialog(
     var local by remember { mutableStateOf(selected) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Dosya formatları") },
+        title = { Text(stringResource(R.string.txt_dosya_formatlar)) },
         text = {
             LazyColumn(Modifier.heightIn(max = 360.dp)) {
                 items(DuplicatePhotoPrefs.ALL_FORMAT_OPTIONS, key = { it.first }) { (ext, label) ->
@@ -108,7 +110,7 @@ internal fun FormatFilterDialog(
                                 local = if (it) local + ext else local - ext
                             }
                         )
-                        Text("$label (.$ext)")
+                        Text(stringResource(R.string.txt_1_s_2_s_3, label, ext))
                     }
                 }
             }
@@ -116,10 +118,10 @@ internal fun FormatFilterDialog(
         confirmButton = {
             TextButton(onClick = {
                 onConfirm(local.ifEmpty { DuplicatePhotoPrefs.DEFAULT_FORMATS })
-            }) { Text("Kaydet") }
+            }) { Text(stringResource(R.string.txt_kaydet)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("İptal") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.txt_ptal)) }
         }
     )
 }
@@ -133,11 +135,11 @@ internal fun SelectionAssistantDialog(
     var local by remember { mutableStateOf(rules) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Seçim asistanı") },
+        title = { Text(stringResource(R.string.txt_se_im_asistan)) },
         text = {
             Column {
                 Text(
-                    "Öncelik sırası (üstteki kural daha baskın). Tutulacak kopya buna göre seçilir.",
+                    stringResource(R.string.txt_ncelik_s_ras_stteki_kural_daha_bask_n_tutula),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -153,7 +155,7 @@ internal fun SelectionAssistantDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text("${index + 1}. ${rule.label}", fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.txt_1_s_2_s_4, index + 1, rule.label), fontWeight = FontWeight.SemiBold)
                                 Text(rule.detail, style = MaterialTheme.typography.labelSmall)
                             }
                             Column {
@@ -188,15 +190,15 @@ internal fun SelectionAssistantDialog(
                     }
                 }
                 TextButton(onClick = { local = SelectionAssistant.defaultOrder }) {
-                    Text("Varsayılana dön")
+                    Text(stringResource(R.string.txt_varsay_lana_d_n))
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(local) }) { Text("Uygula") }
+            TextButton(onClick = { onConfirm(local) }) { Text(stringResource(R.string.txt_uygula)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("İptal") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.txt_ptal)) }
         }
     )
 }
@@ -229,14 +231,14 @@ internal fun PhotoPreviewDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Kapat", color = Color.White)
+                        Text(stringResource(R.string.txt_kapat), color = Color.White)
                     }
                     Row {
                         if (group != null && group.photos.size > 1) {
                             val other = group.photos.firstOrNull { it.path != photo.path }
                             if (other != null) {
                                 TextButton(onClick = { onCompareWith(other) }) {
-                                    Text("Karşılaştır", color = Color.White)
+                                    Text(stringResource(R.string.txt_kar_la_t_r), color = Color.White)
                                 }
                             }
                         }
@@ -349,8 +351,8 @@ internal fun SideBySideCompareDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Yan yana karşılaştırma", color = Color.White, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = onDismiss) { Text("Kapat", color = Color.White) }
+                    Text(stringResource(R.string.txt_yan_yana_kar_la_t_rma), color = Color.White, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.txt_kapat), color = Color.White) }
                 }
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     ComparePane(

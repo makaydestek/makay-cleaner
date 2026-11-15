@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -61,14 +63,14 @@ fun SplashScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Makay Cleaner",
+                text = stringResource(R.string.txt_makay_cleaner),
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimary
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "v${com.makay.cleaner.BuildConfig.VERSION_NAME}",
+                text = stringResource(R.string.txt_v_1_s, com.makay.cleaner.BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
             )

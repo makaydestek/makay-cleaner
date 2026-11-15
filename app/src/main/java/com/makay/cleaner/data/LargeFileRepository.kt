@@ -154,21 +154,25 @@ class LargeFileRepository(private val context: Context) {
                 selectionArgs,
                 sortOrder
             )?.use { cursor ->
-                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
-                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
-                val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
-                val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
-                val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
-                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA)
+                val idColumn = cursor.getColumnIndex(MediaStore.MediaColumns._ID)
+                val nameColumn = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                val sizeColumn = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                val mimeColumn = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
+                val dateColumn = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED)
+                // DATA API 29+ bazı sağlayıcılarda dönmez; OrThrow tüm taramayı boşaltırdı.
+                val dataColumn = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                if (idColumn < 0 || nameColumn < 0 || sizeColumn < 0) return@use
 
                 while (cursor.moveToNext()) {
                     try {
                         val id = cursor.getLong(idColumn)
                         val name = cursor.getString(nameColumn) ?: "Bilinmeyen"
                         val size = cursor.getLong(sizeColumn)
-                        val mimeType = cursor.getString(mimeColumn) ?: "application/octet-stream"
-                        val dateAdded = cursor.getLong(dateColumn)
-                        val dataPath = cursor.getString(dataColumn)
+                        val mimeType = if (mimeColumn >= 0) {
+                            cursor.getString(mimeColumn) ?: "application/octet-stream"
+                        } else "application/octet-stream"
+                        val dateAdded = if (dateColumn >= 0) cursor.getLong(dateColumn) else 0L
+                        val dataPath = if (dataColumn >= 0) cursor.getString(dataColumn) else null
 
                         val filePath = if (dataPath != null) {
                             dataPath

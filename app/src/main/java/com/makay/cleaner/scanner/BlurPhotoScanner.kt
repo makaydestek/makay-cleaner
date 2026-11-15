@@ -45,13 +45,15 @@ object BlurPhotoScanner {
         } ?: return emptyList()
 
         cursor.use { c ->
-            val pathIdx = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
-            val sizeIdx = c.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
-            val nameIdx = c.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+            val pathIdx = c.getColumnIndex(MediaStore.Images.Media.DATA)
+            val sizeIdx = c.getColumnIndex(MediaStore.Images.Media.SIZE)
+            val nameIdx = c.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
+            if (pathIdx < 0 || sizeIdx < 0) return emptyList()
             var checked = 0
             while (c.moveToNext() && checked < MAX_SCAN && candidates.size < limit) {
                 val path = c.getString(pathIdx) ?: continue
                 if (SystemFileGuard.isProtectedPath(path)) continue
+                if (!com.makay.cleaner.util.FilePurger.canRemove(context, java.io.File(path))) continue
                 val size = c.getLong(sizeIdx)
                 if (size < 20_000L) continue
                 checked++
@@ -61,7 +63,9 @@ object BlurPhotoScanner {
                         path = path,
                         sizeBytes = size,
                         blurScore = score,
-                        displayName = c.getString(nameIdx) ?: path.substringAfterLast('/')
+                        displayName = if (nameIdx >= 0) {
+                            c.getString(nameIdx) ?: path.substringAfterLast('/')
+                        } else path.substringAfterLast('/')
                     )
                 }
             }
@@ -79,14 +83,18 @@ object BlurPhotoScanner {
             while (maxDim / sample > DECODE_MAX) sample *= 2
             val opts = BitmapFactory.Options().apply {
                 inSampleSize = sample
-                inPreferredConfig = Bitmap.Config.ARGB_8888
+                // Gri tonlama için RGB_565 yeterli ve bellekte yarı yer kaplar.
+                inPreferredConfig = Bitmap.Config.RGB_565
             }
             val bmp = BitmapFactory.decodeFile(path, opts) ?: return null
-            val gray = IntArray(bmp.width * bmp.height)
-            bmp.getPixels(gray, 0, bmp.width, 0, 0, bmp.width, bmp.height)
             val w = bmp.width
             val h = bmp.height
-            bmp.recycle()
+            val gray = IntArray(w * h)
+            try {
+                bmp.getPixels(gray, 0, w, 0, 0, w, h)
+            } finally {
+                if (!bmp.isRecycled) bmp.recycle()
+            }
             if (w < 3 || h < 3) return null
 
             var sum = 0.0

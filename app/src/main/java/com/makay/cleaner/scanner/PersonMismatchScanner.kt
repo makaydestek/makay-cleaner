@@ -270,7 +270,12 @@ class PersonMismatchScanner(private val context: Context) {
 
     private fun detectFaces(bitmap: Bitmap): List<Face> {
         val image = InputImage.fromBitmap(bitmap, 0)
-        return Tasks.await(detector.process(image))
+        return try {
+            // Timeout: ML Kit yanıt vermezse tarama süresiz bloke olmasın.
+            Tasks.await(detector.process(image), 10, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     private fun decodeBitmap(uri: Uri?, path: String?): Bitmap? {

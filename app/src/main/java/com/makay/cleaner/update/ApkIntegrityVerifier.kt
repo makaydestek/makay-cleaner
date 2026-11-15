@@ -65,6 +65,16 @@ class ApkIntegrityVerifier(context: Context) {
             )
         }
 
+        // APK versionCode kurulu sürümden büyük olmalı; aksi halde Android
+        // INSTALL_FAILED_VERSION_DOWNGRADE verir ve her açılışta döngü oluşur.
+        val archiveCode = archiveLongVersionCode(archiveInfo)
+        val installedCode = installedLongVersionCode()
+        if (archiveCode > 0 && installedCode > 0 && archiveCode <= installedCode) {
+            return Result.Failed(
+                "İndirilen APK sürümü (versionCode=$archiveCode) kurulu sürümden yeni değil; kurulum iptal."
+            )
+        }
+
         val installedDigests = installedSigningDigests()
         if (installedDigests.isEmpty()) {
             return Result.Failed("Yüklü uygulamanın imzası okunamadı.")
@@ -167,14 +177,40 @@ class ApkIntegrityVerifier(context: Context) {
         signingInfo: android.content.pm.SigningInfo?
     ): Set<String> {
         if (signingInfo == null) return emptySet()
-        val certs = if (signingInfo.hasMultipleSigners()) {
-            signingInfo.apkContentsSigners
-        } else {
-            signingInfo.signingCertificateHistory
-        }
+        // Yalnızca GÜNCEL imzalayan sertifikalar. signingCertificateHistory
+        // rotation'daki eski anahtarı da içerir; eski anahtar sızarsa
+        // "imza doğrulandı" diyerek kuruluma izin vermemeli.
+        val certs = signingInfo.apkContentsSigners
         return certs?.mapNotNull { sig ->
             runCatching { sha256Hex(sig.toByteArray()) }.getOrNull()
         }?.toSet().orEmpty()
+    }
+
+    private fun archiveLongVersionCode(info: android.content.pm.PackageInfo): Long {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
+        }
+    }
+
+    private fun installedLongVersionCode(): Long {
+        return try {
+            val pm = appContext.packageManager
+            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageInfo(
+                    appContext.packageName,
+                    PackageManager.PackageInfoFlags.of(0)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(appContext.packageName, 0)
+            }
+            archiveLongVersionCode(info)
+        } catch (_: Exception) {
+            0L
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -226,7 +262,13 @@ class ApkIntegrityVerifier(context: Context) {
                 }
                 "objects.githubusercontent.com",
                 "release-assets.githubusercontent.com",
-                "github-releases.githubusercontent.com" -> true
+                "github-releases.githubusercontent.com" -> {
+                    // GitHub asset CDN URL'lerinde depo adı yol içinde yer
+                    // almaz. Bu host'lar yalnızca github.com'dan başlayan ve
+                    // her adımı doğrulanan yönlendirme zincirinde kullanılır
+                    // (bkz. AppUpdateRepository.openTrustedConnection).
+                    true
+                }
                 else -> false
             }
         }

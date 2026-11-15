@@ -1,5 +1,7 @@
 package com.makay.cleaner.util
 
+import com.makay.cleaner.R
+
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
@@ -61,12 +63,12 @@ object ResourceUsageHelper {
             .toList()
     }
 
-    fun formatDuration(ms: Long): String {
+    fun formatDuration(ms: Long, context: Context): String {
         val min = ms / 60_000
         return when {
-            min < 1 -> "<1 dk"
-            min < 60 -> "$min dk"
-            else -> "${min / 60} sa ${min % 60} dk"
+            min < 1 -> context.getString(R.string.time_less_than_minute)
+            min < 60 -> context.getString(R.string.time_minutes, min)
+            else -> context.getString(R.string.time_hours_minutes, min / 60, min % 60)
         }
     }
 

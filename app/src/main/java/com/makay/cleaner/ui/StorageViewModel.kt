@@ -69,6 +69,8 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
                     cats.sumOf { it.sizeBytes },
                     com.makay.cleaner.data.CleaningRecorder.METRIC_STORAGE
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

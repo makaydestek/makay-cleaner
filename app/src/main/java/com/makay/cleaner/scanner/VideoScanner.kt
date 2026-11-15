@@ -1,5 +1,7 @@
 package com.makay.cleaner.scanner
 
+import com.makay.cleaner.R
+
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
@@ -115,9 +117,9 @@ object VideoArchiveHelper {
     ): Boolean {
         val archived = copyToArchive(context, item) ?: return false
         val ok = if (!item.path.isNullOrBlank()) {
-            trash.movePathToTrash(item.path, "Video arşiv")
+            trash.movePathToTrash(item.path, context.getString(R.string.record_video_archive))
         } else {
-            trash.moveUriToTrash(item.uri, item.displayName, item.sizeBytes, "Video arşiv")
+            trash.moveUriToTrash(item.uri, item.displayName, item.sizeBytes, context.getString(R.string.record_video_archive))
         }
         if (!ok) {
             archived.delete()

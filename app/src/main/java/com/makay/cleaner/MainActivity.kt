@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,23 +14,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.lifecycleScope
 import com.makay.cleaner.data.ThemeRepository
 import com.makay.cleaner.ui.AppWithSplash
-import com.makay.cleaner.ui.formatBytes
 import com.makay.cleaner.ui.theme.MakayCleanerTheme
 import com.makay.cleaner.update.AppUpdateHost
 import com.makay.cleaner.update.AppUpdateRepository
-import com.makay.cleaner.util.QuickCleanHelper
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
 
 class MainActivity : FragmentActivity() {
@@ -85,12 +79,14 @@ class MainActivity : FragmentActivity() {
                         val promptToken by _updatePromptToken
                         val fromNotif by _updateFromNotification
                         val autoDl by _updateAutoDownload
+                        val locked by com.makay.cleaner.util.AppLockState.locked.collectAsState()
                         Box(Modifier.fillMaxSize()) {
                             AppWithSplash()
                             AppUpdateHost(
                                 openFromNotification = fromNotif,
                                 autoDownload = autoDl,
-                                promptToken = promptToken
+                                promptToken = promptToken,
+                                blocked = locked
                             )
                         }
                     }
@@ -98,7 +94,6 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        handleWidgetIntent(intent)
         handleDeepLink(intent)
     }
 
@@ -106,7 +101,6 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeUpdateIntent(intent)
-        handleWidgetIntent(intent)
         handleDeepLink(intent)
     }
 
@@ -129,17 +123,16 @@ class MainActivity : FragmentActivity() {
 
     fun requestStoragePermission() {
         if (com.makay.cleaner.util.PermissionHelper.hasStoragePermission(this)) return
+        val body = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getString(R.string.storage_permission_body_all_files)
+        } else {
+            getString(R.string.storage_permission_body_legacy)
+        }
         android.app.AlertDialog.Builder(this)
-            .setTitle("Depolama erişimi gerekli")
-            .setMessage(
-                "Makay Cleaner, cihazdaki gereksiz dosyaları taramak ve yalnızca seçtiğiniz öğeleri temizlemek için depolama erişimi ister. " +
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-                        "Android 11 ve üzeri cihazlarda bu izin, paylaşılan depolamadaki dosyaları yönetme erişimidir. İzni bir sonraki sistem ekranında açabilirsiniz."
-                    else
-                        "İzin verilmezse depolama taraması ve temizliği çalışmaz."
-            )
-            .setNegativeButton("Şimdi değil", null)
-            .setPositiveButton("Devam et") { _, _ -> openStorageAccessSettings() }
+            .setTitle(R.string.storage_permission_title)
+            .setMessage(body)
+            .setNegativeButton(R.string.storage_permission_negative, null)
+            .setPositiveButton(R.string.storage_permission_positive) { _, _ -> openStorageAccessSettings() }
             .show()
     }
 
@@ -162,6 +155,20 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         checkStoragePermission()
+        applySecureFlagIfLocked()
+    }
+
+    /**
+     * Kilit etkinken ekran görüntüsü / kayıt / son uygulamalar önizlemesini engelle.
+     * PIN ekranı ve taranan dosya adları hassas kabul edilir.
+     */
+    private fun applySecureFlagIfLocked() {
+        val lockEnabled = com.makay.cleaner.security.AppLockManager(this).isAnyLockEnabled()
+        if (lockEnabled) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
 
     private fun handleDeepLink(intent: Intent?) {
@@ -173,23 +180,5 @@ class MainActivity : FragmentActivity() {
         super.onDestroy()
         @Suppress("DEPRECATION")
         instance = null
-    }
-
-    private fun handleWidgetIntent(intent: Intent?) {
-        if (intent?.action == ACTION_QUICK_CLEAN || intent?.getBooleanExtra("quick_clean", false) == true) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                val result = QuickCleanHelper.cleanAppCaches(this@MainActivity)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        if (result.filesDeleted > 0)
-                            "Hızlı temizlik: ${formatBytes(result.spaceSaved)}"
-                        else
-                            "Temizlenecek dosya yok",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-        }
     }
 }

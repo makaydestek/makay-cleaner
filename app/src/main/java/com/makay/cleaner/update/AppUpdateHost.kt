@@ -1,5 +1,7 @@
 package com.makay.cleaner.update
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.app.Activity
 import android.app.Application
 import android.content.Context
@@ -18,8 +20,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -42,7 +44,8 @@ fun Context.findActivity(): Activity? {
 fun AppUpdateHost(
     openFromNotification: Boolean = false,
     autoDownload: Boolean = false,
-    promptToken: Long = 0L
+    promptToken: Long = 0L,
+    blocked: Boolean = false
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as Application
@@ -52,14 +55,16 @@ fun AppUpdateHost(
     } else {
         viewModel(factory = AppUpdateViewModel.Factory(app))
     }
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val activity = context.findActivity()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val needsInstallPermission = rememberUpdatedState(state.needsInstallPermission)
 
     LaunchedEffect(Unit) {
         viewModel.checkOnLaunch()
     }
-    LaunchedEffect(promptToken, openFromNotification, autoDownload) {
+    LaunchedEffect(promptToken, openFromNotification, autoDownload, blocked) {
+        if (blocked) return@LaunchedEffect
         if (promptToken == 0L && !openFromNotification && !autoDownload) return@LaunchedEffect
         viewModel.handleNotificationOpen(autoDownload = autoDownload, activity = activity)
     }
@@ -67,7 +72,8 @@ fun AppUpdateHost(
     DisposableEffect(lifecycleOwner, activity) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME &&
-                state.needsInstallPermission &&
+                needsInstallPermission.value &&
+                !blocked &&
                 activity != null
             ) {
                 viewModel.retryInstallAfterPermission(activity)
@@ -76,6 +82,9 @@ fun AppUpdateHost(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
+    // Kilitliyken güncelleme diyaloğu/kurulumu gösterilmez.
+    if (blocked) return
 
     if (state.dialogVisible && state.available != null) {
         val update = state.available!!

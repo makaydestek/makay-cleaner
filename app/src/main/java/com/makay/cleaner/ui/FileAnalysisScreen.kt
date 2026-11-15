@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
@@ -11,6 +13,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -50,76 +54,40 @@ fun FileAnalysisScreen(
     onOpenMediaClean: () -> Unit = {},
     onOpenApk: () -> Unit = {}
 ) {
-    val scanner = remember { FileAnalysisScanner(application) }
     val trash = remember { RecycleBinRepository(application) }
-    var report by remember { mutableStateOf<FileAnalysisScanner.AnalysisReport?>(null) }
-    var loading by remember { mutableStateOf(false) }
-    var progressText by remember { mutableStateOf("Hazırlanıyor…") }
-    var progressCurrent by remember { mutableIntStateOf(0) }
-    var progressTotal by remember { mutableIntStateOf(6) }
-    var tab by remember { mutableIntStateOf(0) }
-    var selectedEmpty by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var confirmEmpty by remember { mutableStateOf(false) }
+    val vm: FileAnalysisViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = FileAnalysisViewModel.Factory(application)
+    )
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    val report = state.report
+    val loading = state.loading
+    val progressText = state.progressText
+    val progressCurrent = state.progressCurrent
+    val progressTotal = state.progressTotal
+
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedEmpty by rememberSaveable(stateSaver = stringSetSaver) {
+        mutableStateOf<Set<String>>(emptySet())
+    }
+    var confirmEmpty by rememberSaveable { mutableStateOf(false) }
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val hasPermission = rememberStoragePermissionState()
-    val cancelFlag = remember { AtomicBoolean(false) }
-    var scanJob by remember { mutableStateOf<Job?>(null) }
     val widthClass = rememberWidthClass()
 
     fun runAnalysis() {
         if (!hasPermission) return
-        scanJob?.cancel()
-        cancelFlag.set(false)
-        scanJob = scope.launch {
-            loading = true
-            progressText = "Analiz başlıyor…"
-            progressCurrent = 0
-            progressTotal = 6
-            SystemFileGuard.consumeSkippedCount()
-            val main = Handler(Looper.getMainLooper())
-            val listener = FileAnalysisScanner.ProgressListener { phase, cur, tot ->
-                main.post {
-                    progressText = phase
-                    progressCurrent = cur
-                    progressTotal = tot.coerceAtLeast(1)
-                }
-            }
-            val result = withContext(Dispatchers.IO) {
-                scanner.analyze(cancelFlag, listener)
-            }
-            report = result
-            selectedEmpty = emptySet()
-            loading = false
-            if (!result.cancelled) {
-                CleaningRecorder.recordScan(
-                    application,
-                    "Dosya Analizi",
-                    result.scannedFileEstimate,
-                    result.types.sumOf { it.sizeBytes },
-                    CleaningRecorder.METRIC_STORAGE
-                )
-            }
-        }
+        vm.runAnalysis()
     }
 
     fun cancelAnalysis() {
-        cancelFlag.set(true)
-        scanJob?.cancel()
-        loading = false
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            cancelFlag.set(true)
-            scanJob?.cancel()
-        }
+        vm.cancel()
     }
 
     LaunchedEffect(hasPermission) {
-        if (hasPermission && report == null && !loading) runAnalysis()
+        if (hasPermission && state.report == null && !state.loading) vm.runAnalysis()
     }
 
     val fraction = (progressCurrent.toFloat() / progressTotal.toFloat()).coerceIn(0f, 1f)
@@ -129,11 +97,11 @@ fun FileAnalysisScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Dosya analizi", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.txt_dosya_analizi), fontWeight = FontWeight.Bold)
                         report?.let { r ->
                             if (!loading) {
                                 Text(
-                                    "${r.storage.usedFormatted} kullanılıyor · ${r.scannedFileEstimate} dosya",
+                                    stringResource(R.string.txt_1_s_kullan_l_yor_2_s_dosya, r.storage.usedFormatted, r.scannedFileEstimate),
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -147,12 +115,12 @@ fun FileAnalysisScreen(
                 },
                 actions = {
                     if (loading) {
-                        TextButton(onClick = { cancelAnalysis() }) { Text("İptal") }
+                        TextButton(onClick = { cancelAnalysis() }) { Text(stringResource(R.string.txt_ptal)) }
                     } else {
                         TextButton(onClick = {
                             if (hasPermission) runAnalysis()
                             else PermissionHelper.requestStoragePermission(context)
-                        }) { Text("Yenile") }
+                        }) { Text(stringResource(R.string.txt_yenile)) }
                     }
                 }
             )
@@ -168,13 +136,13 @@ fun FileAnalysisScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("${selectedEmpty.size} boş klasör", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.txt_1_s_bo_klas_r, selectedEmpty.size), fontWeight = FontWeight.Bold)
                         Button(
                             onClick = { confirmEmpty = true },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.error
                             )
-                        ) { Text("Çöp kutusuna taşı") }
+                        ) { Text(stringResource(R.string.txt_p_kutusuna_ta)) }
                     }
                 }
             }
@@ -204,7 +172,7 @@ fun FileAnalysisScreen(
                         Spacer(Modifier.height(12.dp))
                         Text(progressText, fontWeight = FontWeight.Medium)
                         Text(
-                            "${(fraction * 100).toInt()}%",
+                            stringResource(R.string.txt_1_s_3, (fraction * 100).toInt()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -214,7 +182,7 @@ fun FileAnalysisScreen(
                             modifier = Modifier.fillMaxWidth(0.85f)
                         )
                         Text(
-                            "Sistem ve korumalı klasörler atlanır.",
+                            stringResource(R.string.txt_sistem_ve_korumal_klas_rler_atlan_r),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 16.dp)
@@ -224,9 +192,9 @@ fun FileAnalysisScreen(
 
                 report == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Analiz henüz çalıştırılmadı")
+                        Text(stringResource(R.string.txt_analiz_hen_z_al_t_r_lmad))
                         Spacer(Modifier.height(12.dp))
-                        Button(onClick = { runAnalysis() }) { Text("Analiz et") }
+                        Button(onClick = { runAnalysis() }) { Text(stringResource(R.string.txt_analiz_et)) }
                     }
                 }
 
@@ -235,11 +203,11 @@ fun FileAnalysisScreen(
                     Column(contentMod.fillMaxSize()) {
                         AnalysisSummaryHeader(r)
                         TabRow(selectedTabIndex = tab) {
-                            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Türler") })
-                            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Klasörler") })
-                            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Büyük") })
-                            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Son") })
-                            Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text("Boş") })
+                            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.txt_t_rler)) })
+                            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.txt_klas_rler)) })
+                            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(stringResource(R.string.txt_b_y_k)) })
+                            Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text(stringResource(R.string.txt_son)) })
+                            Tab(selected = tab == 4, onClick = { tab = 4 }, text = { Text(stringResource(R.string.txt_bo)) })
                         }
                         when (tab) {
                             0 -> TypesTab(
@@ -330,7 +298,7 @@ fun FileAnalysisScreen(
             onUndo = {
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
-                    Toast.makeText(context, "$n öğe geri yüklendi", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
                     runAnalysis()
                 }
             }
@@ -357,23 +325,23 @@ private fun AnalysisSummaryHeader(r: FileAnalysisScanner.AnalysisReport) {
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    "${r.storage.usedFormatted} / ${r.storage.totalFormatted}",
+                    stringResource(R.string.txt_1_s_2_s_8, r.storage.usedFormatted, r.storage.totalFormatted),
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Boş: ${r.storage.freeFormatted} · %${r.storage.usagePercent.toInt()}",
+                    stringResource(R.string.txt_bo_1_s_2_s, r.storage.freeFormatted, r.storage.usagePercent.toInt()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (r.cancelled) {
                     Text(
-                        "Tarama erken durdu; sonuçlar kısmi olabilir.",
+                        stringResource(R.string.txt_tarama_erken_durdu_sonu_lar_k_smi_olabilir),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
                 Text(
-                    "Analiz yereldir; dosyalarınız sunucuya gönderilmez.",
+                    stringResource(R.string.txt_analiz_yereldir_dosyalar_n_z_sunucuya_g_nder),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -397,21 +365,21 @@ private fun TypesTab(
     ) {
         item {
             Text(
-                "Hızlı işlemler",
+                stringResource(R.string.txt_h_zl_i_lemler),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = onDupPhotos, label = { Text("Yinelenen foto") })
-                AssistChip(onClick = onDuplicates, label = { Text("Yinelenen dosya") })
-                AssistChip(onClick = onLarge, label = { Text("Büyük dosya") })
+                AssistChip(onClick = onDupPhotos, label = { Text(stringResource(R.string.txt_yinelenen_foto)) })
+                AssistChip(onClick = onDuplicates, label = { Text(stringResource(R.string.txt_yinelenen_dosya)) })
+                AssistChip(onClick = onLarge, label = { Text(stringResource(R.string.txt_b_y_k_dosya)) })
             }
         }
         if (types.isEmpty()) {
             item {
                 Text(
-                    "Tür verisi yok",
+                    stringResource(R.string.txt_t_r_verisi_yok),
                     modifier = Modifier.padding(24.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -440,7 +408,7 @@ private fun TypesTab(
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "${t.fileCount} dosya · %$pct",
+                        stringResource(R.string.txt_1_s_dosya_2_s_3, t.fileCount, pct),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -466,7 +434,7 @@ private fun FoldersTab(folders: List<FileAnalysisScanner.FolderStat>) {
     ) {
         if (folders.isEmpty()) {
             item {
-                Text("Klasör özeti bulunamadı", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.txt_klas_r_zeti_bulunamad), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         items(folders, key = { it.name }) { f ->
@@ -481,7 +449,7 @@ private fun FoldersTab(folders: List<FileAnalysisScanner.FolderStat>) {
                     Column(Modifier.weight(1f)) {
                         Text(f.name, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         Text(
-                            "${f.fileCount} dosya",
+                            stringResource(R.string.txt_1_s_dosya, f.fileCount),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -511,7 +479,7 @@ private fun FilesTab(
                 Column(Modifier.padding(14.dp)) {
                     Text(f.displayName, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        "${formatBytes(f.sizeBytes)} · ${f.categoryId}",
+                        stringResource(R.string.txt_1_s_2_s_9, formatBytes(f.sizeBytes), f.categoryId),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -543,19 +511,19 @@ private fun EmptyFoldersTab(
     ) {
         item {
             Text(
-                "Yalnızca kullanıcı alanındaki boş klasörler listelenir. Sistem klasörleri korunur.",
+                stringResource(R.string.txt_yaln_zca_kullan_c_alan_ndaki_bo_klas_rler_li),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row {
-                TextButton(onClick = onSelectAll) { Text("Tümünü seç") }
-                TextButton(onClick = onClear) { Text("Temizle") }
+                TextButton(onClick = onSelectAll) { Text(stringResource(R.string.txt_t_m_n_se_2)) }
+                TextButton(onClick = onClear) { Text(stringResource(R.string.txt_temizle_2)) }
             }
         }
         if (paths.isEmpty()) {
             item {
                 Text(
-                    "Boş klasör bulunamadı",
+                    stringResource(R.string.txt_bo_klas_r_bulunamad),
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -71,25 +71,9 @@ object MediaStoreSync {
                 } catch (_: Exception) {
                 }
             }
-            // DISPLAY_NAME + RELATIVE_PATH fallback (Q+)
-            if (!removed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val file = File(path)
-                val name = file.name
-                val relative = guessRelativePath(file)
-                if (relative != null) {
-                    for (collection in collections) {
-                        try {
-                            val n = cr.delete(
-                                collection,
-                                "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
-                                arrayOf(name, relative)
-                            )
-                            if (n > 0) removed = true
-                        } catch (_: Exception) {
-                        }
-                    }
-                }
-            }
+            // DISPLAY_NAME + RELATIVE_PATH fallback KALDIRILDI: aynı klasörde aynı
+            // ada sahip BAŞKA bir medyanın kaydını silebiliyordu. Yol eşleşmezse
+            // yalnızca scanFile ile indeks tazelenir.
             removed
         } catch (_: Exception) {
             false

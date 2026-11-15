@@ -1,5 +1,9 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,7 +23,7 @@ fun PermissionScreen(
     onPermissionsDenied: () -> Unit,
     viewModel: PermissionViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -39,9 +43,23 @@ fun PermissionScreen(
         viewModel.checkPermissions()
     }
 
+    // Android 13+ galeri okuma izni. Verilmese bile uygulama açılır; yalnızca
+    // medya taramaları sınırlı çalışır.
+    val mediaLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        onPermissionsGranted()
+    }
+
     if (uiState.isGranted) {
         LaunchedEffect(Unit) {
-            onPermissionsGranted()
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                !com.makay.cleaner.util.PermissionHelper.hasMediaPermission(context)
+            ) {
+                mediaLauncher.launch(com.makay.cleaner.util.PermissionHelper.mediaPermissionRequest())
+            } else {
+                onPermissionsGranted()
+            }
         }
         return
     }
@@ -91,7 +109,7 @@ fun PermissionScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
-                Text("Depolama iznini aç", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.txt_depolama_iznini_a), style = MaterialTheme.typography.titleMedium)
             }
         } else {
             Button(
@@ -106,19 +124,19 @@ fun PermissionScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
-                Text("İzin ver ve devam et", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.txt_zin_ver_ve_devam_et), style = MaterialTheme.typography.titleMedium)
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
         TextButton(onClick = onPermissionsDenied) {
-            Text("Şimdi değil")
+            Text(stringResource(R.string.txt_imdi_de_il))
         }
 
         if (uiState.showRationale && !uiState.needsAllFilesAccess) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "İzin verilmeden temizlik işlemi yapılamaz.",
+                text = stringResource(R.string.txt_zin_verilmeden_temizlik_i_lemi_yap_lamaz),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Environment
 import android.os.StatFs
+import com.makay.cleaner.R
 import com.makay.cleaner.data.AnalyticsRepository
 import java.io.File
 
@@ -25,6 +26,8 @@ class SmartSuggestions(private val context: Context) {
     enum class Priority { LOW, MEDIUM, HIGH, URGENT }
     enum class Category { STORAGE, CACHE, LARGE_FILES, UNUSED_APPS, SOCIAL_MEDIA, DUPLICATE_MEDIA }
 
+    private fun str(id: Int, vararg args: Any): String =
+        if (args.isEmpty()) context.getString(id) else context.getString(id, *args)
     fun generateSuggestions(): List<Suggestion> {
         val suggestions = mutableListOf<Suggestion>()
         val stats = analyticsRepo.getTotalStats()
@@ -40,8 +43,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "urgent_storage",
-                    title = "Acil: Depolama dolmak üzere",
-                    description = "Depolama alanınızın %${storageInfo.usagePercent.toInt()}’i dolu. Önce hafif önbellek temizliği deneyin.",
+                    title = str(R.string.suggestion_urgent_title),
+                    description = str(R.string.suggestion_urgent_desc, storageInfo.usagePercent.toInt()),
                     priority = Priority.URGENT,
                     category = Category.STORAGE,
                     estimatedSpaceSavings = storageInfo.usedBytes / 10
@@ -51,8 +54,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "high_storage",
-                    title = "Depolama alanı azalıyor",
-                    description = "Depolama %${storageInfo.usagePercent.toInt()} dolu. Gereksiz dosyaları temizleyebilirsiniz.",
+                    title = str(R.string.suggestion_high_title),
+                    description = str(R.string.suggestion_high_desc, storageInfo.usagePercent.toInt()),
                     priority = Priority.HIGH,
                     category = Category.STORAGE,
                     estimatedSpaceSavings = storageInfo.usedBytes / 20
@@ -71,11 +74,11 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "cleaning_reminder",
-                    title = "Temizlik zamanı",
+                    title = str(R.string.suggestion_time_title),
                     description = if (daysSinceLastClean >= 999) {
-                        "Henüz temizlik kaydı yok. Sadece önbellek temizliği ile yer açabilirsiniz."
+                        str(R.string.suggestion_time_none)
                     } else {
-                        "Son temizliğin üzerinden $daysSinceLastClean gün geçti."
+                        str(R.string.suggestion_time_days, daysSinceLastClean)
                     },
                     priority = if (daysSinceLastClean > 14) Priority.HIGH else Priority.MEDIUM,
                     category = Category.CACHE
@@ -87,8 +90,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "cache_cleanup",
-                    title = "Önbellek temizliği",
-                    description = "${formatBytes(cacheSize)} önbellek bulundu. Tek dokunuşla hafif temizlik yapın.",
+                    title = str(R.string.suggestion_cache_title),
+                    description = str(R.string.suggestion_cache_desc, formatBytes(cacheSize)),
                     priority = Priority.MEDIUM,
                     category = Category.CACHE,
                     estimatedSpaceSavings = cacheSize
@@ -100,8 +103,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "large_files",
-                    title = "Büyük dosyalar",
-                    description = "$largeFiles adet büyük dosya tespit edildi. Listeyi açıp gereksizleri seçin.",
+                    title = str(R.string.suggestion_large_title),
+                    description = str(R.string.suggestion_large_desc, largeFiles),
                     priority = Priority.MEDIUM,
                     category = Category.LARGE_FILES
                 )
@@ -113,8 +116,12 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "social_media",
-                    title = "Sosyal medya temizliği",
-                    description = "${formatBytes(socialMediaSize)} sosyal medya dosyası var (eşik: ${socialPrefs.getAutoCleanThresholdMb()} MB).",
+                    title = str(R.string.suggestion_social_title),
+                    description = str(
+                        R.string.suggestion_social_desc,
+                        formatBytes(socialMediaSize),
+                        socialPrefs.getAutoCleanThresholdMb()
+                    ),
                     priority = Priority.LOW,
                     category = Category.SOCIAL_MEDIA,
                     estimatedSpaceSavings = socialMediaSize / 2
@@ -126,8 +133,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "wa_dup_videos",
-                    title = "WhatsApp mükerrer videolar",
-                    description = "Aynı videoların kopyalarını tarayıp yer açabilirsiniz.",
+                    title = str(R.string.suggestion_wa_title),
+                    description = str(R.string.suggestion_wa_desc),
                     priority = Priority.MEDIUM,
                     category = Category.DUPLICATE_MEDIA
                 )
@@ -138,8 +145,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "unused_apps",
-                    title = "Kullanılmayan uygulamalar",
-                    description = "$unusedApps uygulama uzun süredir kullanılmıyor olabilir. Toplu kaldırmayı inceleyin.",
+                    title = str(R.string.suggestion_unused_title),
+                    description = str(R.string.suggestion_unused_desc, unusedApps),
                     priority = Priority.LOW,
                     category = Category.UNUSED_APPS
                 )
@@ -151,8 +158,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "routine_scan",
-                    title = "Hızlı kontrol",
-                    description = "Depolama ve önbelleği tarayarak gereksiz dosyaları bulabilirsiniz.",
+                    title = str(R.string.suggestion_quick_title),
+                    description = str(R.string.suggestion_quick_desc),
                     priority = Priority.LOW,
                     category = Category.STORAGE
                 )
@@ -160,8 +167,8 @@ class SmartSuggestions(private val context: Context) {
             suggestions.add(
                 Suggestion(
                     id = "cache_tip",
-                    title = "Önbellek ipucu",
-                    description = "Uygulama önbelleğini düzenli temizlemek cihazı hafifletebilir.",
+                    title = str(R.string.suggestion_tip_title),
+                    description = str(R.string.suggestion_tip_desc),
                     priority = Priority.LOW,
                     category = Category.CACHE
                 )

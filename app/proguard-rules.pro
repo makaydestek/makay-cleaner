@@ -12,6 +12,10 @@
 -keep class com.makay.cleaner.domain.model.** { *; }
 -keep class com.makay.cleaner.data.AnalyticsRepository$* { *; }
 -keep class com.makay.cleaner.data.CleaningStatsRepository { *; }
+# Gson ile serileşen çöp kutusu indeksi (alan adları korunmalı)
+-keep class com.makay.cleaner.data.RecycleBinRepository$TrashItem { *; }
+# Kişi uyuşmazlığı arşivi (Gson)
+-keep class com.makay.cleaner.data.PersonMismatchScanArchive$* { *; }
 
 # WorkManager
 -keep class * extends androidx.work.Worker

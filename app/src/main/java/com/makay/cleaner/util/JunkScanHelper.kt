@@ -116,7 +116,7 @@ object JunkScanHelper {
         val cacheFiles = (cache.map { it.file } + thumbs + extra).filter { it.takeUnique() }
         val systemLimit = if (depth == ScanDepth.DEEP) 8000 else 2500
         val unusedAgeDays = if (depth == ScanDepth.DEEP) 3 else 7
-        val system = if (timedOut()) emptyList() else systemItems(systemLimit)
+        val system = if (timedOut()) emptyList() else systemItems(context, systemLimit)
             .filter { FilePurger.canRemove(context, it.file) && it.file.takeUnique() }
         val corpses = if (timedOut()) emptyList() else corpseItems(context)
             .filter { FilePurger.canRemove(context, File(it.path)) && File(it.path).takeUnique() }
@@ -146,13 +146,15 @@ object JunkScanHelper {
         )
     }
 
-    /** Tek dokunuş Optimizasyon: kalıcı silme (çöp yok) + sistem önbelleği denemesi. */
+    /** Tek dokunuş Optimizasyon: önbellek/geçici kalıcı, APK/artık çöpe. */
     fun cleanAll(context: Context): CleanResult =
         cleanSelected(
             context,
-            setOf("cache", "unused", "apk", "residue", "tmp"),
+            // "unused" (eski indirmeler) tek dokunuşta SİLİNMEZ: kullanıcının
+            // PDF/fotoğraf/arşiv gibi gerçek dosyaları yanlışlıkla gitmesin.
+            setOf("cache", "apk", "residue", "tmp"),
             recordAs = "Optimizasyon",
-            useTrash = false,
+            useTrash = true,
             reclaimSystemCache = true
         )
 
@@ -275,8 +277,10 @@ object JunkScanHelper {
 
         if ("tmp" in categoryIds) {
             cats++
-            systemItems(4000).forEach { item ->
-                purgeHard(item.file, item.reason)
+            systemItems(context, 4000).forEach { item ->
+                // Geçici/thumbnail öğeleri de çöp moduna uyar (onaysız kalıcı
+                // silmeyi önlemek için).
+                if (useTrash) purgeTrash(item.file, item.reason) else purgeHard(item.file, item.reason)
             }
         }
 
@@ -388,8 +392,8 @@ object JunkScanHelper {
         return out
     }
 
-    private fun systemItems(maxItems: Int = 500) = try {
-        SystemCleanerScanner().scan(maxItems = maxItems)
+    private fun systemItems(context: Context, maxItems: Int = 500) = try {
+        SystemCleanerScanner(context).scan(maxItems = maxItems)
     } catch (e: Exception) {
         SoftErrorLogger.warn("JunkScan", "systemItems başarısız", e)
         emptyList()
@@ -414,6 +418,9 @@ object JunkScanHelper {
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
             File(Environment.getExternalStorageDirectory(), "Download")
         ).distinctBy { it.absolutePath }
+        // Güvenlik: yalnızca gerçek indirme artıkları. Kullanıcının PDF/fotoğraf/
+        // belge gibi dosyaları yaşlarına bakılmaksızın bu kategoriye girmez.
+        val junkExt = setOf("apk", "tmp", "temp", "crdownload", "part", "partial", "log", "bak")
         val threshold = System.currentTimeMillis() - minAgeDays.coerceAtLeast(1) * 24L * 3600_000
         val out = mutableListOf<File>()
         roots.forEach { dir ->
@@ -423,11 +430,11 @@ object JunkScanHelper {
                     if (out.size >= 400) return@forEach
                     if (!f.isFile) return@forEach
                     if (!FilePurger.canRemove(context, f)) return@forEach
-                    val old = f.lastModified() < threshold
-                    val junkExt = f.extension.lowercase() in setOf(
-                        "apk", "tmp", "temp", "crdownload", "part", "log", "bak"
-                    )
-                    if ((old && f.length() > 20 * 1024) || junkExt) out.add(f)
+                    val ext = f.extension.lowercase()
+                    // Artık uzantıları her zaman; diğer dosyalar hiçbir zaman.
+                    if (ext !in junkExt) return@forEach
+                    if (f.lastModified() >= threshold) return@forEach
+                    if (f.length() > 20 * 1024) out.add(f)
                 }
             } catch (e: Exception) {
                 SoftErrorLogger.warn("JunkScan", "unusedDownloadFiles: ${dir.name}", e)

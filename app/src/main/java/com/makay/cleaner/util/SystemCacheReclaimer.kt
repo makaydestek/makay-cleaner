@@ -35,7 +35,7 @@ object SystemCacheReclaimer {
     fun isAggressiveReclaimEnabled(context: Context): Boolean =
         context.applicationContext
             .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_AGGRESSIVE, true)
+            .getBoolean(KEY_AGGRESSIVE, false)
 
     fun setAggressiveReclaimEnabled(context: Context, enabled: Boolean) {
         context.applicationContext
@@ -221,7 +221,7 @@ object SystemCacheReclaimer {
                 if (!file.isFile || file.length() <= 0L) return@forEach
                 if (!SystemFileGuard.canDelete(file)) return@forEach
                 val size = file.length()
-                if (FilePurger.tryDelete(file) && !file.exists()) {
+                if (FilePurger.tryDelete(context, file) && !file.exists()) {
                     count++
                     saved += size
                 }

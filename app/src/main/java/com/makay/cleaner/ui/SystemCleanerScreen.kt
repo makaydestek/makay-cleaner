@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -28,15 +30,52 @@ fun SystemCleanerScreen(
     application: Application,
     onNavigateBack: () -> Unit
 ) {
-    val scanner = remember { SystemCleanerScanner() }
+    val scanner = remember { SystemCleanerScanner(application) }
     val trash = remember { RecycleBinRepository(application) }
     var items by remember { mutableStateOf<List<SystemCleanerScanner.JunkItem>>(emptyList()) }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loading by remember { mutableStateOf(true) }
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val hasStoragePermission = rememberStoragePermissionState()
+
+    fun cleanSelected() {
+        scope.launch {
+            var deleted = 0
+            var saved = 0L
+            withContext(Dispatchers.IO) {
+                val targets = items.filter { it.file.absolutePath in selected }
+                trash.beginBatch()
+                targets.forEach { item ->
+                    val size = item.sizeBytes
+                    // Dizinler de çöp üzerinden gider; File.delete() ile
+                    // geri alınamaz kalıcı silme yapılmaz.
+                    val ok = com.makay.cleaner.util.FilePurger.remove(
+                        application,
+                        item.file,
+                        trash = trash,
+                        category = item.reason
+                    )
+                    if (ok) {
+                        deleted++
+                        saved += size
+                    }
+                }
+            }
+            CleaningRecorder.record(application, "Sistem temizleyici", saved, deleted)
+            CleanResultTracker.record("Sistem temizleyici", deleted, saved)
+            summary = CleanResultTracker.last
+            items = withContext(Dispatchers.IO) { scanner.scan() }
+            selected = emptySet()
+            Toast.makeText(
+                context,
+                "$deleted öğe çöp kutusuna taşındı (${formatBytes(saved)})",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     LaunchedEffect(hasStoragePermission) {
         if (hasStoragePermission) {
@@ -49,7 +88,7 @@ fun SystemCleanerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sistem temizleyici", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_sistem_temizleyici), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -57,32 +96,9 @@ fun SystemCleanerScreen(
                 },
                 actions = {
                     if (selected.isNotEmpty()) {
-                        TextButton(onClick = {
-                            scope.launch {
-                                var deleted = 0
-                                var saved = 0L
-                                withContext(Dispatchers.IO) {
-                                    items.filter { it.file.absolutePath in selected }.forEach { item ->
-                                        val size = item.sizeBytes
-                                        val ok = if (item.file.isDirectory) {
-                                            item.file.delete()
-                                        } else {
-                                            trash.moveToTrash(item.file, item.reason)
-                                        }
-                                        if (ok) {
-                                            deleted++
-                                            saved += size
-                                        }
-                                    }
-                                }
-                                CleaningRecorder.record(application, "Sistem temizleyici", saved, deleted)
-                                CleanResultTracker.record("Sistem temizleyici", deleted, saved)
-                                summary = CleanResultTracker.last
-                                items = withContext(Dispatchers.IO) { scanner.scan() }
-                                selected = emptySet()
-                                Toast.makeText(context, "$deleted öğe temizlendi", Toast.LENGTH_SHORT).show()
-                            }
-                        }) { Text("Temizle (${selected.size})") }
+                        TextButton(onClick = { confirmDelete = true }) {
+                            Text(stringResource(R.string.txt_temizle_1_s_2, selected.size))
+                        }
                     }
                 }
             )
@@ -101,7 +117,7 @@ fun SystemCleanerScreen(
                 CircularProgressIndicator()
             }
             items.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Temizlenecek gereksiz dosya yok")
+                Text(stringResource(R.string.txt_temizlenecek_gereksiz_dosya_yok))
             }
             else -> LazyColumn(
                 Modifier.fillMaxSize().padding(padding).padding(16.dp),
@@ -112,10 +128,10 @@ fun SystemCleanerScreen(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("${items.size} öğe · ${formatBytes(items.sumOf { it.sizeBytes })}")
+                        Text(stringResource(R.string.msg_items_size, items.size, formatBytes(items.sumOf { it.sizeBytes })))
                         TextButton(onClick = {
                             selected = items.map { it.file.absolutePath }.toSet()
-                        }) { Text("Tümünü seç") }
+                        }) { Text(stringResource(R.string.txt_t_m_n_se_2)) }
                     }
                 }
                 items(items, key = { it.file.absolutePath }) { item ->
@@ -136,7 +152,7 @@ fun SystemCleanerScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(item.file.name, fontWeight = FontWeight.Medium)
                                 Text(
-                                    "${item.reason} · ${formatBytes(item.sizeBytes)}",
+                                    stringResource(R.string.txt_1_s_2_s_16, item.reason, formatBytes(item.sizeBytes)),
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -145,6 +161,28 @@ fun SystemCleanerScreen(
                 }
             }
         }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(stringResource(R.string.txt_se_ilenler_p_kutusuna_ta_ns_n_m)) },
+            text = {
+                Text(
+                    "${selected.size} öğe (${formatBytes(items.filter { it.file.absolutePath in selected }.sumOf { it.sizeBytes })}) " +
+                        "çöp kutusuna taşınır ve 48 saat içinde geri yüklenebilir."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    cleanSelected()
+                }) { Text(stringResource(R.string.txt_pe_ta)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.txt_vazge)) }
+            }
+        )
     }
 
     summary?.let { s ->

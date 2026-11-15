@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -47,7 +49,7 @@ fun SecuritySettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("🔐 Güvenlik Ayarları", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_g_venlik_ayarlar), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     TvIconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -70,12 +72,12 @@ fun SecuritySettingsScreen(
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
-                        "Sistem dosya koruması",
+                        stringResource(R.string.txt_sistem_dosya_korumas),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "/system, /vendor ve üretici paketleri silinmez. Güvenlik taraması virüs motoru değildir.",
+                        stringResource(R.string.txt_system_vendor_ve_retici_paketleri_silinmez_g),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -92,13 +94,13 @@ fun SecuritySettingsScreen(
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            "Şifreli depo kullanılamıyor",
+                            stringResource(R.string.txt_ifreli_depo_kullan_lam_yor),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Text(
-                            "Cihaz Keystore açılamadı. PIN ayarları yedek depoda tutuluyor; kilidi güvenilir saymayın.",
+                            stringResource(R.string.txt_cihaz_keystore_a_lamad_pin_ayarlar_yedek_dep),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
@@ -127,7 +129,7 @@ fun SecuritySettingsScreen(
                 ) { focused ->
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "PIN Kilidi",
+                            text = stringResource(R.string.txt_pin_kilidi),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -155,9 +157,8 @@ fun SecuritySettingsScreen(
                                     showSetPinDialog = true
                                 }
                             } else {
-                                appLockManager.removePin()
-                                isPinEnabled = false
-                                isBiometricEnabled = false
+                                // Onaysız kaldırma yok: yalnızca onay diyaloğunu aç.
+                                showRemovePinDialog = true
                             }
                         },
                         enabled = !storageDegraded || isPinEnabled,
@@ -196,7 +197,7 @@ fun SecuritySettingsScreen(
                     ) { focused ->
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Biyometrik Kilidi",
+                                text = stringResource(R.string.txt_biyometrik_kilidi),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -257,21 +258,21 @@ fun SecuritySettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = " Güvenlik Bilgisi",
+                        text = stringResource(R.string.txt_g_venlik_bilgisi),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "• PIN kodunuz SHA-256 ile şifrelenir",
+                        text = stringResource(R.string.txt_pin_kodunuz_pbkdf2_120_000_tur_ile_tuzlanara),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        text = "• Biyometrik veriler cihazda güvenli şekilde saklanır",
+                        text = stringResource(R.string.txt_biyometrik_veriler_cihazda_g_venli_ekilde_sa),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        text = "• Hassas veriler EncryptedSharedPreferences ile korunur",
+                        text = stringResource(R.string.txt_hassas_veriler_encryptedsharedpreferences_il),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -290,7 +291,7 @@ fun SecuritySettingsScreen(
                 confirmPin = ""
                 pinError = null
             },
-            title = { Text("PIN Kodu Belirle") },
+            title = { Text(stringResource(R.string.txt_pin_kodu_belirle)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
@@ -301,7 +302,7 @@ fun SecuritySettingsScreen(
                                 pinError = null
                             }
                         },
-                        label = { Text("Yeni PIN") },
+                        label = { Text(stringResource(R.string.txt_yeni_pin)) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -315,7 +316,7 @@ fun SecuritySettingsScreen(
                                 pinError = null
                             }
                         },
-                        label = { Text("PIN Tekrar") },
+                        label = { Text(stringResource(R.string.txt_pin_tekrar)) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -331,7 +332,8 @@ fun SecuritySettingsScreen(
                     onClick = {
                         when {
                             storageDegraded -> pinError = "Şifreli depo kullanılamıyor; PIN kurulamaz"
-                            newPin.length < 4 -> pinError = "PIN en az 4 haneli olmalıdır"
+                            newPin.length < AppLockManager.MIN_PIN_LENGTH ->
+                                pinError = "PIN en az ${AppLockManager.MIN_PIN_LENGTH} haneli olmalıdır"
                             newPin != confirmPin -> pinError = "PIN'ler eşleşmiyor"
                             !appLockManager.setPin(newPin) ->
                                 pinError = "PIN kaydedilemedi (şifreli depo yok)"
@@ -345,7 +347,7 @@ fun SecuritySettingsScreen(
                         }
                     }
                 ) {
-                    Text("Kaydet")
+                    Text(stringResource(R.string.txt_kaydet))
                 }
             },
             dismissButton = {
@@ -355,7 +357,7 @@ fun SecuritySettingsScreen(
                     confirmPin = ""
                     pinError = null
                 }) {
-                    Text("İptal")
+                    Text(stringResource(R.string.txt_ptal))
                 }
             }
         )
@@ -364,17 +366,18 @@ fun SecuritySettingsScreen(
     if (showRemovePinDialog) {
         AlertDialog(
             onDismissRequest = { showRemovePinDialog = false },
-            title = { Text("PIN kilidini kapat") },
-            text = { Text("PIN kaldırılınca uygulama arka plana gidince kilitlenmez.") },
+            title = { Text(stringResource(R.string.txt_pin_kilidini_kapat)) },
+            text = { Text(stringResource(R.string.txt_pin_kald_r_l_nca_uygulama_arka_plana_gidince)) },
             confirmButton = {
                 TextButton(onClick = {
                     appLockManager.removePin()
                     isPinEnabled = false
+                    isBiometricEnabled = false
                     showRemovePinDialog = false
-                }) { Text("Kapat") }
+                }) { Text(stringResource(R.string.txt_kapat)) }
             },
             dismissButton = {
-                TextButton(onClick = { showRemovePinDialog = false }) { Text("İptal") }
+                TextButton(onClick = { showRemovePinDialog = false }) { Text(stringResource(R.string.txt_ptal)) }
             }
         )
     }

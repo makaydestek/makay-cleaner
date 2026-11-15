@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -42,9 +44,32 @@ fun DuplicatesScreen(
     var loading by remember { mutableStateOf(true) }
     var summary by remember { mutableStateOf<CleanResultTracker.Summary?>(null) }
     var typeFilter by remember { mutableStateOf(DuplicateScanner.FileTypeFilter.ALL) }
+    var pendingGroup by remember { mutableStateOf<DuplicateScanner.DuplicateGroup?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val hasStoragePermission = rememberStoragePermissionState()
+
+    fun moveGroupToTrash(group: DuplicateScanner.DuplicateGroup) {
+        scope.launch {
+            var deleted = 0
+            var saved = 0L
+            withContext(Dispatchers.IO) {
+                trash.beginBatch()
+                group.files.drop(1).forEach { f ->
+                    val size = f.length()
+                    if (trash.moveToTrash(f, "Yinelenen")) {
+                        deleted++
+                        saved += size
+                    }
+                }
+            }
+            CleaningRecorder.record(application, "Yinelenenler", saved, deleted)
+            CleanResultTracker.record("Yinelenenler", deleted, saved)
+            summary = CleanResultTracker.last
+            groups = withContext(Dispatchers.IO) { scanner.scan(typeFilter = typeFilter) }
+            Toast.makeText(context, context.getString(R.string.msg_copies_moved, deleted), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     fun runScan(filter: DuplicateScanner.FileTypeFilter = typeFilter) {
         scope.launch {
@@ -74,7 +99,7 @@ fun DuplicatesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Yinelenen dosyalar", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.txt_yinelenen_dosyalar), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Text("←", style = MaterialTheme.typography.titleLarge)
@@ -82,7 +107,7 @@ fun DuplicatesScreen(
                 },
                 actions = {
                     if (!loading && hasStoragePermission) {
-                        TextButton(onClick = { runScan() }) { Text("Yenile") }
+                        TextButton(onClick = { runScan() }) { Text(stringResource(R.string.txt_yenile)) }
                     }
                 }
             )
@@ -106,7 +131,7 @@ fun DuplicatesScreen(
                     }
                 }
                 Text(
-                    "Türe göre özel tarama — yalnızca seçilen uzantılar taranır.",
+                    stringResource(R.string.txt_t_re_g_re_zel_tarama_yaln_zca_se_ilen_uzant),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -120,7 +145,7 @@ fun DuplicatesScreen(
                     CircularProgressIndicator()
                 }
                 groups.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Yinelenen dosya bulunamadı")
+                    Text(stringResource(R.string.txt_yinelenen_dosya_bulunamad))
                 }
                 else -> LazyColumn(
                     Modifier.fillMaxSize().padding(16.dp),
@@ -130,7 +155,7 @@ fun DuplicatesScreen(
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
                                 Text(
-                                    "${group.files.size} kopya · ${formatBytes(group.sizeBytes)} her biri",
+                                    stringResource(R.string.txt_1_s_kopya_2_s_her_biri, group.files.size, formatBytes(group.sizeBytes)),
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 group.files.forEachIndexed { index, file ->
@@ -139,35 +164,31 @@ fun DuplicatesScreen(
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
-                                TextButton(onClick = {
-                                    scope.launch {
-                                        var deleted = 0
-                                        var saved = 0L
-                                        withContext(Dispatchers.IO) {
-                                            trash.beginBatch()
-                                            group.files.drop(1).forEach { f ->
-                                                val size = f.length()
-                                                if (trash.moveToTrash(f, "Yinelenen")) {
-                                                    deleted++
-                                                    saved += size
-                                                }
-                                            }
-                                        }
-                                        CleaningRecorder.record(application, "Yinelenenler", saved, deleted)
-                                        CleanResultTracker.record("Yinelenenler", deleted, saved)
-                                        summary = CleanResultTracker.last
-                                        groups = withContext(Dispatchers.IO) {
-                                            scanner.scan(typeFilter = typeFilter)
-                                        }
-                                        Toast.makeText(context, "$deleted kopya taşındı", Toast.LENGTH_SHORT).show()
-                                    }
-                                }) { Text("Fazlalıkları çöp kutusuna taşı") }
+                                TextButton(onClick = { pendingGroup = group }) {
+                                    Text(stringResource(R.string.txt_fazlal_klar_p_kutusuna_ta))
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    pendingGroup?.let { group ->
+        ConfirmDeleteDialog(
+            title = "Fazlalık kopyalar çöp kutusuna taşınsın mı?",
+            message = "Her gruptan 1 dosya tutulur; kalan ${group.files.size - 1} kopya çöp kutusuna taşınır.",
+            fileCount = group.files.size - 1,
+            totalBytes = group.sizeBytes * (group.files.size - 1),
+            moveToTrash = true,
+            previewPaths = group.files.drop(1).map { it.absolutePath },
+            onConfirm = {
+                pendingGroup = null
+                moveGroupToTrash(group)
+            },
+            onDismiss = { pendingGroup = null }
+        )
     }
 
     summary?.let { s ->
@@ -181,7 +202,7 @@ fun DuplicatesScreen(
             onUndo = {
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
-                    Toast.makeText(context, "$n öğe geri yüklendi", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
                     runScan()
                 }
             }
@@ -209,14 +230,14 @@ fun ProGateContent(featureName: String, onBack: () -> Unit, onRequirePro: () -> 
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Pro özellik", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.txt_pro_zellik), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             Text(
-                "$featureName Pro ile açılır. Ayarlar → Pro’dan etkinleştirin.",
+                stringResource(R.string.txt_1_s_pro_ile_a_l_r_ayarlar_pro_dan_etkinle_ti, featureName),
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onRequirePro) { Text("Pro’ya git") }
+            Button(onClick = onRequirePro) { Text(stringResource(R.string.txt_pro_ya_git)) }
         }
     }
 }

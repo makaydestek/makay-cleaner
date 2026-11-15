@@ -1,5 +1,7 @@
 package com.makay.cleaner.ui
 
+import com.makay.cleaner.R
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,21 +36,21 @@ fun PlatformSelectScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                "Makay Cleaner",
+                stringResource(R.string.txt_makay_cleaner),
                 color = Color.White,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Lütfen kullanım yapacağınız platformu seçin",
+                stringResource(R.string.txt_l_tfen_kullan_m_yapaca_n_z_platformu_se_in),
                 color = Color(0xFFAEAEB2),
                 fontSize = 15.sp
             )
             if (PlatformManager.suggestTv(context)) {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Bu cihazda TV / Leanback algılandı — TV sürümü önerilir.",
+                    stringResource(R.string.txt_bu_cihazda_tv_leanback_alg_land_tv_s_r_m_ner),
                     color = Color(0xFF8BC34A),
                     fontSize = 13.sp
                 )
@@ -69,7 +71,7 @@ fun PlatformSelectScreen(
                 shape = RoundedCornerShape(16.dp),
                 colors = tvButtonColors(mobileFocused, Color(0xFF3F8CFF))
             ) {
-                Text("📱 Mobil / Tablet Sürümü", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.txt_mobil_tablet_s_r_m), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(Modifier.height(16.dp))
@@ -89,7 +91,7 @@ fun PlatformSelectScreen(
                 shape = RoundedCornerShape(16.dp),
                 colors = tvButtonColors(tvFocused, Color(0xFF30D158))
             ) {
-                Text("📺 Android TV Sürümü", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.txt_android_tv_s_r_m), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
