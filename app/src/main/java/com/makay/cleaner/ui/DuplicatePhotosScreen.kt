@@ -174,6 +174,13 @@ fun DuplicatePhotosScreen(
                 title = {
                     Column {
                         Text(stringResource(R.string.txt_yinelenen_foto_raflar), fontWeight = FontWeight.Bold)
+                        if (com.makay.cleaner.util.PermissionHelper.hasPartialVisualMediaPermission(context)) {
+                            Text(
+                                stringResource(R.string.media_scope_partial_photos),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
                         if (hasScanned && !loading) {
                             Text(
                                 "${exactGroups.size + similarGroups.size} grup · ${formatBytes(

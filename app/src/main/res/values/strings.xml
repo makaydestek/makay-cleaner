@@ -648,4 +648,19 @@
     <string name="time_less_than_minute">&lt;1 dk</string>
     <string name="time_minutes">%1$d dk</string>
     <string name="time_hours_minutes">%1$d sa %2$d dk</string>
+    <string name="media_scope_partial_photos">Yalnızca izin verilen fotoğraf ve videolar taranıyor</string>
+    <string name="media_scope_partial_videos">Yalnızca izin verilen videolar taranıyor</string>
+    <string name="score_scope_note">Skor yalnızca temizlenebilir geçici dosya miktarını gösterir; cihaz performansı veya güvenlik ölçümü değildir.</string>
+    <string name="storage_category_large_media">Büyük medya dosyaları</string>
+    <string name="storage_category_other_media">Diğer medya dosyaları</string>
+    <string name="storage_category_other_downloads">Diğer indirilenler</string>
+    <string name="file_analysis_search_label">Dosya adı, türü veya klasöründe ara</string>
+    <string name="file_analysis_search_scope">En büyük veya en yeni 200 sonuç içinde arama</string>
+    <string name="file_analysis_size_all">Tümü</string>
+    <string name="file_analysis_size_minimum_mb">≥%1$d MB</string>
+    <string name="file_analysis_no_matches">Arama ölçütlerine uyan dosya yok</string>
+    <string name="file_analysis_copy_to_folder">Seçilen klasöre kopyala…</string>
+    <string name="file_analysis_copy_complete">Dosya seçilen klasöre kopyalandı</string>
+    <string name="file_analysis_copy_failed">Kopyalanamadı. Klasör iznini yeniden seçin.</string>
+    <string name="score_label_cleanliness">Temizlik skoru</string>
 </resources>

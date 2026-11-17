@@ -669,7 +669,7 @@ fun SecurityScanScreen(
                         when {
                             scanning -> "Taranıyor…"
                             summary == null -> "Sonuç yok — yeniden tarayın"
-                            else -> "Sağlık skoru"
+                            else -> stringResource(R.string.score_label_cleanliness)
                         },
                         color = homeTextSecondary(),
                         fontSize = 13.sp

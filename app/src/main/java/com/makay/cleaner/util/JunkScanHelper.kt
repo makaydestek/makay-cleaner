@@ -278,9 +278,9 @@ object JunkScanHelper {
         if ("tmp" in categoryIds) {
             cats++
             systemItems(context, 4000).forEach { item ->
-                // Geçici/thumbnail öğeleri de çöp moduna uyar (onaysız kalıcı
-                // silmeyi önlemek için).
-                if (useTrash) purgeTrash(item.file, item.reason) else purgeHard(item.file, item.reason)
+                // Önbellek ve geçici dosyalar güvenli gruptur; APK/artık gibi
+                // gözden geçirme kategorilerinden farklı olarak kalıcı silinir.
+                purgeHard(item.file, item.reason)
             }
         }
 

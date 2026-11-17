@@ -144,33 +144,45 @@ fun StorageScreen(
         scope.launch {
             optimizing = true
             cleanMessage = null
-            val result = withContext(Dispatchers.IO) {
-                JunkScanHelper.cleanAll(context)
-            }
-            val (junk, locked, unused) = withContext(Dispatchers.IO) {
-                val report = JunkScanHelper.scan(context)
-                val u = UnusedAppsHelper.getUnusedApps(context).size
-                if (PlatformManager.isTvMode(context)) {
-                    val score = JunkScanHelper.optimizationScore(report.cleanableBytes)
-                    com.makay.cleaner.util.TvRecommendationManager.publishRecommendation(
-                        context,
-                        report.cleanableBytes,
-                        score
-                    )
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    JunkScanHelper.cleanAll(context)
                 }
-                Triple(report.cleanableBytes, report.lockedBytes, u)
+                val (junk, locked, unused) = withContext(Dispatchers.IO) {
+                    val report = JunkScanHelper.scan(context)
+                    val u = UnusedAppsHelper.getUnusedApps(context).size
+                    if (PlatformManager.isTvMode(context)) {
+                        val score = JunkScanHelper.optimizationScore(report.cleanableBytes)
+                        com.makay.cleaner.util.TvRecommendationManager.publishRecommendation(
+                            context,
+                            report.cleanableBytes,
+                            score
+                        )
+                    }
+                    Triple(report.cleanableBytes, report.lockedBytes, u)
+                }
+                junkBytes = junk
+                lockedBytes = locked
+                unusedApps = unused
+                scanned = true
+                viewModel.refresh()
+                showWhy = junk > 0L
+                cleanMessage = buildList {
+                    if (result.spaceSaved > 0L) add("${formatBytes(result.spaceSaved)} kalıcı olarak silindi")
+                    if (result.movedToTrashBytes > 0L) add("${formatBytes(result.movedToTrashBytes)} çöp kutusuna taşındı")
+                    if (result.failedCount > 0) add("${result.failedCount} öğe temizlenemedi")
+                    if (result.skippedProtected > 0) add("${result.skippedProtected} korumalı öğe atlandı")
+                    if (isEmpty()) add("Temizlenecek uygun öğe bulunamadı")
+                }.joinToString(" · ")
+                // TV: tarama bitince sayfa başı + Ayarlar odağında kal
+                tvFocusEpoch++
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                cleanMessage = "Optimizasyon tamamlanamadı: ${e.localizedMessage ?: "beklenmeyen hata"}"
+            } finally {
+                optimizing = false
             }
-            junkBytes = junk
-            lockedBytes = locked
-            unusedApps = unused
-            scanned = true
-            viewModel.refresh()
-            optimizing = false
-            showWhy = junk > 0L
-            val removed = result.spaceSaved
-            cleanMessage = if (removed > 0L) "${formatBytes(removed)} silindi" else null
-            // TV: tarama bitince sayfa başı + Ayarlar odağında kal
-            tvFocusEpoch++
         }
     }
 

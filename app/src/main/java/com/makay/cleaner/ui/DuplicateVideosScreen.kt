@@ -109,6 +109,13 @@ fun DuplicateVideosScreen(
                 title = {
                     Column {
                         Text(stringResource(R.string.txt_yinelenen_videolar), fontWeight = FontWeight.Bold)
+                        if (com.makay.cleaner.util.PermissionHelper.hasPartialVisualMediaPermission(context)) {
+                            Text(
+                                stringResource(R.string.media_scope_partial_videos),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
                         if (hasScanned && !loading) {
                             Text(
                                 "${groups.size} grup · ${formatBytes(groups.sumOf { it.wasteBytes })}",

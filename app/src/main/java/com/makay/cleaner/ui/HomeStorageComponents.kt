@@ -384,7 +384,7 @@ internal fun HomeScoreHero(
                     maxLines = 1
                 )
                 Text(
-                    text = if (score >= 100) "İyi durumda" else "Skor",
+                    text = stringResource(R.string.score_label_cleanliness),
                     color = textSecondary,
                     fontSize = if (isTv) 11.sp else 12.sp,
                     fontWeight = FontWeight.Medium,
@@ -433,6 +433,13 @@ internal fun HomeScoreHero(
                 fontSize = 16.sp
             )
         }
+        Text(
+            text = stringResource(R.string.score_scope_note),
+            color = textSecondary,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp)
+        )
     }
 }
 

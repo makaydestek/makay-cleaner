@@ -3,6 +3,8 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
@@ -11,6 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -74,6 +78,52 @@ fun FileAnalysisScreen(
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val transferPrefs = remember(application) {
+        application.getSharedPreferences("file_analysis_transfer", android.content.Context.MODE_PRIVATE)
+    }
+    var destinationTree by remember {
+        mutableStateOf(transferPrefs.getString("destination_tree", null)?.let(Uri::parse))
+    }
+    var fileWaitingForDestination by remember { mutableStateOf<FileAnalysisScanner.FileEntry?>(null) }
+    fun copyFileToDestination(entry: FileAnalysisScanner.FileEntry, tree: Uri) {
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                com.makay.cleaner.util.DocumentTreeCopy.copy(application, File(entry.path), tree)
+            }
+            if (ok) {
+                Toast.makeText(context, context.getString(R.string.file_analysis_copy_complete), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, context.getString(R.string.file_analysis_copy_failed), Toast.LENGTH_SHORT).show()
+                destinationTree = null
+                transferPrefs.edit().remove("destination_tree").apply()
+            }
+        }
+    }
+    val destinationPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { tree ->
+        if (tree != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    tree,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
+            destinationTree = tree
+            transferPrefs.edit().putString("destination_tree", tree.toString()).apply()
+            fileWaitingForDestination?.let { copyFileToDestination(it, tree) }
+            fileWaitingForDestination = null
+        }
+    }
+    fun requestCopyToDestination(entry: FileAnalysisScanner.FileEntry) {
+        val savedTree = destinationTree
+        if (savedTree != null) {
+            copyFileToDestination(entry, savedTree)
+        } else {
+            fileWaitingForDestination = entry
+            destinationPicker.launch(null)
+        }
+    }
     val hasPermission = rememberStoragePermissionState()
     val widthClass = rememberWidthClass()
 
@@ -226,8 +276,16 @@ fun FileAnalysisScreen(
                                 onLarge = onOpenLargeFiles
                             )
                             1 -> FoldersTab(r.topFolders)
-                            2 -> FilesTab(r.largestFiles, emptyLabel = "20 MB üzeri dosya bulunamadı")
-                            3 -> FilesTab(r.recentFiles, emptyLabel = "Son dosya bulunamadı")
+                            2 -> FilesTab(
+                                r.largestFiles,
+                                emptyLabel = "20 MB üzeri dosya bulunamadı",
+                                onCopyToDestination = ::requestCopyToDestination
+                            )
+                            3 -> FilesTab(
+                                r.recentFiles,
+                                emptyLabel = "Son dosya bulunamadı",
+                                onCopyToDestination = ::requestCopyToDestination
+                            )
                             4 -> EmptyFoldersTab(
                                 paths = r.emptyFolders,
                                 selected = selectedEmpty,
@@ -464,17 +522,63 @@ private fun FoldersTab(folders: List<FileAnalysisScanner.FolderStat>) {
 @Composable
 private fun FilesTab(
     files: List<FileAnalysisScanner.FileEntry>,
-    emptyLabel: String
+    emptyLabel: String,
+    onCopyToDestination: (FileAnalysisScanner.FileEntry) -> Unit
 ) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var minSizeMb by rememberSaveable { mutableIntStateOf(0) }
+    val filtered = files.filter { file ->
+        val matchesQuery = query.isBlank() ||
+            file.displayName.contains(query, ignoreCase = true) ||
+            file.path.contains(query, ignoreCase = true) ||
+            file.mimeType.contains(query, ignoreCase = true) ||
+            file.categoryId.contains(query, ignoreCase = true)
+        matchesQuery && file.sizeBytes >= minSizeMb * 1024L * 1024L
+    }
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        if (files.isEmpty()) {
-            item { Text(emptyLabel, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text(stringResource(R.string.file_analysis_search_label)) }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0, 50, 100).forEach { threshold ->
+                    FilterChip(
+                        selected = minSizeMb == threshold,
+                        onClick = { minSizeMb = threshold },
+                        label = {
+                            Text(
+                                when (threshold) {
+                                    0 -> stringResource(R.string.file_analysis_size_all)
+                                    else -> stringResource(R.string.file_analysis_size_minimum_mb, threshold)
+                                }
+                            )
+                        }
+                    )
+                }
+            }
+            Text(
+                stringResource(R.string.file_analysis_search_scope),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        items(files, key = { it.path }) { f ->
+        if (filtered.isEmpty()) {
+            item {
+                Text(
+                    if (files.isEmpty()) emptyLabel else stringResource(R.string.file_analysis_no_matches),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        items(filtered, key = { it.path }) { f ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     Text(f.displayName, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -490,6 +594,9 @@ private fun FilesTab(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                    TextButton(onClick = { onCopyToDestination(f) }) {
+                        Text(stringResource(R.string.file_analysis_copy_to_folder))
+                    }
                 }
             }
         }

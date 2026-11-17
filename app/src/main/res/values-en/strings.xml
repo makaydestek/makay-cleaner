@@ -647,4 +647,19 @@
     <string name="time_less_than_minute">&lt;1 min</string>
     <string name="time_minutes">%1$d min</string>
     <string name="time_hours_minutes">%1$d h %2$d min</string>
+    <string name="media_scope_partial_photos">Scanning only photos and videos you allowed</string>
+    <string name="media_scope_partial_videos">Scanning only videos you allowed</string>
+    <string name="score_scope_note">This score reflects only the amount of cleanable temporary files; it does not measure device performance or security.</string>
+    <string name="storage_category_large_media">Large media files</string>
+    <string name="storage_category_other_media">Other media files</string>
+    <string name="storage_category_other_downloads">Other downloads</string>
+    <string name="file_analysis_search_label">Search name, type, or folder</string>
+    <string name="file_analysis_search_scope">Searching the 200 largest or newest results</string>
+    <string name="file_analysis_size_all">All</string>
+    <string name="file_analysis_size_minimum_mb">≥%1$d MB</string>
+    <string name="file_analysis_no_matches">No files match your search</string>
+    <string name="file_analysis_copy_to_folder">Copy to selected folder…</string>
+    <string name="file_analysis_copy_complete">File copied to the selected folder</string>
+    <string name="file_analysis_copy_failed">Copy failed. Select folder access again.</string>
+    <string name="score_label_cleanliness">Cleanliness score</string>
 </resources>

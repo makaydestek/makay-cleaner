@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.makay.cleaner.R
 import com.makay.cleaner.data.AppCacheRepository
 import com.makay.cleaner.domain.model.StorageCategory
 import com.makay.cleaner.domain.model.StorageInfo
@@ -115,18 +116,17 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
                 JunkScanHelper.scan(ctx).categories.firstOrNull { it.id == "cache" }?.sizeBytes ?: 0L
             }.getOrDefault(0L)
         )
-        val mediaSize = mediaStoreImagesVideosSize(cr)
-        val audioSize = mediaStoreAudioSize(cr)
+        val allMediaSize = mediaStoreImagesVideosSize(cr) + mediaStoreAudioSize(cr)
+        val largeSize = mediaStoreLargeSize(cr).coerceAtMost(allMediaSize)
         val docsSize = maxOf(mediaStoreDocsSize(cr), estimateDocsShallow())
-        val largeSize = mediaStoreLargeSize(cr)
-        val otherSize = maxOf(mediaStoreDownloadSize(cr), estimateDownloadsShallow())
+        val downloads = downloadBreakdown(cr)
 
         return listOf(
             cat("cache", "Uygulama Önbelleği", cacheSize, 0xFFFF9800.toInt()),
-            cat("large", "Büyük Dosyalar", largeSize, 0xFFF44336.toInt()),
-            cat("media", "Medya Dosyaları", mediaSize + audioSize, 0xFF2196F3.toInt()),
+            cat("large", ctx.getString(R.string.storage_category_large_media), largeSize, 0xFFF44336.toInt()),
+            cat("media", ctx.getString(R.string.storage_category_other_media), (allMediaSize - largeSize).coerceAtLeast(0L), 0xFF2196F3.toInt()),
             cat("docs", "Belgeler", docsSize, 0xFF4CAF50.toInt()),
-            cat("other", "Diğer", otherSize, 0xFF9E9E9E.toInt())
+            cat("other", ctx.getString(R.string.storage_category_other_downloads), downloads.otherBytes, 0xFF9E9E9E.toInt())
         )
     }
 
@@ -136,7 +136,7 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
         val media = runCatching { mediaStoreImagesVideosSize(ctx.contentResolver) }.getOrDefault(0L)
         return listOf(
             cat("cache", "Uygulama Önbelleği", cache, 0xFFFF9800.toInt()),
-            cat("large", "Büyük Dosyalar", 0L, 0xFFF44336.toInt()),
+            cat("large", getApplication<Application>().getString(R.string.storage_category_large_media), 0L, 0xFFF44336.toInt()),
             cat("media", "Medya Dosyaları", media, 0xFF2196F3.toInt()),
             cat("docs", "Belgeler", 0L, 0xFF4CAF50.toInt()),
             cat("other", "Diğer", 0L, 0xFF9E9E9E.toInt())
@@ -147,7 +147,7 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
         val cache = safeCacheSize(getApplication())
         return listOf(
             cat("cache", "Uygulama Önbelleği", cache, 0xFFFF9800.toInt()),
-            cat("large", "Büyük Dosyalar", 0L, 0xFFF44336.toInt()),
+            cat("large", getApplication<Application>().getString(R.string.storage_category_large_media), 0L, 0xFFF44336.toInt()),
             cat("media", "Medya Dosyaları", 0L, 0xFF2196F3.toInt()),
             cat("docs", "Belgeler", 0L, 0xFF4CAF50.toInt()),
             cat("other", "Diğer", 0L, 0xFF9E9E9E.toInt())
@@ -237,19 +237,66 @@ class StorageViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    private fun mediaStoreDownloadSize(cr: ContentResolver): Long {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            querySizeSum(cr, MediaStore.Downloads.EXTERNAL_CONTENT_URI)
-        } else {
-            0L
+    private data class DownloadBreakdown(val otherBytes: Long)
+
+    /** İndirilenlerde belge ve medya olarak sınıflandırılmayan baytlar. */
+    private fun downloadBreakdown(cr: ContentResolver): DownloadBreakdown {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return DownloadBreakdown(estimateOtherDownloadsShallow())
+        }
+        return try {
+            var other = 0L
+            cr.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.MediaColumns.SIZE, MediaStore.MediaColumns.MIME_TYPE),
+                null, null, null
+            )?.use { cursor ->
+                val sizeIndex = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                val mimeIndex = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
+                if (sizeIndex >= 0) while (cursor.moveToNext()) {
+                    val mime = if (mimeIndex >= 0) cursor.getString(mimeIndex).orEmpty() else ""
+                    val classified = mime.startsWith("image/") || mime.startsWith("video/") ||
+                        mime.startsWith("audio/") || isDocumentMime(mime)
+                    if (!classified) other += cursor.getLong(sizeIndex).coerceAtLeast(0L)
+                }
+            }
+            DownloadBreakdown(other)
+        } catch (_: Exception) {
+            // Hata halinde toplamı tahmin olarak sunmamak, kategori çakışmasını önler.
+            DownloadBreakdown(0L)
         }
     }
 
-    /** Download klasörü — en fazla 2 seviye, 400 dosya */
-    private fun estimateDownloadsShallow(): Long {
+    private fun isDocumentMime(mime: String): Boolean = mime in setOf(
+        "application/pdf", "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/plain", "text/csv"
+    )
+
+    /** Sınıflandırılmamış Download dosyaları — belge ve medya hariç. */
+    private fun estimateOtherDownloadsShallow(): Long {
         val root = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             ?: File(Environment.getExternalStorageDirectory(), "Download")
-        return dirSizeBounded(root, maxDepth = 2, maxFiles = 400)
+        if (!root.exists()) return 0L
+        val mediaExtensions = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "bmp", "mp4", "mkv", "mov", "avi", "webm", "mp3", "m4a", "wav", "aac", "ogg", "opus")
+        val documentExtensions = setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv")
+        var total = 0L
+        var count = 0
+        try {
+            root.walkTopDown().maxDepth(2).forEach { file ->
+                if (count >= 400) return@forEach
+                if (!file.isFile) return@forEach
+                count++
+                val ext = file.extension.lowercase()
+                if (ext !in mediaExtensions && ext !in documentExtensions) total += file.length()
+            }
+        } catch (_: Exception) {
+        }
+        return total
     }
 
     private fun estimateDocsShallow(): Long {

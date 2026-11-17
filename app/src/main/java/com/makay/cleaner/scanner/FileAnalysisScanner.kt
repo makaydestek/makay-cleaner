@@ -72,6 +72,7 @@ class FileAnalysisScanner(private val context: Context) {
     companion object {
         private const val LARGE_MIN_BYTES = 20L * 1024L * 1024L
         private const val TOP_N = 25
+        private const val SEARCHABLE_FILES = 200
         private const val EMPTY_MAX = 40
 
         fun formatSize(bytes: Long): String {
@@ -346,7 +347,7 @@ class FileAnalysisScanner(private val context: Context) {
             selection = "${MediaStore.MediaColumns.SIZE} >= ?",
             args = arrayOf(LARGE_MIN_BYTES.toString()),
             order = "${MediaStore.MediaColumns.SIZE} DESC",
-            limit = TOP_N
+            limit = SEARCHABLE_FILES
         )
     }
 
@@ -356,7 +357,7 @@ class FileAnalysisScanner(private val context: Context) {
             selection = "${MediaStore.MediaColumns.SIZE} >= ?",
             args = arrayOf((1024L * 100).toString()),
             order = "${MediaStore.MediaColumns.DATE_MODIFIED} DESC",
-            limit = TOP_N
+            limit = SEARCHABLE_FILES
         )
     }
 
