@@ -437,7 +437,7 @@
     <string name="txt_1_s_dosya_2_s_3">%1$s dosya · %%%2$s</string>
     <string name="txt_1_s_dosya">%1$s dosya</string>
     <string name="txt_1_s_2_s_9">%1$s · %2$s</string>
-    <string name="txt_1_s_4">%1$s</string>
+    <string name="score_percent">%%%1$d</string>
     <string name="txt_skor_1_s">Skor %1$s</string>
     <string name="txt_pil_ayar_na_git_1_s">Pil ayarına git · %1$s</string>
     <string name="txt_1_s_2_s_10">%1$s · %2$s</string>

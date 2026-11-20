@@ -7,6 +7,31 @@ import org.junit.Test
 class RecycleBinRetentionTest {
 
     @Test
+    fun legacyIndexSkipsIncompleteRecordsAndPreservesValidEntries() {
+        val items = RecycleBinRepository.parseLegacyIndex(
+            """
+            [
+              null,
+              {"trashPath":"/trash/missing-id"},
+              {"id":"null-path","trashPath":null},
+              {"id":"missing-original","trashPath":"/trash/unknown"},
+              {"id":"valid","trashPath":"/trash/valid","originalPath":"/downloads/file.apk",
+               "sizeBytes":42,"deletedAt":1700000000000,"category":"APK"},
+              {"id":"media","trashPath":"/trash/media","mediaStoreUri":"content://media/123",
+               "displayName":"photo.jpg"}
+            ]
+            """.trimIndent()
+        )
+
+        assertEquals(listOf("valid", "media"), items.map { it.id })
+        assertEquals("file.apk", items.first().displayName)
+        assertEquals(42L, items.first().sizeBytes)
+        assertEquals("APK", items.first().category)
+        assertEquals("content://media/123", items.last().originalPath)
+        assertEquals("photo.jpg", items.last().displayName)
+    }
+
+    @Test
     fun retentionIs48Hours() {
         assertEquals(48L * 60 * 60 * 1000, RecycleBinRepository.RETENTION_MS)
     }

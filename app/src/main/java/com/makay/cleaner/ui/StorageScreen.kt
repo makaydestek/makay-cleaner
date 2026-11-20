@@ -141,8 +141,9 @@ fun StorageScreen(
             onNavigateToPermissions()
             return
         }
+        if (optimizing) return
+        optimizing = true
         scope.launch {
-            optimizing = true
             cleanMessage = null
             try {
                 val result = withContext(Dispatchers.IO) {
@@ -150,7 +151,8 @@ fun StorageScreen(
                 }
                 val (junk, locked, unused) = withContext(Dispatchers.IO) {
                     val report = JunkScanHelper.scan(context)
-                    val u = UnusedAppsHelper.getUnusedApps(context).size
+                    val u = runCatching { UnusedAppsHelper.getUnusedApps(context).size }
+                        .getOrDefault(unusedApps)
                     if (PlatformManager.isTvMode(context)) {
                         val score = JunkScanHelper.optimizationScore(report.cleanableBytes)
                         com.makay.cleaner.util.TvRecommendationManager.publishRecommendation(
@@ -174,15 +176,15 @@ fun StorageScreen(
                     if (result.skippedProtected > 0) add("${result.skippedProtected} korumalı öğe atlandı")
                     if (isEmpty()) add("Temizlenecek uygun öğe bulunamadı")
                 }.joinToString(" · ")
-                // TV: tarama bitince sayfa başı + Ayarlar odağında kal
-                tvFocusEpoch++
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                cleanMessage = "Optimizasyon tamamlanamadı: ${e.localizedMessage ?: "beklenmeyen hata"}"
+                android.util.Log.e("MakayCleaner", "Optimization failed", e)
+                cleanMessage = "Optimizasyon tamamlanamadı."
             } finally {
                 optimizing = false
             }
+            tvFocusEpoch++
         }
     }
 
@@ -190,8 +192,8 @@ fun StorageScreen(
     val homeScroll = rememberScrollState()
     LaunchedEffect(isTv, tvFocusEpoch) {
         if (!isTv) return@LaunchedEffect
-        homeScroll.scrollTo(0)
         requestTvFocusSafe(settingsFocus)
+        homeScroll.scrollTo(0)
     }
     Column(
         modifier = Modifier
@@ -240,7 +242,7 @@ fun StorageScreen(
                 score = healthScore,
                 subtitle = statusSubtitle,
                 isLoading = uiState.isLoading || optimizing,
-                buttonEnabled = !optimizing,
+                buttonEnabled = scanned && !optimizing,
                 buttonLabel = when {
                     optimizing -> "Optimize ediliyor…"
                     !scanned -> "Kontrol ediliyor…"

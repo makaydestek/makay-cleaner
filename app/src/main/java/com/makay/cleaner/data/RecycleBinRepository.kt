@@ -6,8 +6,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.annotation.Keep
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.makay.cleaner.util.MediaStoreSync
 import com.makay.cleaner.util.SystemFileGuard
 import java.io.File
@@ -34,6 +34,20 @@ class RecycleBinRepository(private val context: Context) {
         val mimeType: String? = null,
         /** Orijinal albüm/klasör (MediaStore RELATIVE_PATH biçiminde). */
         val relativePath: String? = null
+    )
+
+    @Keep
+    private data class LegacyTrashItem(
+        val id: String?,
+        val originalPath: String?,
+        val trashPath: String?,
+        val displayName: String?,
+        val sizeBytes: Long,
+        val deletedAt: Long,
+        val category: String?,
+        val mediaStoreUri: String?,
+        val mimeType: String?,
+        val relativePath: String?
     )
 
     private val dao: TrashItemDao = RecycleBinDatabase.get(context).trashDao()
@@ -390,11 +404,7 @@ class RecycleBinRepository(private val context: Context) {
             if (prefs.getBoolean(KEY_MIGRATED, false)) return
             val raw = prefs.getString("items", null)
             if (!raw.isNullOrBlank() && dao.count() == 0) {
-                val parsed = runCatching {
-                    val type = object : TypeToken<Array<TrashItem?>>() {}.type
-                    Gson().fromJson<Array<TrashItem?>>(raw, type)?.filterNotNull().orEmpty()
-                }.getOrDefault(emptyList())
-                val valid = parsed.filter { it.id.isNotBlank() && it.trashPath.isNotBlank() }
+                val valid = parseLegacyIndex(raw)
                 if (valid.isNotEmpty()) {
                     dao.insertAll(valid.map { it.toEntity() })
                 }
@@ -456,6 +466,32 @@ class RecycleBinRepository(private val context: Context) {
     )
 
     companion object {
+        internal fun parseLegacyIndex(raw: String): List<TrashItem> {
+            val entries = runCatching {
+                Gson().fromJson(raw, Array<LegacyTrashItem?>::class.java)
+            }.getOrNull().orEmpty()
+
+            return entries.filterNotNull().mapNotNull { entry ->
+                val id = entry.id?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val trashPath = entry.trashPath?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val mediaStoreUri = entry.mediaStoreUri?.takeIf { it.isNotBlank() }
+                val originalPath = entry.originalPath?.takeIf { it.isNotBlank() }
+                    ?: mediaStoreUri ?: return@mapNotNull null
+                TrashItem(
+                    id = id,
+                    originalPath = originalPath,
+                    trashPath = trashPath,
+                    displayName = entry.displayName?.takeIf { it.isNotBlank() }
+                        ?: File(originalPath).name.ifBlank { File(trashPath).name },
+                    sizeBytes = entry.sizeBytes,
+                    deletedAt = entry.deletedAt,
+                    category = entry.category.orEmpty(),
+                    mediaStoreUri = mediaStoreUri,
+                    mimeType = entry.mimeType,
+                    relativePath = entry.relativePath
+                )
+            }
+        }
         const val RETENTION_MS = 48L * 60 * 60 * 1000
         private const val KEY_LAST_BATCH = "last_batch_ids"
         private const val KEY_MIGRATED = "room_migrated"

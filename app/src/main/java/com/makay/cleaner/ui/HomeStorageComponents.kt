@@ -372,7 +372,7 @@ internal fun HomeScoreHero(
                     .padding(horizontal = if (isTv) ring * 0.10f else ring * 0.18f)
             ) {
                 Text(
-                    text = stringResource(R.string.txt_1_s_4, score),
+                    text = stringResource(R.string.score_percent, score),
                     color = textPrimary,
                     fontSize = if (isTv) {
                         if (score >= 100) 34.sp else 36.sp
@@ -404,8 +404,7 @@ internal fun HomeScoreHero(
                         fontSize = if (isTv) 11.sp else 12.sp,
                         lineHeight = if (isTv) 13.sp else 15.sp,
                         textAlign = TextAlign.Center,
-                        maxLines = if (isTv) 1 else 2,
-                        overflow = TextOverflow.Ellipsis
+                        maxLines = 2
                     )
                 }
             }

@@ -437,7 +437,7 @@
     <string name="txt_1_s_dosya_2_s_3">%1$s files · %%%2$s</string>
     <string name="txt_1_s_dosya">%1$s files</string>
     <string name="txt_1_s_2_s_9">%1$s · %2$s</string>
-    <string name="txt_1_s_4">%1$s</string>
+    <string name="score_percent">%1$d%%</string>
     <string name="txt_skor_1_s">Score %1$s</string>
     <string name="txt_pil_ayar_na_git_1_s">Go to battery settings · %1$s</string>
     <string name="txt_1_s_2_s_10">%1$s · %2$s</string>
