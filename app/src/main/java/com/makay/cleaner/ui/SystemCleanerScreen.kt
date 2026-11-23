@@ -3,7 +3,6 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -69,11 +68,7 @@ fun SystemCleanerScreen(
             summary = CleanResultTracker.last
             items = withContext(Dispatchers.IO) { scanner.scan() }
             selected = emptySet()
-            Toast.makeText(
-                context,
-                "$deleted öğe çöp kutusuna taşındı (${formatBytes(saved)})",
-                Toast.LENGTH_SHORT
-            ).show()
+            AppNotice.show("$deleted öğe çöp kutusuna taşındı (${formatBytes(saved)})")
         }
     }
 

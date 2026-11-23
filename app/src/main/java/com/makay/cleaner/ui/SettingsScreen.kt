@@ -5,7 +5,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,7 +53,7 @@ fun SettingsScreen(
 
     LaunchedEffect(uiState.lastManualCleanMessage) {
         uiState.lastManualCleanMessage?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            AppNotice.show(it)
             viewModel.consumeManualCleanMessage()
         }
     }

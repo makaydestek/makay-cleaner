@@ -3,7 +3,6 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -81,13 +80,13 @@ fun PersonMismatchScreen(
 
     LaunchedEffect(state.toastMessage) {
         val msg = state.toastMessage ?: return@LaunchedEffect
-        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        AppNotice.show(msg)
         vm.consumeToast()
     }
 
     LaunchedEffect(state.errorMessage) {
         val msg = state.errorMessage ?: return@LaunchedEffect
-        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        AppNotice.show(msg)
         vm.consumeError()
     }
 

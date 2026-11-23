@@ -3,7 +3,6 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -135,11 +134,7 @@ fun VideoToolsScreen(
                                                     val ok = withContext(Dispatchers.IO) {
                                                         VideoArchiveHelper.copyToArchive(application, video) != null
                                                     }
-                                                    Toast.makeText(
-                                                        context,
-                                                        if (ok) "Arşive kopyalandı" else "Arşiv başarısız",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
+                                                    AppNotice.show(if (ok) "Arşive kopyalandı" else "Arşiv başarısız")
                                                 }
                                             }) { Text(stringResource(R.string.txt_kopyala)) }
                                             TextButton(onClick = { pendingArchiveVideo = video }) {
@@ -178,11 +173,7 @@ fun VideoToolsScreen(
                         summary = CleanResultTracker.last
                         videos = withContext(Dispatchers.IO) { scanner.scan() }
                     }
-                    Toast.makeText(
-                        context,
-                        if (ok) "Arşivlendi + çöp kutusu" else "İşlem başarısız",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    AppNotice.show(if (ok) "Arşivlendi + çöp kutusu" else "İşlem başarısız")
                 }
             },
             onDismiss = { pendingArchiveVideo = null }
@@ -267,7 +258,7 @@ fun ApkRemnantScreen(
             CleaningRecorder.record(application, "APK kalıntı", saved, n)
             items = withContext(Dispatchers.IO) { scanner.scan() }
             selected = emptySet()
-            Toast.makeText(context, context.getString(R.string.msg_apk_moved, n), Toast.LENGTH_SHORT).show()
+            AppNotice.show(context.getString(R.string.msg_apk_moved, n))
         }
     }
 

@@ -3,7 +3,6 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,7 +54,7 @@ fun CorpseFinderScreen(
             CleanResultTracker.record("Kalıntı bulucu", deleted, saved, movedToTrash = false)
             summary = CleanResultTracker.last
             corpses = withContext(Dispatchers.IO) { finder.scan() }
-            Toast.makeText(context, context.getString(R.string.msg_remnants_cleaned), Toast.LENGTH_SHORT).show()
+            AppNotice.show(context.getString(R.string.msg_remnants_cleaned))
         }
     }
 

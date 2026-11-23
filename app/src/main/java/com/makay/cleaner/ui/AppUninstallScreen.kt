@@ -5,7 +5,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -136,17 +135,9 @@ fun AppUninstallScreen(
                             val intent = viewModel.getUninstallIntent(app.packageName)
                             try {
                                 context.startActivity(intent)
-                                Toast.makeText(
-                                    context,
-                                    "Kaldırma sonrası kalıntılar temizlenecek",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                AppNotice.show("Kaldırma sonrası kalıntılar temizlenecek")
                             } catch (e: Exception) {
-                                Toast.makeText(
-                                    context,
-                                    "Kaldırma başlatılamadı: ${e.message}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                AppNotice.show("Kaldırma başlatılamadı: ${e.message}")
                             }
                         }
                     )

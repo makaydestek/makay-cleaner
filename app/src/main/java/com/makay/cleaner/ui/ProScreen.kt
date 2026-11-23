@@ -1,7 +1,6 @@
 package com.makay.cleaner.ui
 
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -124,9 +123,9 @@ fun ProScreen(
                     onClick = {
                         if (ProManager.unlockWithCode(application, code)) {
                             isPro = true
-                            Toast.makeText(context, context.getString(R.string.pro_unlocked), Toast.LENGTH_SHORT).show()
+                            AppNotice.show(context.getString(R.string.pro_unlocked))
                         } else {
-                            Toast.makeText(context, context.getString(R.string.pro_invalid), Toast.LENGTH_SHORT).show()
+                            AppNotice.show(context.getString(R.string.pro_invalid))
                         }
                     },
                     modifier = Modifier.fillMaxWidth()

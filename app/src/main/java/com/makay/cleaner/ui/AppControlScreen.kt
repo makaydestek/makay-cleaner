@@ -5,7 +5,6 @@ import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -82,12 +81,8 @@ fun AppControlScreen(
                                     }
                                     context.startActivity(intent)
                                 }
-                                Toast.makeText(
-                                    context,
-                                    "${selected.size} uygulama için kaldırma ekranı açıldı. " +
-                                        "Her birinde «Kaldır»a dokunun; kalıntılar otomatik temizlenir.",
-                                    Toast.LENGTH_LONG
-                                ).show()
+                                AppNotice.show("${selected.size} uygulama için kaldırma ekranı açıldı. " +
+                                        "Her birinde «Kaldır»a dokunun; kalıntılar otomatik temizlenir.")
                                 selected = emptySet()
                             }
                         }) { Text(stringResource(R.string.txt_kald_r_1_s, selected.size)) }

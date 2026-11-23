@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.TrafficStats
 import android.os.BatteryManager
 import android.provider.Settings
-import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -86,9 +85,7 @@ fun CleanerHubScreen(
             cleaning = false
             val removed = result.spaceSaved
             val trashed = result.movedToTrashBytes
-            Toast.makeText(
-                context,
-                when {
+            AppNotice.show(when {
                     removed > 0L && trashed > 0L ->
                         "Boşalan: ${formatBytes(removed)} · Çöpe: ${formatBytes(trashed)}"
                     removed > 0L ->
@@ -98,9 +95,7 @@ fun CleanerHubScreen(
                     before > 0L ->
                         "Dosyalar duruyor. Skor, silinemeyen öğeler için yükselmez."
                     else -> "Silinecek dosya kalmadı"
-                },
-                Toast.LENGTH_LONG
-            ).show()
+                })
             loading = true
             report = withContext(Dispatchers.IO) { JunkScanHelper.deepScan(application) }
             loading = false

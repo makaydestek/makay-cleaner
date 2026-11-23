@@ -3,7 +3,6 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -149,15 +148,11 @@ fun MediaHubScreen(
                     buckets = withContext(Dispatchers.IO) { repo.scanBuckets() }
                     val expected = target.fileCount
                     val failed = (expected - deleted).coerceAtLeast(0)
-                    Toast.makeText(
-                        context,
-                        when {
+                    AppNotice.show(when {
                             deleted == 0 -> "Hiçbir dosya taşınamadı (izin / sistem koruması)"
                             failed > 0 -> "$deleted taşındı, $failed taşınamadı"
                             else -> "$deleted dosya çöp kutusuna taşındı"
-                        },
-                        Toast.LENGTH_SHORT
-                    ).show()
+                        })
                 }
             },
             onDismiss = { pendingBucket = null },
@@ -180,7 +175,7 @@ fun MediaHubScreen(
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
                     buckets = withContext(Dispatchers.IO) { repo.scanBuckets() }
-                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
+                    AppNotice.show(context.getString(R.string.msg_items_restored, n))
                 }
             }
         )

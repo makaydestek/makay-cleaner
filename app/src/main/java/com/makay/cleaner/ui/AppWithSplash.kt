@@ -2,7 +2,6 @@ package com.makay.cleaner.ui
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -12,6 +11,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -178,14 +181,10 @@ fun MainAppContent() {
                 val result = withContext(Dispatchers.IO) {
                     QuickCleanHelper.cleanAppCaches(context)
                 }
-                Toast.makeText(
-                    context,
-                    if (result.filesDeleted > 0)
+                AppNotice.show(if (result.filesDeleted > 0)
                         "Önbellek temizlendi: ${formatBytes(result.spaceSaved)}"
                     else
-                        "Önbellek zaten temiz",
-                    Toast.LENGTH_SHORT
-                ).show()
+                        "Önbellek zaten temiz")
                 nav.resetTo(AppScreen.Storage)
             }
             else -> nav.resetTo(AppScreen.Storage)
@@ -207,11 +206,7 @@ fun MainAppContent() {
                             val (saved, count) = cleanup
                             if (count > 0 || saved > 0) {
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(
-                                        context,
-                                        "$pkg kalıntıları temizlendi (${formatBytes(saved)})",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    AppNotice.show("$pkg kalıntıları temizlendi (${formatBytes(saved)})")
                                 }
                             }
                         }
@@ -234,6 +229,7 @@ fun MainAppContent() {
         back()
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     when (currentScreen) {
         AppScreen.Lock -> {
             AppLockScreen(
@@ -274,14 +270,10 @@ fun MainAppContent() {
                         val result = withContext(Dispatchers.IO) {
                             QuickCleanHelper.cleanAppCaches(context)
                         }
-                        Toast.makeText(
-                            context,
-                            if (result.filesDeleted > 0)
+                        AppNotice.show(if (result.filesDeleted > 0)
                                 "Önbellek temizlendi: ${formatBytes(result.spaceSaved)}"
                             else
-                                "Önbellek zaten temiz",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                                "Önbellek zaten temiz")
                     }
                 }
             )
@@ -334,14 +326,10 @@ fun MainAppContent() {
                                 val result = withContext(Dispatchers.IO) {
                                     QuickCleanHelper.cleanAppCaches(context)
                                 }
-                                Toast.makeText(
-                                    context,
-                                    if (result.filesDeleted > 0)
+                                AppNotice.show(if (result.filesDeleted > 0)
                                         "Önbellek temizlendi: ${formatBytes(result.spaceSaved)}"
                                     else
-                                        "Önbellek zaten temiz",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                        "Önbellek zaten temiz")
                             }
                         }
                         "wa_dup_videos" -> go(AppScreen.DuplicateVideos)
@@ -511,7 +499,7 @@ fun MainAppContent() {
                 onOpenPermissionMap = { go(AppScreen.PermissionMap) },
                 onOpenBrowserCache = { go(AppScreen.BrowserCache) },
                 onClearClipboard = {
-                    Toast.makeText(context, clearClipboardNow(context), Toast.LENGTH_SHORT).show()
+                    AppNotice.show(clearClipboardNow(context))
                 }
             )
         }
@@ -562,6 +550,10 @@ fun MainAppContent() {
                 onOpenUninstall = { go(AppScreen.Uninstall) },
                 onOpenProfiles = { go(AppScreen.AppProfiles) }
             )
+        }
+    }
+        Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+            AppNotice.Host()
         }
     }
 }

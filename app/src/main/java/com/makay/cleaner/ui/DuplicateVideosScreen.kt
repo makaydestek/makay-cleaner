@@ -5,7 +5,6 @@ import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -348,11 +347,7 @@ fun DuplicateVideosScreen(
                         CleanResultTracker.record("Yinelenen video", deleted, saved)
                         summary = CleanResultTracker.last
                     }
-                    Toast.makeText(
-                        context,
-                        if (deleted > 0) "$deleted video taşındı" else "Silinemedi",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    AppNotice.show(if (deleted > 0) "$deleted video taşındı" else "Silinemedi")
                     runScan()
                 }
             },
@@ -378,7 +373,7 @@ fun DuplicateVideosScreen(
             onUndo = {
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
-                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
+                    AppNotice.show(context.getString(R.string.msg_items_restored, n))
                     runScan()
                 }
             }

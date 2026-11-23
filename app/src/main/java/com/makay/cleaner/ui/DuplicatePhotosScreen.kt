@@ -5,7 +5,6 @@ import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -574,11 +573,7 @@ fun DuplicatePhotosScreen(
                         CleanResultTracker.record("Yinelenen foto", deleted, saved)
                         summary = CleanResultTracker.last
                     }
-                    Toast.makeText(
-                        context,
-                        if (deleted > 0) "$deleted foto çöp kutusuna taşındı" else "Silinemedi",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    AppNotice.show(if (deleted > 0) "$deleted foto çöp kutusuna taşındı" else "Silinemedi")
                     runScan()
                 }
             },
@@ -601,7 +596,7 @@ fun DuplicatePhotosScreen(
             onUndo = {
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
-                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
+                    AppNotice.show(context.getString(R.string.msg_items_restored, n))
                     runScan()
                 }
             }

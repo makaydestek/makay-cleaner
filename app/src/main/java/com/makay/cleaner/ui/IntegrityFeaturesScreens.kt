@@ -3,7 +3,6 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -305,12 +304,8 @@ fun BlurPhotosScreen(application: Application, onNavigateBack: () -> Unit) {
                 }
             }
             busy = false
-            Toast.makeText(
-                context,
-                if (n > 0) "$n foto çöpe · ${formatBytes(saved)}"
-                else "Silinemedi",
-                Toast.LENGTH_SHORT
-            ).show()
+            AppNotice.show(if (n > 0) "$n foto çöpe · ${formatBytes(saved)}"
+                else "Silinemedi")
             loading = true
             items = withContext(Dispatchers.Default) { BlurPhotoScanner.scan(application) }
             selected = emptySet()
@@ -456,11 +451,7 @@ fun AppProfilesScreen(onNavigateBack: () -> Unit) {
                     onClick = {
                         repo.apply(profile)
                         active = profile
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.msg_profile_applied, title),
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        AppNotice.show(context.getString(R.string.msg_profile_applied, title))
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -564,7 +555,7 @@ fun GoodNightScreen(onNavigateBack: () -> Unit) {
             Button(
                 onClick = {
                     repo.save(enabled, hour, minute)
-                    Toast.makeText(context, context.getString(R.string.msg_saved), Toast.LENGTH_SHORT).show()
+                    AppNotice.show(context.getString(R.string.msg_saved))
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text(stringResource(R.string.txt_kaydet)) }
@@ -707,12 +698,8 @@ fun BrowserCacheScreen(onNavigateBack: () -> Unit) {
                                     )
                                 }
                                 busy = false
-                                Toast.makeText(
-                                    context,
-                                    if (n > 0) "$n dosya · ${formatBytes(saved)}"
-                                    else "Silinemedi",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                AppNotice.show(if (n > 0) "$n dosya · ${formatBytes(saved)}"
+                                    else "Silinemedi")
                                 refresh()
                             }
                         },

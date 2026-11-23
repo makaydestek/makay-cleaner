@@ -6,7 +6,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import android.app.Application
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -335,18 +334,10 @@ fun AnalyticsScreen(
                                             Intent.createChooser(share, "Dışa aktar")
                                         )
                                     }.onFailure {
-                                        Toast.makeText(
-                                            context,
-                                            "Paylaşım açılamadı: ${it.message}",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        AppNotice.show("Paylaşım açılamadı: ${it.message}")
                                     }
                                 }.onFailure {
-                                    Toast.makeText(
-                                        context,
-                                        "Dışa aktarım başarısız: ${it.message}",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    AppNotice.show("Dışa aktarım başarısız: ${it.message}")
                                 }
                             }
                         },
@@ -390,7 +381,7 @@ fun AnalyticsScreen(
                 TextButton(onClick = {
                     showClearConfirm = false
                     viewModel.clearAnalytics()
-                    Toast.makeText(context, context.getString(R.string.msg_analytics_deleted), Toast.LENGTH_SHORT).show()
+                    AppNotice.show(context.getString(R.string.msg_analytics_deleted))
                 }) { Text(stringResource(R.string.txt_sil)) }
             },
             dismissButton = {

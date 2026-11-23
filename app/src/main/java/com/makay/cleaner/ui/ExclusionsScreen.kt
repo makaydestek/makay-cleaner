@@ -3,7 +3,6 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -180,7 +179,7 @@ fun ExclusionsScreen(
                             scope.launch {
                                 withContext(Dispatchers.IO) { repo.removeUser(item.id) }
                                 refreshUser()
-                                Toast.makeText(context, context.getString(R.string.msg_removed), Toast.LENGTH_SHORT).show()
+                                AppNotice.show(context.getString(R.string.msg_removed))
                             }
                         }
                     )
@@ -229,13 +228,9 @@ fun ExclusionsScreen(
                                 titleInput = ""
                                 showAdd = false
                                 refreshUser()
-                                Toast.makeText(context, context.getString(R.string.msg_added), Toast.LENGTH_SHORT).show()
+                                AppNotice.show(context.getString(R.string.msg_added))
                             } else {
-                                Toast.makeText(
-                                    context,
-                                    "Geçersiz yol veya zaten listede / sistem korumasında",
-                                    Toast.LENGTH_LONG
-                                ).show()
+                                AppNotice.show("Geçersiz yol veya zaten listede / sistem korumasında")
                             }
                         }
                     }

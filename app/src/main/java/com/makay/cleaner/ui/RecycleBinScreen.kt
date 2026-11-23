@@ -3,7 +3,6 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -122,11 +121,7 @@ fun RecycleBinScreen(
                                     scope.launch {
                                         val ok = withContext(Dispatchers.IO) { repo.restore(item.id) }
                                         refresh()
-                                        Toast.makeText(
-                                            context,
-                                            if (ok) "Geri yüklendi" else "Geri yükleme başarısız",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        AppNotice.show(if (ok) "Geri yüklendi" else "Geri yükleme başarısız")
                                     }
                                 }) { Text(stringResource(R.string.txt_geri_y_kle)) }
                                 TextButton(onClick = { pendingPermanentDelete = item }) { Text(stringResource(R.string.txt_kal_c_sil)) }
@@ -148,7 +143,7 @@ fun RecycleBinScreen(
                     scope.launch {
                         val (saved, count) = withContext(Dispatchers.IO) { repo.emptyBin() }
                         refresh()
-                        Toast.makeText(context, context.getString(R.string.msg_items_permanently_deleted, count, formatBytes(saved)), Toast.LENGTH_SHORT).show()
+                        AppNotice.show(context.getString(R.string.msg_items_permanently_deleted, count, formatBytes(saved)))
                     }
                 }) { Text(stringResource(R.string.txt_kal_c_sil)) }
             },
@@ -166,7 +161,7 @@ fun RecycleBinScreen(
                     scope.launch {
                         val ok = withContext(Dispatchers.IO) { repo.purgePermanently(item.id) }
                         refresh()
-                        Toast.makeText(context, if (ok) context.getString(R.string.msg_deleted_permanently) else context.getString(R.string.msg_delete_failed), Toast.LENGTH_SHORT).show()
+                        AppNotice.show(if (ok) context.getString(R.string.msg_deleted_permanently) else context.getString(R.string.msg_delete_failed))
                     }
                 }) { Text(stringResource(R.string.txt_kal_c_sil)) }
             },

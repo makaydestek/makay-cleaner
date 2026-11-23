@@ -6,7 +6,6 @@ import android.content.Intent
 import android.net.TrafficStats
 import android.os.BatteryManager
 import android.provider.Settings
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -226,7 +225,7 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
             } catch (_: Exception) {
             }
         }
-        Toast.makeText(context, context.getString(R.string.msg_data_settings_failed), Toast.LENGTH_SHORT).show()
+        AppNotice.show(context.getString(R.string.msg_data_settings_failed))
     }
 
     fun openNetworkSettings() {
@@ -243,7 +242,7 @@ fun DataUsageScreen(onNavigateBack: () -> Unit) {
             } catch (_: Exception) {
             }
         }
-        Toast.makeText(context, context.getString(R.string.msg_network_settings_failed), Toast.LENGTH_SHORT).show()
+        AppNotice.show(context.getString(R.string.msg_network_settings_failed))
     }
 
     Scaffold(
@@ -421,7 +420,7 @@ private fun openSystemBattery(context: Context) {
         } catch (_: Exception) {
         }
     }
-    Toast.makeText(context, context.getString(R.string.msg_battery_settings_failed), Toast.LENGTH_SHORT).show()
+    AppNotice.show(context.getString(R.string.msg_battery_settings_failed))
 }
 
 private fun startSettings(context: Context, action: String, fallback: () -> Unit) {

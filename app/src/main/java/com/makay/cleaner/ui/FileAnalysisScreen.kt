@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -91,9 +90,9 @@ fun FileAnalysisScreen(
                 com.makay.cleaner.util.DocumentTreeCopy.copy(application, File(entry.path), tree)
             }
             if (ok) {
-                Toast.makeText(context, context.getString(R.string.file_analysis_copy_complete), Toast.LENGTH_SHORT).show()
+                AppNotice.show(context.getString(R.string.file_analysis_copy_complete))
             } else {
-                Toast.makeText(context, context.getString(R.string.file_analysis_copy_failed), Toast.LENGTH_SHORT).show()
+                AppNotice.show(context.getString(R.string.file_analysis_copy_failed))
                 destinationTree = null
                 transferPrefs.edit().remove("destination_tree").apply()
             }
@@ -328,11 +327,7 @@ fun FileAnalysisScreen(
                         CleanResultTracker.record("Boş klasör", deleted, 0L)
                         summary = CleanResultTracker.last
                     }
-                    Toast.makeText(
-                        context,
-                        if (deleted > 0) "$deleted klasör taşındı" else "Taşınamadı",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    AppNotice.show(if (deleted > 0) "$deleted klasör taşındı" else "Taşınamadı")
                     selectedEmpty = emptySet()
                     runAnalysis()
                 }
@@ -356,7 +351,7 @@ fun FileAnalysisScreen(
             onUndo = {
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
-                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
+                    AppNotice.show(context.getString(R.string.msg_items_restored, n))
                     runAnalysis()
                 }
             }

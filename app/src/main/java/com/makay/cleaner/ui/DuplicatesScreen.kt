@@ -3,7 +3,6 @@ package com.makay.cleaner.ui
 import com.makay.cleaner.R
 import androidx.compose.ui.res.stringResource
 import android.app.Application
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -67,7 +66,7 @@ fun DuplicatesScreen(
             CleanResultTracker.record("Yinelenenler", deleted, saved)
             summary = CleanResultTracker.last
             groups = withContext(Dispatchers.IO) { scanner.scan(typeFilter = typeFilter) }
-            Toast.makeText(context, context.getString(R.string.msg_copies_moved, deleted), Toast.LENGTH_SHORT).show()
+            AppNotice.show(context.getString(R.string.msg_copies_moved, deleted))
         }
     }
 
@@ -202,7 +201,7 @@ fun DuplicatesScreen(
             onUndo = {
                 scope.launch {
                     val (n, _) = withContext(Dispatchers.IO) { trash.undoLastBatch() }
-                    Toast.makeText(context, context.getString(R.string.msg_items_restored, n), Toast.LENGTH_SHORT).show()
+                    AppNotice.show(context.getString(R.string.msg_items_restored, n))
                     runScan()
                 }
             }
